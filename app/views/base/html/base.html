@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($page['title']) ?> | Cursology</title>
+
+    <!-- Se ejecuta antes de cargar el CSS para que no parpadee el tema equivocado. -->
+    <script>
+        (function () {
+            var theme = null;
+            try { theme = localStorage.getItem('cursology-theme'); } catch (e) {}
+            if (theme !== 'light' && theme !== 'dark') {
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
+
+    <link rel="stylesheet" href="assets.php?path=base/css/base.css">
+    <?php foreach ($page['css'] as $css): ?>
+    <link rel="stylesheet" href="assets.php?path=<?= htmlspecialchars($css) ?>">
+    <?php endforeach; ?>
+
+    <script src="assets.php?path=base/js/base.js" defer></script>
+    <?php foreach ($page['js'] as $js): ?>
+    <script src="assets.php?path=<?= htmlspecialchars($js) ?>" defer></script>
+    <?php endforeach; ?>
+</head>
+<body>
+    <a class="skip-link" href="#main-content">Saltar al contenido</a>
+
+    <?php require __DIR__ . '/header.html'; ?>
+
+    <div class="app-shell">
+        <?php require __DIR__ . '/sidebar.html'; ?>
+
+        <div class="app-main">
+            <main class="app-content" id="main-content" tabindex="-1">
+                <?php require $page['file']; ?>
+            </main>
+
+            <?php require __DIR__ . '/footer.html'; ?>
+        </div>
+    </div>
+</body>
+</html>
