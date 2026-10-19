@@ -1,0 +1,91 @@
+<?php
+$navLink = fn (string $name) => $view === $name
+    ? 'class="sidebar-link is-active" aria-current="page"'
+    : 'class="sidebar-link"';
+?>
+<aside class="sidebar" id="app-sidebar" aria-label="Menú principal">
+    <div class="sidebar-head">
+        <a class="brand" href="?view=home">
+            <span class="brand-mark" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/>
+                    <path d="M22 10v6"/>
+                    <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>
+                </svg>
+            </span>
+            <span class="brand-name">Curso<span>logy</span></span>
+        </a>
+        <button type="button" class="icon-btn" data-sidebar-close aria-label="Cerrar menú">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <p class="sidebar-label">Menú</p>
+    <nav>
+        <ul class="sidebar-nav">
+            <?php if (!$isLoggedIn): ?>
+                <li>
+                    <a <?= $navLink('login') ?> href="?view=login">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                            <path d="m10 17 5-5-5-5"/>
+                            <path d="M15 12H3"/>
+                        </svg>
+                        <span>Login</span>
+                    </a>
+                </li>
+            <?php endif; ?>
+
+            <li>
+                <a <?= $navLink('home') ?> href="?view=home">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 10.5 12 3l9 7.5"/>
+                        <path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>
+                    </svg>
+                    <span>Home</span>
+                </a>
+            </li>
+
+            <?php if ($isLoggedIn): ?>
+                <li>
+                    <a <?= $navLink('profile') ?> href="?view=profile">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="8" r="4"/>
+                            <path d="M4 21a8 8 0 0 1 16 0"/>
+                        </svg>
+                        <span>Profile</span>
+                    </a>
+                </li>
+            <?php endif; ?>
+        </ul>
+    </nav>
+
+    <div class="sidebar-footer">
+        <?php if ($isLoggedIn): ?>
+            <a class="sidebar-link sidebar-link-danger" href="?view=logout">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <path d="m16 17 5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+                <span>Logout</span>
+            </a>
+        <?php endif; ?>
+
+        <button type="button" class="sidebar-link theme-switch" role="switch" aria-checked="false" aria-label="Theme: modo oscuro" data-theme-toggle>
+            <svg class="theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+            <svg class="theme-icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+            <span>Theme</span>
+            <span class="theme-switch-state" data-theme-label aria-hidden="true">Claro</span>
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        </button>
+    </div>
+</aside>
+<div class="sidebar-backdrop" data-sidebar-backdrop data-sidebar-close></div>
