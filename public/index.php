@@ -4,6 +4,7 @@ define('BASE_PATH', dirname(__DIR__));
 // true = BD local, false = BD de producción
 define('USE_LOCAL_DB', true);
 
+require_once BASE_PATH . '/app/autoload.php';
 require_once BASE_PATH . '/app/database/conn.php';
 define('DB_DEFAULT', $DATABASES[USE_LOCAL_DB ? 'local' : 'prod']);
 

@@ -33,7 +33,7 @@ $DATABASES = [
     'local' => [
         'host'     => $ENV['DB_LOCAL_HOST'] ?? '',
         'port'     => (int) (($ENV['DB_LOCAL_PORT'] ?? '') ?: 3306),
-        'name'     => $ENV['DB_LOCAL_NAME'] ?? '',
+        'name'     => ($ENV['DB_LOCAL_NAME'] ?? '') ?: 'cursology',
         'user'     => $ENV['DB_LOCAL_USER'] ?? '',
         'password' => $ENV['DB_LOCAL_PASSWORD'] ?? '',
         'charset'  => 'utf8mb4',
@@ -42,7 +42,7 @@ $DATABASES = [
     'prod' => [
         'host'     => $ENV['DB_PROD_HOST'] ?? '',
         'port'     => (int) (($ENV['DB_PROD_PORT'] ?? '') ?: 3306),
-        'name'     => $ENV['DB_PROD_NAME'] ?? '',
+        'name'     => ($ENV['DB_PROD_NAME'] ?? '') ?: 'cursology',
         'user'     => $ENV['DB_PROD_USER'] ?? '',
         'password' => $ENV['DB_PROD_PASSWORD'] ?? '',
         'charset'  => 'utf8mb4',
@@ -68,10 +68,14 @@ function db(): PDO
             $config['charset']
         );
 
+        // Las fechas se guardan en UTC: CURRENT_TIMESTAMP(6) usa el time_zone de la
+        // sesión, y el modo estricto es el mismo con el que se creó el esquema.
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00', sql_mode = 'STRICT_TRANS_TABLES,"
+                . "ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
         ];
         if ($config['ssl_ca'] !== '') {
             $options[PDO::MYSQL_ATTR_SSL_CA] = $config['ssl_ca'];
