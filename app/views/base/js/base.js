@@ -36,6 +36,24 @@
 
     window.Cursology = { api: api };
 
+    /* ---------- Pestañas genéricas: [data-tabs] con role="tab" y aria-controls ---------- */
+    document.querySelectorAll('[data-tabs]').forEach(function (group) {
+        const tabs = Array.prototype.slice.call(group.querySelectorAll('[role="tab"]'));
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                tabs.forEach(function (other) {
+                    const selected = other === tab;
+                    other.setAttribute('aria-selected', String(selected));
+                    other.tabIndex = selected ? 0 : -1;
+                    const panel = document.getElementById(other.getAttribute('aria-controls'));
+                    if (panel) {
+                        panel.hidden = !selected;
+                    }
+                });
+            });
+        });
+    });
+
     /* ---------- Cerrar sesión ---------- */
     document.querySelectorAll('[data-logout]').forEach(function (button) {
         button.addEventListener('click', function () {

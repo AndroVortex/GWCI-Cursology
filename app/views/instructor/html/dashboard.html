@@ -1,0 +1,154 @@
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Panel del instructor</h1>
+        <p class="page-subtitle">Administra tus cursos, tus ventas y los mensajes de tus alumnos.</p>
+    </div>
+    <div class="page-actions">
+        <button type="button" class="btn btn-primary" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Crear curso
+        </button>
+    </div>
+</div>
+
+<?php require BASE_PATH . '/app/views/base/html/preview-notice.html'; ?>
+
+<div class="stat-grid">
+    <div class="stat">
+        <p class="stat-label">Cursos publicados</p>
+        <p class="stat-value">—</p>
+        <p class="stat-hint">Borradores: —</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Alumnos inscritos</p>
+        <p class="stat-value">—</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Ingresos</p>
+        <p class="stat-value">—</p>
+        <p class="stat-hint">MXN, compras completadas</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Calificación promedio</p>
+        <p class="stat-value">—</p>
+        <p class="stat-hint">Sin calificar</p>
+    </div>
+</div>
+
+<section class="panel" aria-labelledby="instructor-courses-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="instructor-courses-title">Mis cursos</h2>
+            <p class="panel-description">Borradores y cursos publicados, con sus alumnos e ingresos.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Curso</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col" class="num">Alumnos</th>
+                    <th scope="col" class="num">Ingresos</th>
+                    <th scope="col" class="num">Calificación</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <span class="empty-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>
+                            </span>
+                            <p class="empty-title">Aún no has creado cursos</p>
+                            <p class="empty-text">Crea tu primer curso con sus niveles, capítulos y precios. Se publica cuando esté completo.</p>
+                            <button type="button" class="btn btn-secondary btn-sm" disabled>Crear tu primer curso</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel" aria-labelledby="instructor-sales-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="instructor-sales-title">Ventas</h2>
+            <p class="panel-description">Alumnos inscritos, nivel promedio alcanzado e ingresos por curso.</p>
+        </div>
+    </div>
+    <fieldset class="filters" disabled>
+        <legend class="visually-hidden">Filtros de ventas</legend>
+        <div class="form-field">
+            <label class="form-label" for="sales-desde">Cursos creados desde</label>
+            <input class="form-control" type="date" id="sales-desde">
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="sales-hasta">Hasta</label>
+            <input class="form-control" type="date" id="sales-hasta">
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="sales-categoria">Categoría</label>
+            <select class="form-control" id="sales-categoria"><option>Todas</option></select>
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="sales-activos">Cursos</label>
+            <select class="form-control" id="sales-activos"><option>Todos</option><option>Solo activos</option></select>
+        </div>
+    </fieldset>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Curso</th>
+                    <th scope="col" class="num">Alumnos</th>
+                    <th scope="col" class="num">Nivel promedio</th>
+                    <th scope="col" class="num">Ingresos</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="4">
+                        <div class="empty-state">
+                            <p class="empty-title">Sin ventas todavía</p>
+                            <p class="empty-text">Las compras completadas de tus cursos aparecerán aquí, con el total por forma de pago.</p>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="panel-footer">
+        <span class="text-muted">Total por forma de pago: —</span>
+    </div>
+</section>
+
+<div class="grid-2">
+    <section class="panel" aria-labelledby="instructor-messages-title">
+        <div class="panel-header">
+            <h2 class="panel-title" id="instructor-messages-title">Mensajes de alumnos</h2>
+        </div>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <p class="empty-title">Sin mensajes</p>
+            <p class="empty-text">Las preguntas de tus alumnos sobre cada curso llegarán aquí.</p>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="instructor-reviews-title">
+        <div class="panel-header">
+            <h2 class="panel-title" id="instructor-reviews-title">Opiniones recientes</h2>
+        </div>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+            </span>
+            <p class="empty-title">Sin opiniones</p>
+            <p class="empty-text">Los alumnos califican y opinan al terminar un curso.</p>
+        </div>
+    </section>
+</div>

@@ -1,0 +1,128 @@
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Hola, <?= e($currentUser->name()) ?></h1>
+        <p class="page-subtitle">Retoma tus cursos y revisa tu avance.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-primary" href="?view=home#categorias">Explorar cursos</a>
+    </div>
+</div>
+
+<?php require BASE_PATH . '/app/views/base/html/preview-notice.html'; ?>
+
+<div class="stat-grid">
+    <div class="stat">
+        <p class="stat-label">Cursos inscritos</p>
+        <p class="stat-value">—</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">En progreso</p>
+        <p class="stat-value">—</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Terminados</p>
+        <p class="stat-value">—</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Certificados</p>
+        <p class="stat-value">—</p>
+    </div>
+</div>
+
+<section class="panel" aria-labelledby="student-continue-title">
+    <div class="panel-header">
+        <h2 class="panel-title" id="student-continue-title">Continuar aprendiendo</h2>
+    </div>
+    <div class="empty-state">
+        <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </span>
+        <p class="empty-title">Aún no tienes cursos en progreso</p>
+        <p class="empty-text">Cuando te inscribas a un curso, aquí verás tu avance y podrás retomarlo donde lo dejaste.</p>
+        <a class="btn btn-secondary btn-sm" href="?view=home#categorias">Explorar cursos</a>
+    </div>
+</section>
+
+<section class="panel" aria-labelledby="student-kardex-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="student-kardex-title">Kardex</h2>
+            <p class="panel-description">Historial de tus cursos con fechas de inscripción, último acceso y avance.</p>
+        </div>
+    </div>
+    <fieldset class="filters" disabled>
+        <legend class="visually-hidden">Filtros del kardex</legend>
+        <div class="form-field">
+            <label class="form-label" for="kardex-desde">Inscritos desde</label>
+            <input class="form-control" type="date" id="kardex-desde">
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="kardex-hasta">Hasta</label>
+            <input class="form-control" type="date" id="kardex-hasta">
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="kardex-categoria">Categoría</label>
+            <select class="form-control" id="kardex-categoria"><option>Todas</option></select>
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="kardex-estado">Estado</label>
+            <select class="form-control" id="kardex-estado"><option>Todos</option><option>Terminados</option></select>
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="kardex-activos">Cursos</label>
+            <select class="form-control" id="kardex-activos"><option>Todos</option><option>Solo activos</option></select>
+        </div>
+    </fieldset>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Curso</th>
+                    <th scope="col">Inscripción</th>
+                    <th scope="col">Último acceso</th>
+                    <th scope="col">Terminado</th>
+                    <th scope="col" class="num">Avance</th>
+                    <th scope="col">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <p class="empty-title">Sin cursos inscritos</p>
+                            <p class="empty-text">Tu historial aparecerá aquí desde tu primera inscripción.</p>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<div class="grid-2">
+    <section class="panel" aria-labelledby="student-certificates-title">
+        <div class="panel-header">
+            <h2 class="panel-title" id="student-certificates-title">Certificados</h2>
+        </div>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/></svg>
+            </span>
+            <p class="empty-title">Todavía no tienes certificados</p>
+            <p class="empty-text">Al terminar todos los niveles de un curso se genera tu diploma.</p>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="student-messages-title">
+        <div class="panel-header">
+            <h2 class="panel-title" id="student-messages-title">Mensajes</h2>
+        </div>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <p class="empty-title">Sin conversaciones</p>
+            <p class="empty-text">Puedes escribirle al instructor desde la página de cualquier curso.</p>
+        </div>
+    </section>
+</div>

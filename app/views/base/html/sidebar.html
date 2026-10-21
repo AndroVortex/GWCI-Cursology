@@ -13,7 +13,7 @@ $navLink = fn (string $name) => $view === $name
                     <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>
                 </svg>
             </span>
-            <span class="brand-name">Curso<span>logy</span></span>
+            <span class="brand-name">Cursology</span>
         </a>
         <button type="button" class="icon-btn" data-sidebar-close aria-label="Cerrar menú">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -49,6 +49,17 @@ $navLink = fn (string $name) => $view === $name
             </li>
 
             <?php if ($isLoggedIn): ?>
+                <li>
+                    <a <?= $navLink('dashboard') ?> href="?view=dashboard">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="3" width="7" height="9" rx="1"/>
+                            <rect x="14" y="3" width="7" height="5" rx="1"/>
+                            <rect x="14" y="12" width="7" height="9" rx="1"/>
+                            <rect x="3" y="16" width="7" height="5" rx="1"/>
+                        </svg>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
                 <li>
                     <a <?= $navLink('profile') ?> href="?view=profile">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

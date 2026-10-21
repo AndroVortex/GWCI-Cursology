@@ -256,7 +256,7 @@
         window.Cursology.api(form.getAttribute('action'), requestOptions(form))
             .then(function (result) {
                 if (result.ok) {
-                    window.location.assign('?view=home');
+                    window.location.assign('?view=dashboard');
                     return;
                 }
                 const error = result.body && result.body.error ? result.body.error : null;
