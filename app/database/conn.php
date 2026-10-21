@@ -1,5 +1,8 @@
 <?php
 
+// Configuración (como el settings.py de Django): lee el .env y declara las bases
+// disponibles. La conexión la abre App\Database\Connection con la que elija index.php.
+
 function load_env(string $path): array
 {
     $env = [];
@@ -49,64 +52,3 @@ $DATABASES = [
         'ssl_ca'   => $ENV['DB_PROD_SSL_CA'] ?? '',
     ],
 ];
-
-function db(): PDO
-{
-    static $pdo = null;
-
-    if ($pdo === null) {
-        if (!defined('DB_DEFAULT')) {
-            throw new RuntimeException('DB_DEFAULT no está definida. Defínela en public/index.php.');
-        }
-
-        $config = DB_DEFAULT;
-        $dsn = sprintf(
-            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
-            $config['host'],
-            $config['port'],
-            $config['name'],
-            $config['charset']
-        );
-
-        // Las fechas se guardan en UTC: CURRENT_TIMESTAMP(6) usa el time_zone de la
-        // sesión, y el modo estricto es el mismo con el que se creó el esquema.
-        $options = [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00', sql_mode = 'STRICT_TRANS_TABLES,"
-                . "ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
-        ];
-        if ($config['ssl_ca'] !== '') {
-            $options[PDO::MYSQL_ATTR_SSL_CA] = $config['ssl_ca'];
-        }
-
-        $pdo = new PDO($dsn, $config['user'], $config['password'], $options);
-    }
-
-    return $pdo;
-}
-
-function call_sp(string $name, array $params = []): array
-{
-    if (!preg_match('/^[A-Za-z0-9_]+$/', $name)) {
-        throw new InvalidArgumentException("Nombre de procedimiento inválido: $name");
-    }
-
-    $placeholders = implode(', ', array_fill(0, count($params), '?'));
-    $stmt = db()->prepare("CALL $name($placeholders)");
-    $stmt->execute(array_values($params));
-
-    // MySQL deja result sets pendientes tras un CALL; hay que drenarlos todos
-    // o la siguiente consulta en la conexión falla con el error 2014.
-    $rows = null;
-    do {
-        if ($stmt->columnCount() > 0) {
-            $data = $stmt->fetchAll();
-            $rows ??= $data;
-        }
-    } while ($stmt->nextRowset());
-    $stmt->closeCursor();
-
-    return $rows ?? [];
-}

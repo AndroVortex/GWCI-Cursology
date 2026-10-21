@@ -36,71 +36,8 @@ use App\Models\Mapping\HydrationException;
 /** Columnas generadas que el DDL deja nullable pero cuya expresión nunca produce NULL. */
 const GENERATED_NOT_NULL = ['app_user.active'];
 
-set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
-    throw new ErrorException($message, 0, $severity, $file, $line);
-});
-
 $root = dirname(__DIR__);
-require $root . '/app/autoload.php';
-
-final class Report
-{
-    private static int $total = 0;
-    /** @var list<string> */
-    private static array $failures = [];
-    private static ?string $section = null;
-    private static int $sectionTotal = 0;
-    private static int $sectionFailures = 0;
-
-    public static function section(string $title): void
-    {
-        self::closeSection();
-        self::$section = $title;
-        self::$sectionTotal = 0;
-        self::$sectionFailures = 0;
-    }
-
-    public static function check(bool $ok, string $label): void
-    {
-        self::$total++;
-        self::$sectionTotal++;
-        if (!$ok) {
-            self::$failures[] = '[' . self::$section . '] ' . $label;
-            self::$sectionFailures++;
-        }
-    }
-
-    public static function finish(): never
-    {
-        self::closeSection();
-
-        if (self::$failures !== []) {
-            echo PHP_EOL, 'Fallas:', PHP_EOL;
-            foreach (self::$failures as $failure) {
-                echo '  - ', $failure, PHP_EOL;
-            }
-            printf("%sRESULTADO: FALLÓ (%d de %d comprobaciones)%s", PHP_EOL, count(self::$failures), self::$total, PHP_EOL);
-            exit(1);
-        }
-
-        printf("%sRESULTADO: OK (%d comprobaciones)%s", PHP_EOL, self::$total, PHP_EOL);
-        exit(0);
-    }
-
-    private static function closeSection(): void
-    {
-        if (self::$section === null) {
-            return;
-        }
-        $status = self::$sectionFailures > 0 ? sprintf('%d FALLAS', self::$sectionFailures) : 'ok';
-        printf("%-48s %6d comprobaciones  %s%s", self::$section, self::$sectionTotal, $status, PHP_EOL);
-    }
-}
-
-function check(bool $ok, string $label): void
-{
-    Report::check($ok, $label);
-}
+require __DIR__ . '/support.php';
 
 // ---------------------------------------------------------------
 // Lectura del DDL

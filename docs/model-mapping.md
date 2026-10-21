@@ -2,7 +2,7 @@
 
 Este documento describe cómo las 29 tablas de la base `cursology` se representan como clases PHP, y qué falta para conectarlas con procedimientos almacenados (SP).
 
-> **Estado:** esta fase entrega solo el mapeo. **Todavía no hay acceso funcional a datos**: no existen SP, repositorios ni métodos de escritura. Las entidades se construyen a partir de filas que se les entregan; no abren conexiones ni ejecutan consultas.
+> **Estado:** las entidades se construyen a partir de filas que se les entregan; no abren conexiones ni ejecutan consultas. El acceso a datos vive en los repositorios, que llaman a SP mediante `App\Database\StoredProcedures`. El primer caso conectado es registro/login: ver [stored-procedures.md](stored-procedures.md) y [api.md](api.md).
 
 Fuente de verdad del esquema: [`app/database/schema/Cursology_modelo_fisico_mysql.sql`](../app/database/schema/Cursology_modelo_fisico_mysql.sql) (copia sin cambios del DDL entregado).
 
@@ -18,7 +18,7 @@ Fuente de verdad del esquema: [`app/database/schema/Cursology_modelo_fisico_mysq
 
 El autoload busca los segmentos del namespace en carpetas en minúsculas (convención del repo) y conserva el nombre de la clase en el archivo: `App\Models\Entities\AppUser` → `app/models/entities/AppUser.php`. Así funciona igual en Windows y en Linux. `public/index.php` ya lo carga.
 
-Los archivos vacíos `app/models/user.php`, `app/repositories/user.php`, `app/services/user.php` y `app/controllers/user.php` no se tocaron. Quedan para la capa de modelo (casos de uso y persistencia) de etapas posteriores.
+La capa de modelo de MVC se completa con `app/repositories/` (persistencia mediante SP), `app/services/` (casos de uso) y `app/models/dto/` (resultados que no son filas completas). Los antiguos placeholders vacíos `user.php` se reemplazaron por esas clases.
 
 ## Correspondencia tabla → clase
 
@@ -156,10 +156,9 @@ Las entidades representan datos internos, no respuestas HTTP:
 
 ## Configuración modificada
 
-- **`app/database/conn.php`:** se conservó la conexión PDO existente y se cambió solo esto:
-  - Si `DB_LOCAL_NAME` o `DB_PROD_NAME` están vacíos en `.env`, el nombre de la base es `cursology`. No se leyó ni se modificó `.env`.
-  - Cada conexión ejecuta `SET time_zone = '+00:00'` y el mismo `sql_mode` estricto del DDL, mediante `PDO::MYSQL_ATTR_INIT_COMMAND`. Es necesario porque `CURRENT_TIMESTAMP(6)` usa la zona de la sesión, y el mapeo interpreta las fechas como UTC.
-- **`public/index.php`:** carga `app/autoload.php`.
+- **`app/database/conn.php`:** es solo configuración (lee el `.env` y declara `$DATABASES`). Si `DB_LOCAL_NAME` o `DB_PROD_NAME` están vacíos, el nombre de la base es `cursology`.
+- **`app/database/Connection.php`:** abre el PDO. Cada conexión ejecuta `SET time_zone = '+00:00'` y el mismo `sql_mode` estricto del DDL, mediante `PDO::MYSQL_ATTR_INIT_COMMAND`. Es necesario porque `CURRENT_TIMESTAMP(6)` usa la zona de la sesión, y el mapeo interpreta las fechas como UTC.
+- **`public/index.php`:** carga `app/autoload.php`, `conn.php` y `app/bootstrap.php` (la raíz de composición que crea e inyecta las dependencias).
 - **`app/database/schema/Cursology_modelo_fisico_mysql.sql`:** copia del DDL, idéntica byte a byte (mismo hash). La verificación la usa. El DDL se ejecuta por separado; esta fase no crea ni altera la base.
 
 ## Verificación
@@ -190,37 +189,30 @@ El script no necesita MySQL ni dependencias. Termina con código `0` si todo pas
 7. **Hidratación por entidad:** una completa por cada una; una clave ausente y un NULL por cada columna; y casos de conversión por tipo para las 254 columnas.
 8. **Casos críticos:** `'0'`/`'1'`, `NULL` real frente a `'NULL'`, campo ausente, `'false'`, `18446744073709551615` y su overflow, `'123.45'`, exceso de escala y de rango, float, fecha inexistente, microsegundos, y mensajes de error sin valores.
 9. **Exposición:** `json_encode`, `serialize`, `print_r` y `var_dump` sin el hash ni las claves del examen.
-10. **Sin base de datos:** que no se cargue `conn.php`, `db()` ni `call_sp()`, y que no haya PDO ni SQL CRUD en el código del mapeo.
+10. **Sin base de datos:** que no se cargue `conn.php` ni ninguna conexión, y que no haya PDO ni SQL CRUD en el código del mapeo.
 
 Resultado actual: `RESULTADO: OK (7233 comprobaciones)`.
 
-## Pendientes para conectar los SP
+## Conexión con los SP
 
-La integración prevista es: controlador → capa de modelo (casos de uso y persistencia) → PDO → `CALL` de SP → filas asociativas → entidades o DTO de resultado. Antes de implementarla hay que definir:
+La integración es: controlador → servicio (caso de uso) → repositorio → `StoredProcedures` → `CALL` de SP → filas asociativas → entidades o DTO de resultado. Las reglas completas están en [stored-procedures.md](stored-procedures.md). Ya resuelto:
 
-1. **Contratos por caso de uso, no CRUD por tabla.** Cada SP necesita un nombre fijo controlado por el servidor, parámetros de entrada en orden y los result sets que devuelve. Compras, avance y exámenes tocan varias tablas; los reportes (Kardex, ventas, alumnos e instructores) devuelven proyecciones con su **propio DTO**, no entidades parciales.
-2. **Alias compatibles con los mappers.** Si un result set se hidrata como entidad, debe traer todas sus columnas con el nombre exacto del DDL. Si trae columnas de varias tablas, hay que usar alias para que no choquen con `FETCH_ASSOC` y crear un DTO.
-3. **Ejecución con PDO.** `call_sp()` en `conn.php` ya hace tres cosas:
-   - valida el nombre del SP;
-   - pasa los valores con `?` como prepared statement;
-   - recorre todos los result sets y cierra el cursor, lo que evita el error 2014.
+- **Ejecución:** `App\Database\StoredProcedures`:
+  - valida el nombre del SP;
+  - enlaza los valores con `?` y su tipo (IDs y `DECIMAL` como cadena, `bool` como 0/1, fechas en UTC con microsegundos, `NULL` con `PDO::PARAM_NULL`; los `float` se rechazan);
+  - devuelve **todos** los result sets y cierra el cursor (evita el error 2014).
+- **Errores:** un `SIGNAL SQLSTATE '45000'` llega como `ProcedureException::$businessCode`, y el repositorio lo traduce a una excepción de dominio. El mensaje de MySQL no llega al cliente.
+- **Transacciones:** el SP es el responsable de su transacción. PHP no abre transacciones salvo que se documente una excepción, y nunca hay una abierta durante una llamada de red (Cloudinary, PayPal).
+- **Resultados que no son entidades:** se leen con su propio DTO (por ejemplo, `LoginResult`).
+- **Respuestas HTTP:** usan un DTO por caso de uso (por ejemplo, `UserResponse`).
 
-   Pero hoy **solo devuelve el primer result set**. Para SP con varios `SELECT` hará falta una variante que devuelva todos. Las salidas conviene darlas con un `SELECT` final en vez de parámetros `OUT`.
-4. **Tipos en los parámetros:**
-   - IDs y `DECIMAL` como cadenas (sin pasar por `float`);
-   - booleanos como `0`/`1`;
-   - fechas en UTC con formato `Y-m-d H:i:s.u`;
-   - `NULL` con `PDO::PARAM_NULL`.
+Sigue pendiente para los demás módulos:
 
-   Con `EMULATE_PREPARES = false`, mysqlnd devuelve `int` en enteros y `string` en `DECIMAL`; `RowReader` acepta ambas formas.
-5. **Transacciones.** Cada caso de uso debe tener un único responsable:
-   - O PHP abre la transacción con `beginTransaction()`/`commit()` y los SP no hacen `COMMIT`, o el SP la maneja completa; nunca las dos cosas.
-   - Llamar varios SP seguidos no es atómico sin una transacción explícita.
-   - Hay que definir un orden de bloqueos uniforme (por ejemplo, para compras y finalización de cursos).
-   - No hay que mantener una transacción abierta durante una llamada de red, como la confirmación de un pago.
-6. **Errores.** Las reglas de negocio se señalan desde el SP con `SIGNAL SQLSTATE '45000'`. La capa de modelo las convierte en excepciones de dominio, y los mensajes internos de MySQL nunca llegan al cliente.
-7. **DTO de respuesta por endpoint.** Además de quitar los datos internos, deben aplicar la presentación (zona `America/Monterrey`, formato de fechas e importes de la rúbrica).
-8. **Recomendación:** que el usuario MySQL de la aplicación tenga permiso `EXECUTE` sobre los SP, y no permisos directos sobre las tablas de negocio.
+1. **Contratos por caso de uso, no CRUD por tabla.** Compras, avance y exámenes tocan varias tablas; los reportes (Kardex, ventas, alumnos e instructores) devuelven proyecciones con su propio DTO, no entidades parciales.
+2. **Alias compatibles con los mappers.** Si un result set se hidrata como entidad, trae todas sus columnas con el nombre exacto del DDL. Si combina tablas, se usan alias que no choquen con `FETCH_ASSOC`.
+3. **Orden de bloqueos uniforme** en los SP con varias filas bloqueadas (compras, finalización de cursos).
+4. **Presentación en los DTO de respuesta:** zona `America/Monterrey` y formato de fechas e importes de la rúbrica.
+5. **Recomendación:** antes de producción, un usuario MySQL de la aplicación con permiso `EXECUTE` sobre los SP y sin permisos directos sobre las tablas de negocio.
 
 ## Observaciones sobre el DDL
 

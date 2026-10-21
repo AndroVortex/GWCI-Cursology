@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= e($csrfToken) ?>">
     <title><?= htmlspecialchars($page['title']) ?> | Cursology</title>
 
     <!-- Se ejecuta antes de cargar el CSS para que no parpadee el tema equivocado. -->

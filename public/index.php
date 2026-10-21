@@ -1,4 +1,7 @@
 <?php
+
+use App\Http\Request;
+
 define('BASE_PATH', dirname(__DIR__));
 
 // true = BD local, false = BD de producción
@@ -8,8 +11,27 @@ require_once BASE_PATH . '/app/autoload.php';
 require_once BASE_PATH . '/app/database/conn.php';
 define('DB_DEFAULT', $DATABASES[USE_LOCAL_DB ? 'local' : 'prod']);
 
-session_start();
-$isLoggedIn = isset($_SESSION['user']);
+require_once BASE_PATH . '/app/bootstrap.php';
+
+$request = Request::fromGlobals();
+$session->start();
+
+if ($request->isApi()) {
+    $api->handle($request)->send();
+    exit;
+}
+
+$currentUser = null;
+try {
+    $currentUser = $auth->userForSession($session->userId());
+    if ($currentUser === null && $session->userId() !== null) {
+        $session->clearUser();
+    }
+} catch (Throwable $exception) {
+    error_log('[view] no se pudo cargar el usuario de la sesión: ' . $exception);
+}
+$isLoggedIn = $currentUser !== null;
+$csrfToken = $session->csrfToken();
 
 $views = [
     'home' => [
@@ -27,13 +49,6 @@ $views = [
 ];
 
 $view = is_string($_GET['view'] ?? null) ? $_GET['view'] : 'home';
-
-if ($view === 'logout') {
-    $_SESSION = [];
-    session_destroy();
-    header('Location: ?view=home');
-    exit;
-}
 
 if ($view === 'login' && $isLoggedIn) {
     header('Location: ?view=home');

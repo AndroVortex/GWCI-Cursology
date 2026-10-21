@@ -39,13 +39,13 @@
                 <h1 class="auth-title">Bienvenido de vuelta</h1>
                 <p class="auth-subtitle">Inicia sesión para continuar aprendiendo.</p>
 
-                <form class="auth-form" id="login-form" method="post" action="?view=login" novalidate>
-                    <input type="hidden" name="action" value="login">
+                <form class="auth-form" id="login-form" method="post" action="api/auth/login" novalidate>
+                    <div class="form-alert" role="alert" data-form-alert hidden></div>
 
                     <div class="form-field">
-                        <label class="form-label" for="login-identity">Usuario o email</label>
-                        <input class="form-control" type="text" id="login-identity" name="identity" autocomplete="username" placeholder="tu_usuario o tu@email.com" aria-describedby="login-identity-error">
-                        <p class="field-error" id="login-identity-error" aria-live="polite"></p>
+                        <label class="form-label" for="login-email">Email</label>
+                        <input class="form-control" type="email" id="login-email" name="email" autocomplete="email" maxlength="254" placeholder="tu@email.com" aria-describedby="login-email-error">
+                        <p class="field-error" id="login-email-error" aria-live="polite"></p>
                     </div>
 
                     <div class="form-field">
@@ -71,8 +71,35 @@
                 <h1 class="auth-title">Crea tu cuenta</h1>
                 <p class="auth-subtitle">Es gratis y solo toma un minuto.</p>
 
-                <form class="auth-form" id="signup-form" method="post" action="?view=login" enctype="multipart/form-data" novalidate>
-                    <input type="hidden" name="action" value="signup">
+                <form class="auth-form" id="signup-form" method="post" action="api/auth/register" enctype="multipart/form-data" novalidate>
+                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+
+                    <fieldset class="form-field role-field" id="signup-rol" aria-describedby="signup-rol-error">
+                        <legend class="form-label">¿Cómo quieres usar Cursology?</legend>
+                        <div class="role-options">
+                            <label class="role-option">
+                                <input class="visually-hidden" type="radio" name="rol" value="student" checked>
+                                <span class="role-option-body">
+                                    <span class="role-option-icon" aria-hidden="true">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>
+                                    </span>
+                                    <span class="role-option-title">Quiero aprender</span>
+                                    <span class="role-option-text">Inscríbete a cursos y avanza a tu ritmo.</span>
+                                </span>
+                            </label>
+                            <label class="role-option">
+                                <input class="visually-hidden" type="radio" name="rol" value="instructor">
+                                <span class="role-option-body">
+                                    <span class="role-option-icon" aria-hidden="true">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>
+                                    </span>
+                                    <span class="role-option-title">Quiero enseñar</span>
+                                    <span class="role-option-text">Crea y publica tus propios cursos.</span>
+                                </span>
+                            </label>
+                        </div>
+                        <p class="field-error" id="signup-rol-error" aria-live="polite"></p>
+                    </fieldset>
 
                     <div class="form-field">
                         <span class="form-label">Foto de perfil <span class="optional">(opcional)</span></span>
@@ -89,7 +116,7 @@
                                     </label>
                                     <button type="button" class="btn btn-ghost btn-sm" id="signup-photo-remove" hidden>Quitar</button>
                                 </div>
-                                <p class="form-hint" id="signup-photo-hint">JPG, PNG o WEBP.</p>
+                                <p class="form-hint" id="signup-photo-hint">JPG, PNG o WEBP, máximo 5 MB. Si no subes una, usaremos una imagen por defecto.</p>
                                 <p class="field-error" id="signup-photo-error" aria-live="polite"></p>
                             </div>
                         </div>
@@ -97,19 +124,19 @@
 
                     <div class="form-field">
                         <label class="form-label" for="signup-nombre">Nombre</label>
-                        <input class="form-control" type="text" id="signup-nombre" name="nombre" autocomplete="given-name" placeholder="Tu nombre" aria-describedby="signup-nombre-error">
+                        <input class="form-control" type="text" id="signup-nombre" name="nombre" autocomplete="given-name" maxlength="100" placeholder="Tu nombre" aria-describedby="signup-nombre-error">
                         <p class="field-error" id="signup-nombre-error" aria-live="polite"></p>
                     </div>
 
                     <div class="form-row">
                         <div class="form-field">
                             <label class="form-label" for="signup-apellido-paterno">Apellido paterno</label>
-                            <input class="form-control" type="text" id="signup-apellido-paterno" name="apellido_paterno" autocomplete="family-name" placeholder="Apellido paterno" aria-describedby="signup-apellido-paterno-error">
+                            <input class="form-control" type="text" id="signup-apellido-paterno" name="apellido_paterno" autocomplete="family-name" maxlength="100" placeholder="Apellido paterno" aria-describedby="signup-apellido-paterno-error">
                             <p class="field-error" id="signup-apellido-paterno-error" aria-live="polite"></p>
                         </div>
                         <div class="form-field">
-                            <label class="form-label" for="signup-apellido-materno">Apellido materno</label>
-                            <input class="form-control" type="text" id="signup-apellido-materno" name="apellido_materno" placeholder="Apellido materno" aria-describedby="signup-apellido-materno-error">
+                            <label class="form-label" for="signup-apellido-materno">Apellido materno <span class="optional">(opcional)</span></label>
+                            <input class="form-control" type="text" id="signup-apellido-materno" name="apellido_materno" maxlength="100" placeholder="Apellido materno" aria-describedby="signup-apellido-materno-error">
                             <p class="field-error" id="signup-apellido-materno-error" aria-live="polite"></p>
                         </div>
                     </div>
@@ -134,7 +161,7 @@
 
                     <div class="form-field">
                         <label class="form-label" for="signup-email">Email</label>
-                        <input class="form-control" type="email" id="signup-email" name="email" autocomplete="email" placeholder="tu@email.com" aria-describedby="signup-email-error">
+                        <input class="form-control" type="email" id="signup-email" name="email" autocomplete="email" maxlength="254" placeholder="tu@email.com" aria-describedby="signup-email-error">
                         <p class="field-error" id="signup-email-error" aria-live="polite"></p>
                     </div>
 

@@ -4,6 +4,50 @@
     const THEME_KEY = 'cursology-theme';
     const root = document.documentElement;
 
+    /* ---------- Cliente de la API (fetch con promesas) ---------- */
+    function csrfToken() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+    }
+
+    // Resuelve con { ok, status, body } para cualquier respuesta HTTP (incluidos 4xx/5xx)
+    // y solo rechaza si no hubo respuesta (red caída, servidor apagado).
+    function api(url, options) {
+        const settings = Object.assign({ method: 'GET' }, options || {});
+        const headers = new Headers(settings.headers || {});
+        headers.set('Accept', 'application/json');
+        if (settings.method !== 'GET') {
+            headers.set('X-CSRF-Token', csrfToken());
+        }
+        settings.headers = headers;
+        settings.credentials = 'same-origin';
+
+        return fetch(url, settings).then(function (response) {
+            if (response.status === 204) {
+                return { ok: response.ok, status: response.status, body: null };
+            }
+            return response.json()
+                .catch(function () { return null; })
+                .then(function (body) {
+                    return { ok: response.ok, status: response.status, body: body };
+                });
+        });
+    }
+
+    window.Cursology = { api: api };
+
+    /* ---------- Cerrar sesión ---------- */
+    document.querySelectorAll('[data-logout]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            button.disabled = true;
+            api('api/auth/logout', { method: 'POST' })
+                .catch(function () { return null; })
+                .then(function () {
+                    window.location.assign('?view=home');
+                });
+        });
+    });
+
     /* ---------- Tema (light / dark) ---------- */
     const themeToggle = document.querySelector('[data-theme-toggle]');
     const themeLabel = document.querySelector('[data-theme-label]');

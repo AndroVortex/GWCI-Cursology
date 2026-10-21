@@ -184,6 +184,28 @@ final class RowReader
         return $case;
     }
 
+    /**
+     * Igual que enum(), pero admite NULL (columnas calculadas de un DTO de resultado).
+     *
+     * @template T of BackedEnum
+     * @param class-string<T> $enumClass
+     * @return T|null
+     */
+    public function nullableEnum(string $column, string $enumClass): ?BackedEnum
+    {
+        $value = $this->value($column);
+        if ($value === null) {
+            return null;
+        }
+
+        $case = is_string($value) ? $enumClass::tryFrom($value) : null;
+        if ($case === null) {
+            throw $this->invalid($column, 'valor no permitido por el CHECK de la columna', $value);
+        }
+
+        return $case;
+    }
+
     // ---------------------------------------------------------------
     // DATE -> string Y-m-d, DATETIME(6) -> DateTimeImmutable UTC
     // ---------------------------------------------------------------

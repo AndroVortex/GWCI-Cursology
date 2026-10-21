@@ -1,0 +1,8 @@
+# Front controller para Apache (Laragon): todo lo que no sea un archivo o carpeta
+# real de public/ lo atiende index.php (incluidas las rutas /api/...).
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
