@@ -66,8 +66,11 @@
         });
     });
 
-    /* ---------- Reglas de validación ---------- */
+    /* ---------- Reglas de validación (las mismas que valida el servidor) ---------- */
     const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+    const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+    const MAX_NAME_CHARS = 100;
 
     const PASSWORD_RULES = {
         length: function (value) { return value.length >= 8; },
@@ -93,24 +96,40 @@
         return date.getFullYear() + '-' + month + '-' + day;
     }
 
+    function email(field) {
+        const value = field.value.trim();
+        if (!value) {
+            return 'Ingresa tu email.';
+        }
+        return EMAIL_PATTERN.test(value) ? '' : 'Ingresa un email válido.';
+    }
+
+    function maxLength(field) {
+        return field.value.trim().length > MAX_NAME_CHARS ? 'No puede exceder ' + MAX_NAME_CHARS + ' caracteres.' : '';
+    }
+
     const validators = {
         'login-form': {
-            identity: required('Ingresa tu usuario o email.'),
+            email: email,
             password: function (field) {
                 return field.value ? '' : 'Ingresa tu contraseña.';
             },
         },
         'signup-form': {
+            rol: required('Elige si quieres aprender o enseñar.'),
             foto: function (field) {
                 const file = field.files[0];
                 if (!file) {
                     return '';
                 }
-                return file.type.startsWith('image/') ? '' : 'El archivo debe ser una imagen.';
+                if (PHOTO_TYPES.indexOf(file.type) === -1) {
+                    return 'La foto debe ser una imagen JPG, PNG o WEBP.';
+                }
+                return file.size > MAX_PHOTO_BYTES ? 'La foto no debe exceder 5 MB.' : '';
             },
             nombre: required('Ingresa tu nombre.'),
             apellido_paterno: required('Ingresa tu apellido paterno.'),
-            apellido_materno: required('Ingresa tu apellido materno.'),
+            apellido_materno: maxLength,
             genero: required('Selecciona tu género.'),
             fecha_nacimiento: function (field) {
                 if (!field.value) {
@@ -122,13 +141,7 @@
                 }
                 return date > today() ? 'La fecha no puede ser futura.' : '';
             },
-            email: function (field) {
-                const value = field.value.trim();
-                if (!value) {
-                    return 'Ingresa tu email.';
-                }
-                return EMAIL_PATTERN.test(value) ? '' : 'Ingresa un email válido.';
-            },
+            email: email,
             password: function (field) {
                 if (!field.value) {
                     return 'Crea una contraseña.';
@@ -141,26 +154,124 @@
         },
     };
 
-    function showError(field, message) {
-        const error = document.getElementById(field.id + '-error');
-        const wrapper = field.closest('.form-field');
-        field.setAttribute('aria-invalid', message ? 'true' : 'false');
+    /* ---------- Errores por campo (también los que devuelve la API) ---------- */
+
+    // form.elements[name] es un RadioNodeList para un grupo de radios (rol): en ese
+    // caso el mensaje va en el fieldset que los agrupa.
+    function isGroup(field) {
+        return !field.tagName && typeof field.length === 'number';
+    }
+
+    function showError(form, name, message) {
+        const field = form.elements[name];
+        if (!field) {
+            return;
+        }
+        const anchor = isGroup(field) ? field[0] && field[0].closest('fieldset') : field;
+        if (!anchor) {
+            return;
+        }
+        const inputs = isGroup(field) ? Array.prototype.slice.call(field) : [field];
+        inputs.forEach(function (input) {
+            input.setAttribute('aria-invalid', message ? 'true' : 'false');
+        });
+        const wrapper = anchor.closest('.form-field');
         if (wrapper) {
             wrapper.classList.toggle('has-error', Boolean(message));
         }
+        const error = document.getElementById(anchor.id + '-error');
         if (error) {
-            error.textContent = message;
+            error.textContent = message || '';
         }
     }
 
-    function validateField(rules, field) {
-        const rule = rules[field.name];
-        if (!rule) {
+    function focusField(form, name) {
+        const field = form.elements[name];
+        const target = isGroup(field) ? field[0] : field;
+        if (target) {
+            target.focus();
+        }
+    }
+
+    function validateField(form, rules, name) {
+        const rule = rules[name];
+        if (!rule || !form.elements[name]) {
             return true;
         }
-        const message = rule(field);
-        showError(field, message);
+        const message = rule(form.elements[name]);
+        showError(form, name, message);
         return !message;
+    }
+
+    /* ---------- Alertas generales y estado de envío ---------- */
+    function showAlert(form, message) {
+        const alert = form.querySelector('[data-form-alert]');
+        if (alert) {
+            alert.textContent = message;
+            alert.hidden = false;
+        }
+    }
+
+    function hideAlert(form) {
+        const alert = form.querySelector('[data-form-alert]');
+        if (alert) {
+            alert.hidden = true;
+            alert.textContent = '';
+        }
+    }
+
+    function setBusy(form, busy) {
+        const button = form.querySelector('[type="submit"]');
+        form.setAttribute('aria-busy', String(busy));
+        if (!button) {
+            return;
+        }
+        if (!button.dataset.label) {
+            button.dataset.label = button.textContent;
+        }
+        button.disabled = busy;
+        button.textContent = busy ? 'Enviando…' : button.dataset.label;
+    }
+
+    /* ---------- Envío con fetch ---------- */
+    function requestOptions(form) {
+        if (form.id === 'login-form') {
+            return {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: form.elements.email.value.trim(),
+                    password: form.elements.password.value,
+                }),
+            };
+        }
+        // multipart/form-data: el navegador pone el Content-Type con su boundary.
+        return { method: 'POST', body: new FormData(form) };
+    }
+
+    function submitForm(form) {
+        hideAlert(form);
+        setBusy(form, true);
+
+        window.Cursology.api(form.getAttribute('action'), requestOptions(form))
+            .then(function (result) {
+                if (result.ok) {
+                    window.location.assign('?view=home');
+                    return;
+                }
+                const error = result.body && result.body.error ? result.body.error : null;
+                if (error && error.fields) {
+                    Object.keys(error.fields).forEach(function (name) {
+                        showError(form, name, error.fields[name]);
+                    });
+                }
+                showAlert(form, error && error.message ? error.message : 'Ocurrió un error inesperado. Inténtalo de nuevo.');
+                setBusy(form, false);
+            })
+            .catch(function () {
+                showAlert(form, 'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.');
+                setBusy(form, false);
+            });
     }
 
     Object.keys(validators).forEach(function (formId) {
@@ -174,32 +285,33 @@
             const field = event.target;
             field.dataset.touched = 'true';
             if (field.getAttribute('aria-invalid') === 'true') {
-                validateField(rules, field);
+                validateField(form, rules, field.name);
             }
         });
 
         form.addEventListener('change', function (event) {
-            validateField(rules, event.target);
+            validateField(form, rules, event.target.name);
         });
 
         form.addEventListener('focusout', function (event) {
             if (event.target.dataset.touched === 'true') {
-                validateField(rules, event.target);
+                validateField(form, rules, event.target.name);
             }
         });
 
         form.addEventListener('submit', function (event) {
+            event.preventDefault();
             let firstInvalid = null;
             Object.keys(rules).forEach(function (name) {
-                const field = form.elements[name];
-                if (field && !validateField(rules, field) && !firstInvalid) {
-                    firstInvalid = field;
+                if (!validateField(form, rules, name) && firstInvalid === null) {
+                    firstInvalid = name;
                 }
             });
-            if (firstInvalid) {
-                event.preventDefault();
-                firstInvalid.focus();
+            if (firstInvalid !== null) {
+                focusField(form, firstInvalid);
+                return;
             }
+            submitForm(form);
         });
     });
 
@@ -259,7 +371,7 @@
         photoRemove.addEventListener('click', function () {
             photoInput.value = '';
             resetPreview();
-            showError(photoInput, '');
+            showError(photoInput.form, 'foto', '');
             photoInput.focus();
         });
     }
