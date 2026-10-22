@@ -208,6 +208,20 @@ final class CloudinaryClient
     }
 
     /**
+     * Opciones TLS de curl. En Windows también se confía en el almacén de certificados del
+     * sistema: un proxy que inspecciona HTTPS (p. ej. Zscaler) instala ahí su raíz, que no
+     * viene en el cacert.pem de PHP. La verificación del certificado sigue activa.
+     *
+     * @return array<int, mixed>
+     */
+    public static function tlsOptions(): array
+    {
+        return PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA')
+            ? [CURLOPT_SSL_OPTIONS => CURLSSLOPT_NATIVE_CA]
+            : [];
+    }
+
+    /**
      * @param array<int, mixed> $options
      * @return array<string, mixed>
      * @throws MediaUploadException
@@ -215,7 +229,7 @@ final class CloudinaryClient
     private function send(string $url, array $options): array
     {
         $curl = curl_init($url);
-        curl_setopt_array($curl, $options + [
+        curl_setopt_array($curl, $options + self::tlsOptions() + [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_TIMEOUT => $this->timeoutSeconds,
@@ -226,7 +240,10 @@ final class CloudinaryClient
         curl_close($curl);
 
         if (!is_string($body)) {
-            throw MediaUploadException::failed('no hubo respuesta (' . $curlError . ').');
+            $hint = str_contains($curlError, 'SSL certificate')
+                ? ' Revisa si un proxy o antivirus intercepta HTTPS y si PHP confía en su certificado raíz (curl.cainfo).'
+                : '';
+            throw MediaUploadException::failed('no hubo respuesta (' . $curlError . ').' . $hint);
         }
 
         $data = json_decode($body, true);

@@ -22,6 +22,8 @@ SOURCE app/database/procedures/user/sp_user_change_password.sql;
 
 -- Administración
 SOURCE app/database/procedures/admin/sp_admin_create_first.sql;
+SOURCE app/database/procedures/admin/sp_admin_list_locked_users.sql;
+SOURCE app/database/procedures/admin/sp_admin_unlock_user.sql;
 
 -- Categorías
 SOURCE app/database/procedures/category/sp_category_list.sql;

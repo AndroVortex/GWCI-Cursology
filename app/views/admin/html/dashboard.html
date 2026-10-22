@@ -5,8 +5,11 @@
     </div>
 </div>
 
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
 <?php
-$previewMessage = 'Las categorías ya funcionan. Cuentas, reportes, formas de pago y moderación se conectarán en las siguientes entregas.';
+/** @var list<\App\Models\Dto\LockedAccount> $lockedAccounts */
+$previewMessage = 'Las categorías y la reactivación de cuentas ya funcionan. Reportes, formas de pago y moderación se conectarán en las siguientes entregas.';
 require BASE_PATH . '/app/views/base/html/preview-notice.html';
 ?>
 
@@ -25,7 +28,7 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
     </div>
     <div class="stat">
         <p class="stat-label">Cuentas bloqueadas</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= count($lockedAccounts) ?></p>
     </div>
 </div>
 
@@ -33,7 +36,7 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
     <div class="panel-header">
         <div>
             <h2 class="panel-title" id="admin-locked-title">Cuentas bloqueadas</h2>
-            <p class="panel-description">Se bloquean tras 3 contraseñas incorrectas consecutivas. Solo un administrador puede reactivarlas.</p>
+            <p class="panel-description">Se bloquean tras 3 contraseñas incorrectas consecutivas. Al reactivarla, la cuenta vuelve a entrar con su misma contraseña.</p>
         </div>
     </div>
     <div class="table-wrap">
@@ -44,21 +47,48 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                     <th scope="col">Nombre</th>
                     <th scope="col">Rol</th>
                     <th scope="col">Bloqueada desde</th>
+                    <th scope="col">Último intento</th>
                     <th scope="col"><span class="visually-hidden">Acciones</span></th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="5">
-                        <div class="empty-state">
-                            <span class="empty-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                            </span>
-                            <p class="empty-title">No hay cuentas bloqueadas</p>
-                            <p class="empty-text">Las cuentas que se bloqueen aparecerán aquí con la opción de reactivarlas.</p>
-                        </div>
-                    </td>
-                </tr>
+                <?php foreach ($lockedAccounts as $account): ?>
+                    <tr>
+                        <td>
+                            <div class="account-cell">
+                                <img class="account-avatar" src="<?= e($account->avatar) ?>" alt="" loading="lazy">
+                                <span><?= e($account->email) ?></span>
+                            </div>
+                        </td>
+                        <td><?= e($account->fullName()) ?></td>
+                        <td>
+                            <?= e(role_label($account->role)) ?>
+                            <?php if ($account->banned): ?>
+                                <span class="badge badge-danger">Con ban</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e(format_date($account->lockedAt)) ?></td>
+                        <td><?= e(format_date($account->lastAttemptAt)) ?></td>
+                        <td>
+                            <div class="table-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" data-unlock="<?= e($account->id) ?>" data-name="<?= e($account->fullName()) ?>">Reactivar</button>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($lockedAccounts === []): ?>
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <span class="empty-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                </span>
+                                <p class="empty-title">No hay cuentas bloqueadas</p>
+                                <p class="empty-text">Las cuentas que se bloqueen aparecerán aquí con la opción de reactivarlas.</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 // Raíz de composición: crea los objetos de la aplicación e inyecta sus dependencias.
 // Requiere app/autoload.php, app/database/conn.php ($ENV) y la constante DB_DEFAULT.
 
+use App\Controllers\AccountController;
 use App\Controllers\AuthController;
 use App\Controllers\CategoryController;
 use App\Controllers\CourseController;
@@ -24,6 +25,7 @@ use App\Models\Enums\UserRole;
 use App\Repositories\CategoryRepository;
 use App\Repositories\CourseRepository;
 use App\Repositories\UserRepository;
+use App\Services\AccountAdminService;
 use App\Services\AuthService;
 use App\Services\CategoryService;
 use App\Services\CourseService;
@@ -49,6 +51,7 @@ $cloudinary = new CloudinaryClient(
 $mediaService = new MediaService($cloudinary);
 $auth = new AuthService($users, new RegistrationValidator(), $cloudinary);
 $profileService = new ProfileService($users, new ProfileValidator(), $cloudinary);
+$accountService = new AccountAdminService($users);
 $categoryService = new CategoryService(new CategoryRepository($procedures));
 $courseService = new CourseService(new CourseRepository($procedures), new CourseValidator(), $mediaService);
 
@@ -57,6 +60,7 @@ $courseService = new CourseService(new CourseRepository($procedures), new Course
 // ---------------------------------------------------------------
 $authController = new AuthController($auth, $session);
 $userController = new UserController($profileService, $session);
+$accountController = new AccountController($accountService);
 $categoryController = new CategoryController($categoryService);
 $mediaController = new MediaController($mediaService);
 $courseController = new CourseController($courseService);
@@ -78,6 +82,9 @@ $router->add('PATCH', '/api/users/me', $userController->updateProfile(...), [$re
 $router->add('POST', '/api/users/me/avatar', $userController->updateAvatar(...), [$requireAuth, $csrf]);
 $router->add('DELETE', '/api/users/me/avatar', $userController->removeAvatar(...), [$requireAuth, $csrf]);
 $router->add('PUT', '/api/users/me/password', $userController->changePassword(...), [$requireAuth, $csrf]);
+
+$router->add('GET', '/api/admin/users/locked', $accountController->listLocked(...), $adminOnly);
+$router->add('POST', '/api/admin/users/{id}/unlock', $accountController->unlock(...), [...$adminOnly, $csrf]);
 
 $router->add('GET', '/api/categories', $categoryController->listActive(...));
 $router->add('GET', '/api/admin/categories', $categoryController->listAll(...), $adminOnly);

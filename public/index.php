@@ -95,6 +95,7 @@ $dashboards = [
     UserRole::Admin->value => [
         'title' => 'Administración',
         'file'  => BASE_PATH . '/app/views/admin/html/dashboard.html',
+        'js'    => ['admin/js/dashboard.js'],
     ],
 ];
 
@@ -126,6 +127,9 @@ if ($view === 'dashboard') {
 try {
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Instructor) {
         $instructorCourses = $courseService->listMine($currentUser);
+    }
+    if ($view === 'dashboard' && $currentUser->role() === UserRole::Admin) {
+        $lockedAccounts = $accountService->lockedAccounts($currentUser);
     }
     if ($view === 'categories') {
         $categories = $categoryService->all();

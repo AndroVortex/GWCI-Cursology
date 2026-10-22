@@ -8,9 +8,9 @@ declare(strict_types=1);
  *   php tests/verify_cloudinary_live.php
  *
  * Hace lo mismo que el navegador: pide un ticket, sube el archivo directo a Cloudinary
- * y el servidor lo verifica con la Admin API. Sube una imagen diminuta (pública) y un
- * documento de texto (authenticated) a cursology/courses/u999999999/ y los borra al
- * terminar. No toca la base de datos.
+ * y el servidor lo verifica con la Admin API. También prueba la subida desde el servidor
+ * (la del avatar). Usa una imagen diminuta y un documento de texto en
+ * cursology/courses/u999999999/ y los borra al terminar. No toca la base de datos.
  */
 
 use App\Integrations\CloudinaryClient;
@@ -52,7 +52,7 @@ $user = AppUser::fromRow([
 function browserUpload(array $ticket, string $path, string $filename, string $mimeType): array
 {
     $curl = curl_init($ticket['upload_url']);
-    curl_setopt_array($curl, [
+    curl_setopt_array($curl, CloudinaryClient::tlsOptions() + [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => $ticket['fields'] + ['file' => new CURLFile($path, $mimeType, $filename)],
         CURLOPT_RETURNTRANSFER => true,
@@ -69,7 +69,7 @@ function browserUpload(array $ticket, string $path, string $filename, string $mi
 function fetchUrl(string $url): array
 {
     $curl = curl_init($url);
-    curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_TIMEOUT => 30]);
+    curl_setopt_array($curl, CloudinaryClient::tlsOptions() + [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_TIMEOUT => 30]);
     $body = curl_exec($curl);
     $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
     curl_close($curl);
@@ -129,6 +129,18 @@ try {
         thrown(ValidationException::class, static fn () => $media->confirm($user, 'course_video', $upload, 'video')) !== null,
         'la imagen no se puede reclamar como video promocional (otra carpeta)',
     );
+
+    // -----------------------------------------------------------
+    Report::section('Subida desde el servidor (avatar)');
+    $avatar = $cloudinary->uploadImage($png, 'image/png', "$folder/avatars");
+    $avatarFile = new VerifiedMedia($avatar->publicId, 'image', 'upload', 'png', 1, null, 'avatar.png', 'image/png', $avatar->secureUrl);
+    $uploaded[] = $avatarFile;
+    $avatarAsset = $cloudinary->parseDeliveryUrl($avatar->secureUrl);
+    check(str_starts_with($avatar->publicId, "$folder/avatars/") && fetchUrl($avatar->secureUrl)['status'] === 200, 'uploadImage() sube la foto y devuelve su secure_url');
+    check($avatarAsset !== null && $avatarAsset['public_id'] === $avatar->publicId, 'la URL guardada se puede volver a convertir en su public_id');
+    $cloudinary->destroy($avatar->publicId);
+    array_pop($uploaded);
+    check(!exists($cloudinary, $avatarFile), 'destroy() borra la foto anterior');
 
     // -----------------------------------------------------------
     Report::section('Documento protegido (authenticated)');

@@ -23,6 +23,8 @@ final class BusinessRuleException extends RuntimeException
         'USER_NOT_AVAILABLE' => [403, 'Tu cuenta no está disponible.', null],
         'NOT_ADMIN' => [403, 'Solo un administrador puede hacer esto.', null],
         'NOT_INSTRUCTOR' => [403, 'Solo un instructor puede hacer esto.', null],
+        'USER_NOT_FOUND' => [404, 'La cuenta no existe.', null],
+        'USER_NOT_LOCKED' => [409, 'Esta cuenta ya no está bloqueada.', null],
         'CATEGORY_NAME_TAKEN' => [409, 'Ya existe una categoría con ese nombre.', 'nombre'],
         'CATEGORY_NOT_FOUND' => [404, 'La categoría no existe.', null],
         'CATEGORY_IN_USE' => [409, 'Hay cursos publicados que se quedarían sin una categoría activa. Asígnales otra antes de desactivarla.', null],

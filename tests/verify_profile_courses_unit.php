@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Verificación sin base de datos ni red: perfil, cursos, rutas con {id}, roles,
- * firmas de Cloudinary, referencias de medios y formato de importes.
+ * firmas y TLS de Cloudinary, referencias de medios, cuentas bloqueadas y formato de importes.
  *
  *   php tests/verify_profile_courses_unit.php
  *
@@ -16,6 +16,7 @@ use App\Http\Middleware\RequireRole;
 use App\Http\Request;
 use App\Http\Router;
 use App\Integrations\CloudinaryClient;
+use App\Models\Dto\LockedAccount;
 use App\Models\Entities\AppUser;
 use App\Models\Enums\ContentType;
 use App\Models\Enums\UserRole;
@@ -204,7 +205,7 @@ try {
     check($get('POST', '/api/x/1')->status === 409 && $error['error']['code'] === 'LEVEL_NOT_EMPTY', 'regla de negocio -> su estado y código');
     $error = json_decode($get('POST', '/api/y/1')->body(), true);
     check(isset($error['error']['fields']['archivo']), 'MAIN_VIDEO_EXISTS se atribuye al campo archivo');
-    foreach (['COURSE_NOT_FOUND' => 404, 'CATEGORY_NAME_TAKEN' => 409, 'CATEGORY_NOT_AVAILABLE' => 422, 'NOT_INSTRUCTOR' => 403, 'HAS_ENROLLMENTS' => 409] as $code => $status) {
+    foreach (['COURSE_NOT_FOUND' => 404, 'CATEGORY_NAME_TAKEN' => 409, 'CATEGORY_NOT_AVAILABLE' => 422, 'NOT_INSTRUCTOR' => 403, 'HAS_ENROLLMENTS' => 409, 'USER_NOT_FOUND' => 404, 'USER_NOT_LOCKED' => 409] as $code => $status) {
         check(BusinessRuleException::of($code)->status === $status, "$code -> $status");
     }
 
@@ -238,6 +239,11 @@ try {
     check(!$docs->verifyUploadResponse('cursology/courses/u8/covers/abc', '1712345678', $responseSignature), 'otro public_id con la misma firma se rechaza');
     check(!$docs->verifyUploadResponse('cursology/courses/u7/covers/abc', '1712345679', $responseSignature), 'otra versión se rechaza');
     check(!(new CloudinaryClient('', '', ''))->verifyUploadResponse('a', '1', sha1('public_id=a&version=1')), 'sin credenciales nunca verifica');
+    check(
+        CloudinaryClient::tlsOptions() === (PHP_OS_FAMILY === 'Windows' ? [CURLOPT_SSL_OPTIONS => CURLSSLOPT_NATIVE_CA] : []),
+        'en Windows curl también usa los certificados del sistema (proxy como Zscaler)',
+    );
+    check(!array_key_exists(CURLOPT_SSL_VERIFYPEER, CloudinaryClient::tlsOptions()), 'la verificación SSL nunca se desactiva');
 
     $ticket = $docs->directUpload('video', ['folder' => 'cursology/courses/u7/content', 'type' => 'authenticated']);
     $fields = $ticket['fields'];
@@ -302,6 +308,17 @@ try {
     check($exception !== null && array_keys($exception->fields) === ['portada'], 'archivo de otra carpeta (otro usuario) se rechaza sin consultar Cloudinary');
     $forged = ['public_id' => 'cursology/courses/u7/covers/abc', 'version' => '1', 'signature' => str_repeat('0', 40)];
     check(thrown(ValidationException::class, static fn () => $stranger(userWithRole(UserRole::Instructor), 'course_cover', $forged, 'portada')) !== null, 'firma falsa se rechaza');
+
+    // -----------------------------------------------------------
+    Report::section('Cuentas bloqueadas');
+    $locked = LockedAccount::fromRow([
+        'id' => '42', 'name' => 'Ana', 'father_last_name' => 'López', 'mother_last_name' => null, 'email' => 'ana@example.com',
+        'role' => 'instructor', 'avatar' => 'img/avatar-default.svg', 'ban' => 0,
+        'status_changed_at' => '2026-10-21 18:00:00.000000', 'last_attempt_at' => null,
+    ]);
+    check($locked->fullName() === 'Ana López' && $locked->role === UserRole::Instructor && !$locked->banned, 'fila del SP -> LockedAccount sin apellido materno');
+    check($locked->lockedAt->getTimezone()->getName() === 'UTC' && $locked->lastAttemptAt === null, 'fechas en UTC; sin intentos -> null');
+    check(format_date($locked->lockedAt) === '21 oct 2026', 'fecha de bloqueo con el formato de la rúbrica');
 
     // -----------------------------------------------------------
     Report::section('Formato para las vistas');

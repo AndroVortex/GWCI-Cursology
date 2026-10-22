@@ -6,6 +6,7 @@ namespace App\Repositories;
 
 use App\Database\ProcedureException;
 use App\Database\StoredProcedures;
+use App\Models\Dto\LockedAccount;
 use App\Models\Dto\LoginResult;
 use App\Models\Entities\AppUser;
 use App\Services\Exceptions\BusinessRuleException;
@@ -122,6 +123,31 @@ final class UserRepository
     public function changePassword(string $userId, string $passwordHash): AppUser
     {
         return $this->user('sp_user_change_password', [$userId, $passwordHash]);
+    }
+
+    /**
+     * @return list<LockedAccount>
+     * @throws BusinessRuleException NOT_ADMIN
+     */
+    public function listLocked(string $adminId): array
+    {
+        try {
+            $rows = $this->procedures->rows('sp_admin_list_locked_users', [$adminId]);
+        } catch (ProcedureException $exception) {
+            throw BusinessRuleException::fromProcedure($exception);
+        }
+
+        return array_map(static fn (array $row): LockedAccount => LockedAccount::fromRow($row), $rows);
+    }
+
+    /**
+     * Reactiva una cuenta bloqueada. $actorId null solo desde scripts/unlock_account.php.
+     *
+     * @throws BusinessRuleException NOT_ADMIN, USER_NOT_FOUND, USER_NOT_LOCKED
+     */
+    public function unlock(?string $actorId, string $userId, string $reason): AppUser
+    {
+        return $this->user('sp_admin_unlock_user', [$actorId, $userId, $reason]);
     }
 
     /**

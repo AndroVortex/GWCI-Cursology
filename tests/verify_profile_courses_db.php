@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Verificación de perfil, primer admin, categorías y cursos contra la base LOCAL,
+ * Verificación de perfil, primer admin, cuentas bloqueadas, categorías y cursos contra la base LOCAL,
  * con los SP instalados (app/database/procedures/install.sql).
  *
  *   php tests/verify_profile_courses_db.php
@@ -19,15 +19,18 @@ use App\Database\ProcedureException;
 use App\Database\StoredProcedures;
 use App\Integrations\CloudinaryClient;
 use App\Models\Entities\AppUser;
+use App\Models\Enums\AccountStatus;
 use App\Models\Enums\ContentType;
 use App\Models\Enums\UserRole;
 use App\Repositories\CategoryRepository;
 use App\Repositories\CourseRepository;
 use App\Repositories\UserRepository;
+use App\Services\AccountAdminService;
 use App\Services\AuthService;
 use App\Services\CategoryService;
 use App\Services\CourseService;
 use App\Services\CourseValidator;
+use App\Services\Exceptions\AccountLockedException;
 use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\InvalidCredentialsException;
 use App\Services\Exceptions\ValidationException;
@@ -45,6 +48,7 @@ $users = new UserRepository($procedures);
 $noCloudinary = new CloudinaryClient('', '', '');
 $auth = new AuthService($users, new RegistrationValidator(), $noCloudinary);
 $profiles = new ProfileService($users, new ProfileValidator(), $noCloudinary);
+$accounts = new AccountAdminService($users);
 $categoryRepository = new CategoryRepository($procedures);
 $categories = new CategoryService($categoryRepository);
 $courseRepository = new CourseRepository($procedures);
@@ -137,6 +141,33 @@ try {
         'un segundo admin por el script -> ADMIN_EXISTS',
     );
     check($users->findForLogin("prueba+$mark-admin@cursology.test") === null, 'y no se crea la cuenta');
+
+    // -----------------------------------------------------------
+    Report::section('Cuentas bloqueadas');
+    $lockOut = static function (AppUser $user) use ($auth): ?AccountLockedException {
+        thrown(InvalidCredentialsException::class, static fn () => $auth->login($user->email(), 'Mala#2026'));
+        thrown(InvalidCredentialsException::class, static fn () => $auth->login($user->email(), 'Mala#2026'));
+
+        return thrown(AccountLockedException::class, static fn () => $auth->login($user->email(), 'Mala#2026'));
+    };
+    check($lockOut($student)?->justLocked === true, '3 contraseñas incorrectas bloquean la cuenta');
+    $lockedIds = static fn (): array => array_map(static fn ($a): string => $a->id, $accounts->lockedAccounts($admin));
+    $entry = array_values(array_filter($accounts->lockedAccounts($admin), static fn ($a): bool => $a->id === $student->id()))[0] ?? null;
+    check($entry !== null && $entry->email === $student->email() && $entry->role === UserRole::Student, 'aparece en la lista del admin con su email y rol');
+    check($entry !== null && $entry->lastAttemptAt !== null && $entry->lockedAt <= $entry->lastAttemptAt, 'con la fecha del bloqueo y la del último intento');
+    check(ruleCode(static fn () => $accounts->lockedAccounts($instructor)) === 'NOT_ADMIN', 'un instructor no ve la lista -> NOT_ADMIN');
+    check(ruleCode(static fn () => $users->unlock($instructor->id(), $student->id(), 'x')) === 'NOT_ADMIN', 'un instructor no reactiva cuentas -> NOT_ADMIN');
+
+    $unlocked = $accounts->unlock($admin, $student->id());
+    check($unlocked->accountStatus() === AccountStatus::Active && $unlocked->consecutiveFailedLogins() === 0, 'el admin la reactiva: activa y contador en 0');
+    check(!in_array($student->id(), $lockedIds(), true), 'ya no aparece en la lista');
+    check($auth->login($student->email(), $password)->id() === $student->id(), 'vuelve a iniciar sesión con su misma contraseña');
+    check(ruleCode(static fn () => $accounts->unlock($admin, $student->id())) === 'USER_NOT_LOCKED', 'reactivar una cuenta activa -> USER_NOT_LOCKED');
+    check(ruleCode(static fn () => $accounts->unlock($admin, '999999999999')) === 'USER_NOT_FOUND', 'cuenta inexistente -> USER_NOT_FOUND');
+
+    $lockOut($student);
+    $users->unlock(null, $student->id(), 'Reactivación desde la consola');
+    check($users->findById($student->id())?->accountStatus() === AccountStatus::Active, 'desde la consola (sin actor) también se reactiva');
 
     // -----------------------------------------------------------
     Report::section('Categorías');

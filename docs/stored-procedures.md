@@ -64,6 +64,23 @@ Registra el resultado de un intento de login en una transacción propia, despué
 - **Resultado:** una fila `outcome, consecutive_failures, account_status` (`account_status` es NULL para `unknown_user`). PHP la lee con `App\Models\Dto\LoginResult`.
 - **Error:** `USER_NOT_FOUND`, si el id no existe.
 
+### Administración de cuentas
+
+**`sp_admin_list_locked_users(p_admin_id)`**
+
+- Solo un admin activo y sin ban; si no, `NOT_ADMIN`.
+- **Resultado:** las cuentas con `account_status = 'locked'`, de la más reciente a la más antigua: `id, name, father_last_name, mother_last_name, email, role, avatar, ban, status_changed_at` (desde cuándo está bloqueada) y `last_attempt_at` (último intento en `login_attempt`). PHP las lee con `App\Models\Dto\LockedAccount`.
+- No modifica nada.
+
+**`sp_admin_unlock_user(p_actor_id, p_user_id, p_reason)`**
+
+- Reactiva una cuenta bloqueada en una transacción propia, con la fila del usuario bloqueada por `SELECT ... FOR UPDATE`.
+- Un solo `UPDATE` deja `account_status = 'active'`, `consecutive_failed_logins = 0` y actualiza `status_changed_at`. Tiene que ser un solo `UPDATE` porque así lo exige `ck_user_locked`.
+- Inserta `user_account_event` (`reactivated`, con `p_actor_id` y `p_reason`). La contraseña no cambia.
+- **`p_actor_id`:** el admin que la reactiva. NULL solo desde `scripts/unlock_account.php`, para cuando el bloqueado es el único admin.
+- **Resultado:** la fila completa de `app_user` ya reactivada.
+- **Errores:** `NOT_ADMIN`, `USER_NOT_FOUND` y `USER_NOT_LOCKED` (la cuenta no estaba bloqueada).
+
 ### Usuarios
 
 **`sp_user_get_by_id(p_user_id)`**
