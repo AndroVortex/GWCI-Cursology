@@ -5,7 +5,10 @@
     </div>
 </div>
 
-<?php require BASE_PATH . '/app/views/base/html/preview-notice.html'; ?>
+<?php
+$previewMessage = 'Las categorías ya funcionan. Cuentas, reportes, formas de pago y moderación se conectarán en las siguientes entregas.';
+require BASE_PATH . '/app/views/base/html/preview-notice.html';
+?>
 
 <div class="stat-grid">
     <div class="stat">
@@ -131,7 +134,7 @@
         <ul class="list">
             <li>
                 <span>Categorías</span>
-                <button type="button" class="btn btn-secondary btn-sm" disabled>Administrar</button>
+                <a class="btn btn-secondary btn-sm" href="?view=categories">Administrar</a>
             </li>
             <li>
                 <span>Formas de pago</span>

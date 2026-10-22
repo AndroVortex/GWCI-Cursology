@@ -47,6 +47,14 @@ final class Session
         unset($_SESSION[self::CSRF_KEY]);
     }
 
+    /** Nuevo id de sesión conservando sus datos (p. ej. tras cambiar la contraseña). */
+    public function regenerate(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+    }
+
     /** Quita al usuario sin destruir la sesión (p. ej. si su cuenta se bloqueó). */
     public function clearUser(): void
     {

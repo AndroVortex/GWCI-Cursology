@@ -1,0 +1,31 @@
+<?php
+/*
+ * Campo de subida directa a Cloudinary (lo maneja base/js/media-upload.js).
+ * Requiere $upload = [
+ *   'purpose' => propósito de MediaService, 'name' => nombre del campo para errores,
+ *   'id' => id del input, 'accept' => tipos aceptados, 'button' => texto del botón,
+ *   'hint' => ayuda, 'preview' => ['type' => 'image'|'video', 'src' => URL] o null,
+ *   'attrs' => atributos extra ya escapados (opcional),
+ * ].
+ */
+?>
+<div class="upload-field" data-upload data-purpose="<?= e($upload['purpose']) ?>" data-upload-name="<?= e($upload['name']) ?>" <?= $upload['attrs'] ?? '' ?>>
+    <div class="upload-preview" data-upload-preview>
+        <?php if (($upload['preview']['type'] ?? null) === 'image'): ?>
+            <img src="<?= e($upload['preview']['src']) ?>" alt="">
+        <?php elseif (($upload['preview']['type'] ?? null) === 'video'): ?>
+            <video src="<?= e($upload['preview']['src']) ?>" muted preload="metadata"></video>
+        <?php else: ?>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M20 16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/></svg>
+        <?php endif; ?>
+    </div>
+    <div class="upload-body">
+        <div class="upload-actions">
+            <input class="visually-hidden" type="file" id="<?= e($upload['id']) ?>" name="<?= e($upload['name']) ?>" accept="<?= e($upload['accept']) ?>">
+            <label class="btn btn-secondary btn-sm" for="<?= e($upload['id']) ?>"><?= e($upload['button']) ?></label>
+        </div>
+        <p class="form-hint"><?= e($upload['hint']) ?></p>
+        <div class="upload-progress" data-upload-progress hidden><span></span></div>
+        <p class="upload-status" data-upload-status aria-live="polite"></p>
+    </div>
+</div>

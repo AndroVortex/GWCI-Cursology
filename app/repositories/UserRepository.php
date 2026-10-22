@@ -8,7 +8,9 @@ use App\Database\ProcedureException;
 use App\Database\StoredProcedures;
 use App\Models\Dto\LoginResult;
 use App\Models\Entities\AppUser;
+use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\EmailTakenException;
+use App\Services\ProfileData;
 use App\Services\RegistrationData;
 use UnexpectedValueException;
 
@@ -75,5 +77,70 @@ final class UserRepository
         $row = $this->procedures->row('sp_user_get_by_id', [$userId]);
 
         return $row === null ? null : AppUser::fromRow($row);
+    }
+
+    /**
+     * Solo para scripts/create_admin.php.
+     *
+     * @throws BusinessRuleException ADMIN_EXISTS, EMAIL_TAKEN
+     */
+    public function createFirstAdmin(
+        string $name,
+        string $fatherLastName,
+        ?string $motherLastName,
+        string $gender,
+        string $birthday,
+        string $avatar,
+        string $email,
+        string $passwordHash,
+    ): AppUser {
+        return $this->user('sp_admin_create_first', [
+            $name, $fatherLastName, $motherLastName, $gender, $birthday, $avatar, $email, $passwordHash,
+        ]);
+    }
+
+    /** @throws BusinessRuleException EMAIL_TAKEN, USER_NOT_AVAILABLE */
+    public function updateProfile(string $userId, ProfileData $data): AppUser
+    {
+        return $this->user('sp_user_update_profile', [
+            $userId,
+            $data->name,
+            $data->fatherLastName,
+            $data->motherLastName,
+            $data->gender,
+            $data->birthday,
+            $data->description,
+            $data->email,
+        ]);
+    }
+
+    public function updateAvatar(string $userId, string $avatar): AppUser
+    {
+        return $this->user('sp_user_update_avatar', [$userId, $avatar]);
+    }
+
+    public function changePassword(string $userId, string $passwordHash): AppUser
+    {
+        return $this->user('sp_user_change_password', [$userId, $passwordHash]);
+    }
+
+    /**
+     * SP que devuelve la fila completa de app_user; sus errores de negocio se traducen.
+     *
+     * @param list<mixed> $params
+     */
+    private function user(string $procedure, array $params): AppUser
+    {
+        try {
+            $row = $this->procedures->row($procedure, $params);
+        } catch (ProcedureException $exception) {
+            throw BusinessRuleException::fromProcedure($exception);
+        }
+
+        if ($row === null) {
+            throw new UnexpectedValueException(sprintf('%s no devolvió la cuenta.', $procedure));
+        }
+
+        return AppUser::fromRow($row);
     }
 }

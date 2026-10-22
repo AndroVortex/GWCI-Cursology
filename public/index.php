@@ -2,6 +2,7 @@
 
 use App\Http\Request;
 use App\Models\Enums\UserRole;
+use App\Services\Exceptions\BusinessRuleException;
 
 define('BASE_PATH', dirname(__DIR__));
 
@@ -34,6 +35,7 @@ try {
 $isLoggedIn = $currentUser !== null;
 $csrfToken = $session->csrfToken();
 
+// 'auth' => requiere sesión; 'roles' => además, solo esos roles.
 $views = [
     'home' => [
         'title' => 'Inicio',
@@ -51,7 +53,32 @@ $views = [
         'title' => 'Mi perfil',
         'file'  => BASE_PATH . '/app/views/profile/html/profile.html',
         'css'   => ['profile/css/profile.css'],
-        'js'    => [],
+        'js'    => ['profile/js/profile.js'],
+        'auth'  => true,
+    ],
+    'categories' => [
+        'title' => 'Categorías',
+        'file'  => BASE_PATH . '/app/views/admin/html/categories.html',
+        'css'   => [],
+        'js'    => ['admin/js/categories.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
+    'course-new' => [
+        'title' => 'Nuevo curso',
+        'file'  => BASE_PATH . '/app/views/instructor/html/course-new.html',
+        'css'   => ['instructor/css/course.css'],
+        'js'    => ['base/js/media-upload.js', 'instructor/js/course-form.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Instructor],
+    ],
+    'course-editor' => [
+        'title' => 'Editar curso',
+        'file'  => BASE_PATH . '/app/views/instructor/html/course-editor.html',
+        'css'   => ['instructor/css/course.css'],
+        'js'    => ['base/js/media-upload.js', 'instructor/js/course-form.js', 'instructor/js/course-editor.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Instructor],
     ],
 ];
 
@@ -72,35 +99,46 @@ $dashboards = [
 ];
 
 $view = is_string($_GET['view'] ?? null) ? $_GET['view'] : 'home';
+if ($view !== 'dashboard' && !isset($views[$view])) {
+    $view = 'home';
+}
 
 if ($view === 'login' && $isLoggedIn) {
     header('Location: ?view=dashboard');
     exit;
 }
 
-if (in_array($view, ['profile', 'dashboard'], true) && !$isLoggedIn) {
+if (($view === 'dashboard' || ($views[$view]['auth'] ?? false)) && !$isLoggedIn) {
     header('Location: ?view=login');
     exit;
 }
 
-$dashboardRole = null;
-$isPreview = false;
-if ($view === 'dashboard') {
-    $dashboardRole = $currentUser->role();
-
-    // Solo en local: ?view=dashboard&as=admin muestra el panel (sin datos) de otro rol
-    // para revisar su diseño sin crear cuentas de cada tipo.
-    $previewRole = USE_LOCAL_DB && is_string($_GET['as'] ?? null) ? UserRole::tryFrom($_GET['as']) : null;
-    if ($previewRole !== null && $previewRole !== $dashboardRole) {
-        $dashboardRole = $previewRole;
-        $isPreview = true;
-    }
-
-    $views['dashboard'] = $dashboards[$dashboardRole->value] + ['css' => [], 'js' => []];
+if (isset($views[$view]['roles']) && !in_array($currentUser->role(), $views[$view]['roles'], true)) {
+    header('Location: ?view=dashboard');
+    exit;
 }
 
-if (!isset($views[$view])) {
-    $view = 'home';
+if ($view === 'dashboard') {
+    $views['dashboard'] = $dashboards[$currentUser->role()->value] + ['css' => [], 'js' => []];
+}
+
+// Datos de cada vista, siempre a través de los servicios (que llaman a los SP).
+try {
+    if ($view === 'dashboard' && $currentUser->role() === UserRole::Instructor) {
+        $instructorCourses = $courseService->listMine($currentUser);
+    }
+    if ($view === 'categories') {
+        $categories = $categoryService->all();
+    }
+    if ($view === 'course-new' || $view === 'course-editor') {
+        $activeCategories = $categoryService->active();
+    }
+    if ($view === 'course-editor') {
+        $outline = $courseService->outline($currentUser, is_string($_GET['id'] ?? null) ? $_GET['id'] : '');
+    }
+} catch (BusinessRuleException) {
+    header('Location: ?view=dashboard');
+    exit;
 }
 
 $page = $views[$view];
