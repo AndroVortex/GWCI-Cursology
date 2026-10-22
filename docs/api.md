@@ -100,6 +100,41 @@ Requiere sesión (middleware `RequireAuth`).
 - `200`: `{"data": {"user": {...}}}`.
 - `401` (`UNAUTHENTICATED`): sin sesión, o si la cuenta se bloqueó o se baneó después de iniciar sesión.
 
+### `GET /api/admin/users/locked`
+
+Cuentas bloqueadas por 3 contraseñas incorrectas consecutivas, de la más reciente a la más antigua. Requiere sesión de **admin** (`RequireAuth` + `RequireRole`).
+
+- `200`:
+
+```json
+{"data": {"accounts": [{
+  "id": "13", "fullName": "Ana López", "email": "ana@example.com", "role": "student",
+  "avatar": "img/avatar-default.svg", "banned": false,
+  "lockedAt": "2026-10-21T21:28:38+00:00", "lastAttemptAt": "2026-10-21T21:30:02+00:00"
+}]}}
+```
+
+- `401` sin sesión; `403` (`FORBIDDEN`) si no es admin.
+
+### `POST /api/admin/users/{id}/unlock`
+
+Reactiva la cuenta: vuelve a `active` con el contador de fallos en 0 y entra con **su misma contraseña**. Queda el evento `reactivated` en `user_account_event`, con el admin como actor. Requiere sesión de admin y `X-CSRF-Token`; no lleva cuerpo.
+
+| Estado | `code` | Cuándo |
+|---|---|---|
+| 200 | — | `{"data": {"user": {...}}}` con la cuenta reactivada. |
+| 403 | `FORBIDDEN` / `CSRF_INVALID` | No es admin, o falta el token. |
+| 404 | `USER_NOT_FOUND` | El id no existe. |
+| 409 | `USER_NOT_LOCKED` | La cuenta ya no estaba bloqueada. |
+
+En el panel del admin (`?view=dashboard`), la tabla "Cuentas bloqueadas" usa este endpoint con el botón **Reactivar**.
+
+Si la cuenta bloqueada es la del único admin, nadie puede reactivarla desde el panel; se hace desde la consola:
+
+```powershell
+php scripts/unlock_account.php --email=admin@cursology.local
+```
+
 ## Configuración (`.env`)
 
 ```
@@ -110,6 +145,15 @@ APP_ALLOWED_ORIGINS=
 ```
 
 Sin las credenciales de Cloudinary, el registro sin foto funciona y el registro con foto responde `503`. Las fotos se suben a la carpeta `cursology/avatars` con una petición firmada desde el servidor; el secret nunca llega al navegador.
+
+### Certificados detrás de un proxy (Zscaler)
+
+Si las subidas responden `502` (`MEDIA_UPLOAD_FAILED`, "No se pudo procesar el archivo") y en `C:\laragon\tmp\php_errors.log` aparece `unable to get local issuer certificate (20)`, un proxy que inspecciona HTTPS (como Zscaler en la red de la empresa) está volviendo a firmar el certificado de Cloudinary con su propia raíz.
+
+- **El navegador sí confía en esa raíz** porque está instalada en Windows; por eso la subida directa desde el navegador funciona.
+- **El `cacert.pem` de PHP no la trae**, así que fallaban las llamadas del servidor: subir el avatar y verificar la portada y los videos con la Admin API.
+- **Corrección:** `CloudinaryClient::tlsOptions()` agrega `CURLSSLOPT_NATIVE_CA` en Windows, para que curl use también los certificados de Windows. **La verificación SSL sigue activa:** nunca se desactiva `CURLOPT_SSL_VERIFYPEER`. En Linux (producción) no cambia nada.
+- **Comprobarlo:** `php tests/verify_cloudinary_live.php` sube, verifica y borra archivos reales.
 
 ## Probar
 

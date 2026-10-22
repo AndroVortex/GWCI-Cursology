@@ -77,6 +77,10 @@
     gap: 14px;
 }
 
+.profile-form-continued {
+    padding-top: 0;
+}
+
 .photo-row {
     display: flex;
     flex-wrap: wrap;

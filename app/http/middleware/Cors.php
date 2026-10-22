@@ -14,7 +14,7 @@ use App\Http\Request;
  */
 final class Cors
 {
-    private const ALLOWED_METHODS = 'GET, POST, OPTIONS';
+    private const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
     private const ALLOWED_HEADERS = 'Accept, Content-Type, X-CSRF-Token';
 
     /**

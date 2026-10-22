@@ -34,7 +34,126 @@
         });
     }
 
-    window.Cursology = { api: api };
+    /* ---------- Formularios: errores por campo, alertas y estado de envío ---------- */
+
+    // form.elements[name] es un RadioNodeList para radios o casillas con el mismo nombre;
+    // en ese caso el error se muestra en el fieldset que los agrupa.
+    function fieldAnchor(form, name) {
+        const field = form.elements[name];
+        if (!field) {
+            return null;
+        }
+        const isGroup = !field.tagName && typeof field.length === 'number';
+        return isGroup ? (field[0] ? field[0].closest('fieldset') : null) : field;
+    }
+
+    function showError(form, name, message) {
+        const anchor = fieldAnchor(form, name);
+        const wrapper = anchor ? anchor.closest('.form-field') : null;
+        if (!wrapper) {
+            return false;
+        }
+        wrapper.classList.toggle('has-error', Boolean(message));
+        const error = wrapper.querySelector('.field-error');
+        if (error) {
+            error.textContent = message || '';
+        }
+        return true;
+    }
+
+    function clearErrors(form) {
+        form.querySelectorAll('.form-field.has-error').forEach(function (wrapper) {
+            wrapper.classList.remove('has-error');
+            const error = wrapper.querySelector('.field-error');
+            if (error) {
+                error.textContent = '';
+            }
+        });
+    }
+
+    function showAlert(alert, message, kind) {
+        if (!alert) {
+            return;
+        }
+        alert.textContent = message;
+        alert.classList.toggle('is-success', kind === 'success');
+        alert.hidden = false;
+    }
+
+    function hideAlert(alert) {
+        if (alert) {
+            alert.hidden = true;
+            alert.textContent = '';
+        }
+    }
+
+    function setBusy(form, busy, busyLabel) {
+        form.setAttribute('aria-busy', String(busy));
+        form.querySelectorAll('[type="submit"]').forEach(function (button) {
+            if (!button.dataset.label) {
+                button.dataset.label = button.textContent;
+            }
+            button.disabled = busy;
+            button.textContent = busy ? (busyLabel || 'Guardando…') : button.dataset.label;
+        });
+    }
+
+    // Muestra un error de la API: mensajes por campo y el mensaje general en la alerta.
+    function showApiError(form, alert, result) {
+        const error = result && result.body && result.body.error ? result.body.error : null;
+        if (error && error.fields) {
+            Object.keys(error.fields).forEach(function (name) {
+                showError(form, name, error.fields[name]);
+            });
+        }
+        showAlert(alert, error && error.message ? error.message : 'Ocurrió un error inesperado. Inténtalo de nuevo.');
+    }
+
+    const NETWORK_ERROR = 'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.';
+
+    /* ---------- Mensaje que sobrevive a una recarga (p. ej. "Categoría creada") ---------- */
+    const FLASH_KEY = 'cursology-flash';
+
+    function goWithMessage(url, message) {
+        try {
+            sessionStorage.setItem(FLASH_KEY, message);
+        } catch (e) {
+            /* sin sessionStorage solo se pierde el aviso */
+        }
+        if (url === null) {
+            window.location.reload();
+        } else {
+            window.location.assign(url);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        let flash = null;
+        try {
+            flash = sessionStorage.getItem(FLASH_KEY);
+            sessionStorage.removeItem(FLASH_KEY);
+        } catch (e) {
+            flash = null;
+        }
+        const target = document.querySelector('[data-page-alert]');
+        if (flash && target) {
+            showAlert(target, flash, 'success');
+        }
+    });
+
+    window.Cursology = {
+        api: api,
+        goWithMessage: goWithMessage,
+        form: {
+            showError: showError,
+            clearErrors: clearErrors,
+            showAlert: showAlert,
+            hideAlert: hideAlert,
+            setBusy: setBusy,
+            showApiError: showApiError,
+            NETWORK_ERROR: NETWORK_ERROR,
+        },
+    };
 
     /* ---------- Pestañas genéricas: [data-tabs] con role="tab" y aria-controls ---------- */
     document.querySelectorAll('[data-tabs]').forEach(function (group) {
