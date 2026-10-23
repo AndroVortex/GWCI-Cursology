@@ -1,4 +1,5 @@
--- sp_chapter_delete: elimina un capítulo con su contenido y vuelve a numerar los siguientes.
+-- sp_chapter_delete: elimina un capítulo con su contenido (o, si es examen, sus preguntas y
+-- opciones) y vuelve a numerar los siguientes.
 -- No se permite si el nivel ya tiene alumnos con acceso (se conserva su avance).
 -- Resultado: media_refs con las referencias de su contenido, para borrarlas de Cloudinary.
 -- Errores: CHAPTER_NOT_FOUND, HAS_ENROLLMENTS.
@@ -53,6 +54,11 @@ BEGIN
      WHERE course_chapter_id = p_chapter_id AND content_uri IS NOT NULL;
 
     DELETE FROM course_chapter_content WHERE course_chapter_id = p_chapter_id;
+    DELETE a
+      FROM test_question_answer a
+      JOIN course_chapter_test_question q ON q.id = a.question_id
+     WHERE q.course_chapter_id = p_chapter_id;
+    DELETE FROM course_chapter_test_question WHERE course_chapter_id = p_chapter_id;
     DELETE FROM course_chapter WHERE id = p_chapter_id;
 
     -- En orden ascendente para no chocar con uq_chapter_order mientras se renumera.

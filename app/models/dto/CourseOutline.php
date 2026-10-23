@@ -8,13 +8,16 @@ use App\Models\Entities\Course;
 use App\Models\Entities\CourseCategory;
 use App\Models\Entities\CourseChapter;
 use App\Models\Entities\CourseChapterContent;
+use App\Models\Entities\CourseChapterTestQuestion;
 use App\Models\Entities\CourseLevel;
+use App\Models\Entities\TestQuestionAnswer;
 use App\Models\Mapping\RowReader;
 use App\Services\PricingMode;
 
 /**
- * El curso completo de sp_course_get_for_owner (cinco result sets), agrupado para el
- * editor: niveles en orden, capítulos por nivel y contenido por capítulo.
+ * El curso completo de sp_course_get_for_owner (siete result sets), agrupado para el
+ * editor: niveles en orden, capítulos por nivel, contenido por capítulo y, en los
+ * exámenes, preguntas con sus opciones (con las claves: solo para el dueño).
  */
 final class CourseOutline
 {
@@ -23,6 +26,8 @@ final class CourseOutline
      * @param list<CourseLevel> $levels
      * @param array<string, list<CourseChapter>> $chaptersByLevel
      * @param array<string, list<CourseChapterContent>> $contentsByChapter
+     * @param array<string, list<CourseChapterTestQuestion>> $questionsByChapter
+     * @param array<string, list<TestQuestionAnswer>> $answersByQuestion
      */
     private function __construct(
         public readonly Course $course,
@@ -32,13 +37,28 @@ final class CourseOutline
         private readonly array $contentsByChapter,
         public readonly int $studentCount,
         public readonly int $activeCategoryCount,
+        private readonly array $questionsByChapter = [],
+        private readonly array $answersByQuestion = [],
     ) {
     }
 
     /** @param list<list<array<string, mixed>>> $resultSets */
     public static function fromResultSets(array $resultSets): self
     {
-        [$courseRows, $categoryRows, $levelRows, $chapterRows, $contentRows] = $resultSets + [[], [], [], [], []];
+        [$courseRows, $categoryRows, $levelRows, $chapterRows, $contentRows, $questionRows, $answerRows]
+            = $resultSets + [[], [], [], [], [], [], []];
+
+        $questionsByChapter = [];
+        foreach ($questionRows as $row) {
+            $question = CourseChapterTestQuestion::fromRow($row);
+            $questionsByChapter[$question->courseChapterId()][] = $question;
+        }
+
+        $answersByQuestion = [];
+        foreach ($answerRows as $row) {
+            $answer = TestQuestionAnswer::fromRow($row);
+            $answersByQuestion[$answer->questionId()][] = $answer;
+        }
 
         $chaptersByLevel = [];
         foreach ($chapterRows as $row) {
@@ -62,7 +82,21 @@ final class CourseOutline
             $contentsByChapter,
             $counts->intUnsigned('student_count'),
             $counts->intUnsigned('active_category_count'),
+            $questionsByChapter,
+            $answersByQuestion,
         );
+    }
+
+    /** @return list<CourseChapterTestQuestion> preguntas de un examen, en orden */
+    public function questions(string $chapterId): array
+    {
+        return $this->questionsByChapter[$chapterId] ?? [];
+    }
+
+    /** @return list<TestQuestionAnswer> opciones de una pregunta, en orden */
+    public function answers(string $questionId): array
+    {
+        return $this->answersByQuestion[$questionId] ?? [];
     }
 
     public function pricingMode(): PricingMode

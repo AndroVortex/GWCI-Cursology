@@ -6,12 +6,16 @@ namespace App\Services;
 
 use App\Integrations\MediaUploadException;
 use App\Models\Dto\CourseOutline;
+use App\Models\Dto\ExamResult;
 use App\Models\Dto\InstructorCourseSummary;
 use App\Models\Entities\AppUser;
 use App\Models\Entities\Course;
 use App\Models\Entities\CourseChapter;
 use App\Models\Entities\CourseChapterContent;
+use App\Models\Entities\CourseChapterTestQuestion;
 use App\Models\Entities\CourseLevel;
+use App\Models\Entities\TestQuestionAnswer;
+use App\Models\Enums\SelectionMode;
 use App\Repositories\CourseRepository;
 use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\ValidationException;
@@ -28,6 +32,7 @@ final class CourseService
         private readonly CourseRepository $courses,
         private readonly CourseValidator $validator,
         private readonly MediaService $media,
+        private readonly ExamGrader $grader = new ExamGrader(),
     ) {
     }
 
@@ -155,16 +160,82 @@ final class CourseService
         return $this->courses->moveChapter($instructor->id(), $chapterId, $this->validator->validateMoveDirection($input));
     }
 
-    /** @param array<string, mixed> $input */
+    /** @param array<string, mixed> $input {titulo, tipo: video | examen, minimo} */
     public function addChapter(AppUser $instructor, string $levelId, array $input): CourseChapter
     {
-        return $this->courses->createChapter($instructor->id(), $levelId, $this->validator->validateChapterTitle($input));
+        return $this->courses->createChapter($instructor->id(), $levelId, $this->validator->validateChapter($input, creating: true));
     }
 
-    /** @param array<string, mixed> $input */
+    /** @param array<string, mixed> $input {titulo, minimo?} */
     public function updateChapter(AppUser $instructor, string $chapterId, array $input): CourseChapter
     {
-        return $this->courses->updateChapter($instructor->id(), $chapterId, $this->validator->validateChapterTitle($input));
+        return $this->courses->updateChapter($instructor->id(), $chapterId, $this->validator->validateChapter($input, creating: false));
+    }
+
+    /**
+     * @param array<string, mixed> $input {pregunta, modo, respuestas}
+     * @return array{0: CourseChapterTestQuestion, 1: list<TestQuestionAnswer>}
+     */
+    public function addQuestion(AppUser $instructor, string $chapterId, array $input): array
+    {
+        return $this->courses->createQuestion($instructor->id(), $chapterId, $this->validator->validateQuestion($input));
+    }
+
+    /**
+     * @param array<string, mixed> $input {pregunta, modo, respuestas}
+     * @return array{0: CourseChapterTestQuestion, 1: list<TestQuestionAnswer>}
+     */
+    public function updateQuestion(AppUser $instructor, string $questionId, array $input): array
+    {
+        return $this->courses->updateQuestion($instructor->id(), $questionId, $this->validator->validateQuestion($input));
+    }
+
+    public function deleteQuestion(AppUser $instructor, string $questionId): void
+    {
+        $this->courses->deleteQuestion($instructor->id(), $questionId);
+    }
+
+    /** @param array<string, mixed> $input {direccion: arriba | abajo} */
+    public function moveQuestion(AppUser $instructor, string $questionId, array $input): CourseChapterTestQuestion
+    {
+        return $this->courses->moveQuestion($instructor->id(), $questionId, $this->validator->validateMoveDirection($input));
+    }
+
+    /**
+     * "Probar examen": califica las respuestas del instructor sin guardar nada.
+     *
+     * @param array<string, mixed> $input {respuestas: {id de pregunta: [ids de opciones]}}
+     * @throws ValidationException|BusinessRuleException
+     */
+    public function previewGrade(AppUser $instructor, string $chapterId, array $input): ExamResult
+    {
+        $exam = $this->courses->exam($instructor->id(), $chapterId);
+        if ($exam->questions === []) {
+            throw new ValidationException(['respuestas' => 'El examen aún no tiene preguntas.']);
+        }
+
+        $raw = $input['respuestas'] ?? [];
+        if (!is_array($raw)) {
+            throw new ValidationException(['respuestas' => 'Las respuestas no tienen el formato esperado.']);
+        }
+
+        $selected = [];
+        foreach ($exam->questions as $question) {
+            $ids = $raw[$question->id()] ?? [];
+            $valid = array_map(static fn ($answer): string => $answer->id(), $exam->answers($question->id()));
+            if (!is_array($ids) || !array_is_list($ids) || array_diff($ids, $valid) !== []) {
+                throw new ValidationException(['respuestas' => 'Alguna respuesta no pertenece a su pregunta.']);
+            }
+            if ($question->selectionMode() === SelectionMode::Single && count($ids) > 1) {
+                throw new ValidationException(['respuestas' => 'En una pregunta de opción única se marca solo una respuesta.']);
+            }
+            $selected[$question->id()] = array_values(array_map('strval', $ids));
+        }
+        if (array_diff(array_map('strval', array_keys($raw)), array_keys($selected)) !== []) {
+            throw new ValidationException(['respuestas' => 'Alguna pregunta no pertenece a este examen.']);
+        }
+
+        return $this->grader->grade($exam->gradingQuestions(), $selected, (string) $exam->chapter->minimumPassingGrade());
     }
 
     public function deleteChapter(AppUser $instructor, string $chapterId): void

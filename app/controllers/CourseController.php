@@ -103,6 +103,46 @@ final class CourseController
         return JsonResponse::data(['level' => CoursePresenter::level($level)]);
     }
 
+    /** POST /api/instructor/chapters/{id}/questions ({pregunta, modo, respuestas}) */
+    public function addQuestion(Request $request): JsonResponse
+    {
+        [$question, $answers] = $this->courses->addQuestion($this->user($request), $this->id($request), $request->json());
+
+        return JsonResponse::data(['question' => CoursePresenter::question($question, $answers)], 201);
+    }
+
+    /** PATCH /api/instructor/questions/{id} ({pregunta, modo, respuestas}) */
+    public function updateQuestion(Request $request): JsonResponse
+    {
+        [$question, $answers] = $this->courses->updateQuestion($this->user($request), $this->id($request), $request->json());
+
+        return JsonResponse::data(['question' => CoursePresenter::question($question, $answers)]);
+    }
+
+    /** DELETE /api/instructor/questions/{id} */
+    public function deleteQuestion(Request $request): JsonResponse
+    {
+        $this->courses->deleteQuestion($this->user($request), $this->id($request));
+
+        return JsonResponse::noContent();
+    }
+
+    /** POST /api/instructor/questions/{id}/move ({direccion: arriba | abajo}) */
+    public function moveQuestion(Request $request): JsonResponse
+    {
+        $question = $this->courses->moveQuestion($this->user($request), $this->id($request), $request->json());
+
+        return JsonResponse::data(['question' => ['id' => $question->id(), 'sortOrder' => $question->sortOrder()]]);
+    }
+
+    /** POST /api/instructor/chapters/{id}/preview-grade ({respuestas: {pregunta: [opciones]}}) */
+    public function previewGrade(Request $request): JsonResponse
+    {
+        $result = $this->courses->previewGrade($this->user($request), $this->id($request), $request->json());
+
+        return JsonResponse::data(['result' => CoursePresenter::examResult($result)]);
+    }
+
     /** POST /api/instructor/chapters/{id}/move ({direccion: arriba | abajo}) */
     public function moveChapter(Request $request): JsonResponse
     {

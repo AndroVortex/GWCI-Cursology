@@ -44,7 +44,14 @@ final class BusinessRuleException extends RuntimeException
         'NO_ACTIVE_CATEGORY' => [422, 'Para publicar, el curso necesita al menos una categoría activa.', null],
         'NO_LEVELS' => [422, 'Para publicar, agrega al menos un nivel.', null],
         'LEVEL_WITHOUT_CHAPTERS' => [422, 'Para publicar, cada nivel necesita al menos un capítulo.', null],
-        'CHAPTER_WITHOUT_VIDEO' => [422, 'Para publicar, cada capítulo necesita su video principal.', null],
+        'CHAPTER_WITHOUT_VIDEO' => [422, 'Para publicar, cada capítulo de video necesita su video principal.', null],
+        'EXAM_WITHOUT_QUESTIONS' => [422, 'Para publicar, cada examen necesita al menos una pregunta.', null],
+        'CHAPTER_IS_EXAM' => [409, 'Los exámenes no llevan video ni recursos: solo preguntas.', null],
+        'CHAPTER_NOT_EXAM' => [409, 'Las preguntas solo van en capítulos de examen.', null],
+        'QUESTION_NOT_FOUND' => [404, 'La pregunta no existe.', null],
+        'INVALID_ANSWERS' => [422, 'Revisa las opciones: de 2 a 8, con al menos una correcta (exactamente una en opción única) y pesos mayores a 0 en las correctas.', 'respuestas'],
+        'INVALID_PASSING_GRADE' => [422, 'La calificación mínima debe ser mayor a 0 y de máximo 100.', 'minimo'],
+        'EXAM_HAS_ATTEMPTS' => [409, 'Ya hay alumnos que presentaron este examen: sus preguntas ya no se pueden cambiar.', null],
     ];
 
     private function __construct(

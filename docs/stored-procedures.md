@@ -148,12 +148,14 @@ Todos comprueban que el curso sea del instructor. Si no, responden igual que si 
 
 **`sp_course_get_for_owner(p_instructor_id, p_course_id)`**
 
-Cinco result sets, que agrupa `App\Models\Dto\CourseOutline`:
+Siete result sets, que agrupa `App\Models\Dto\CourseOutline`:
 1. el curso, con `student_count` y `active_category_count`;
 2. sus `course_category` activas;
 3. los niveles por orden;
 4. los capítulos por nivel y orden;
-5. el contenido, con el video principal primero.
+5. el contenido, con el video principal primero;
+6. las preguntas de los exámenes, por orden;
+7. sus opciones, con las claves (`is_correct`, `weight`). Este SP es solo para el dueño.
 
 **`sp_course_publish(p_instructor_id, p_course_id)`**
 
@@ -163,7 +165,8 @@ Cinco result sets, que agrupa `App\Models\Dto\CourseOutline`:
   - `NO_ACTIVE_CATEGORY`;
   - `NO_LEVELS`;
   - `LEVEL_WITHOUT_CHAPTERS`;
-  - `CHAPTER_WITHOUT_VIDEO`.
+  - `CHAPTER_WITHOUT_VIDEO` (solo capítulos de video);
+  - `EXAM_WITHOUT_QUESTIONS`.
 - Pone `published_at = NOW(6)`.
 - **Resultado:** la fila de `course`.
 
@@ -191,13 +194,50 @@ Cinco result sets, que agrupa `App\Models\Dto\CourseOutline`:
 | `sp_level_update(p_instructor_id, p_level_id, p_title, p_description, p_onboarding_video, p_cost)` | Video NULL = conservar; en curso gratis, `cost = 0`. Devuelve el nivel y `media_refs` | `LEVEL_NOT_FOUND` |
 | `sp_level_delete(p_instructor_id, p_level_id)` | Solo si está vacío. Devuelve `media_refs` | `LEVEL_NOT_FOUND`, `LEVEL_NOT_EMPTY`, `HAS_ENROLLMENTS` |
 | `sp_level_move(p_instructor_id, p_level_id, p_direction)` | Sube o baja un lugar (`'up'` / `'down'`) | `LEVEL_NOT_FOUND`, `INVALID_DIRECTION` |
-| `sp_chapter_create(p_instructor_id, p_level_id, p_title)` | Capítulo de video al final del nivel | `LEVEL_NOT_FOUND` |
-| `sp_chapter_update(p_instructor_id, p_chapter_id, p_title)` | Cambia el título | `CHAPTER_NOT_FOUND` |
+| `sp_chapter_create(p_instructor_id, p_level_id, p_title, p_is_test, p_minimum_passing_grade)` | Capítulo de video o examen (con su mínimo de más de 0 a 100) al final del nivel | `LEVEL_NOT_FOUND`, `INVALID_PASSING_GRADE` |
+| `sp_chapter_update(p_instructor_id, p_chapter_id, p_title, p_minimum_passing_grade)` | Cambia el título y, en un examen, el mínimo (NULL = conservarlo) | `CHAPTER_NOT_FOUND`, `INVALID_PASSING_GRADE` |
 | `sp_chapter_delete(p_instructor_id, p_chapter_id)` | Borra el capítulo y su contenido. Devuelve `media_refs` | `CHAPTER_NOT_FOUND`, `HAS_ENROLLMENTS` |
 | `sp_chapter_move(p_instructor_id, p_chapter_id, p_direction)` | Sube o baja un lugar dentro del nivel | `CHAPTER_NOT_FOUND`, `INVALID_DIRECTION` |
-| `sp_content_add(p_instructor_id, p_chapter_id, p_title, p_content_type, p_content_uri, p_text_content, p_mime_type, p_original_filename, p_size_bytes, p_duration_seconds, p_is_main)` | Agrega el video principal o un recurso | `CHAPTER_NOT_FOUND`, `MAIN_VIDEO_EXISTS` |
+| `sp_content_add(p_instructor_id, p_chapter_id, p_title, p_content_type, p_content_uri, p_text_content, p_mime_type, p_original_filename, p_size_bytes, p_duration_seconds, p_is_main)` | Agrega el video principal o un recurso | `CHAPTER_NOT_FOUND`, `CHAPTER_IS_EXAM`, `MAIN_VIDEO_EXISTS` |
 | `sp_content_delete(p_instructor_id, p_content_id)` | Quita el contenido. Devuelve `media_refs` | `CONTENT_NOT_FOUND` |
 
 - **`sp_level_create`:** en un curso gratis guarda `cost = 0`. En un curso publicado, da acceso al nivel nuevo (`user_course_level`) a quien tenga una compra `purchase_scope = 'course'` completada, porque el paquete incluye los niveles futuros.
 - **`*_move`:** intercambian el lugar con el vecino pasando por un valor temporal (máximo + 1), porque `uq_*_order` no admite órdenes repetidos y `ck_*_order` exige que sean al menos 1. En el extremo no cambian nada.
 - **`MAIN_VIDEO_EXISTS`:** viene de `uq_content_main`, que permite un solo video principal por capítulo.
+- **`sp_chapter_delete`:** en un examen también borra sus preguntas y opciones. Si algún alumno ya lo presentó, el 1451 se convierte en `HAS_ENROLLMENTS`.
+
+### Exámenes
+
+Los exámenes son capítulos con `is_test = 1`. Sus preguntas (`course_chapter_test_question`) y opciones (`test_question_answer`) solo se manejan con estos SP, que bloquean el examen con `FOR UPDATE`.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_question_create(p_instructor_id, p_chapter_id, p_question, p_selection_mode, p_answers)` | Agrega la pregunta al final del examen con sus opciones. Devuelve 1) la pregunta y 2) sus opciones | `CHAPTER_NOT_FOUND`, `CHAPTER_NOT_EXAM`, `INVALID_ANSWERS` |
+| `sp_question_update(p_instructor_id, p_question_id, p_question, p_selection_mode, p_answers)` | Reemplaza el texto, el modo y las opciones | `QUESTION_NOT_FOUND`, `INVALID_ANSWERS`, `EXAM_HAS_ATTEMPTS` |
+| `sp_question_delete(p_instructor_id, p_question_id)` | Borra la pregunta y sus opciones y renumera. Devuelve `course_chapter_id` | `QUESTION_NOT_FOUND`, `EXAM_HAS_ATTEMPTS` |
+| `sp_question_move(p_instructor_id, p_question_id, p_direction)` | Sube o baja un lugar (valor temporal, como `sp_chapter_move`) | `QUESTION_NOT_FOUND`, `INVALID_DIRECTION` |
+| `sp_exam_get_for_owner(p_instructor_id, p_chapter_id)` | 1) el capítulo, 2) sus preguntas, 3) sus opciones, para "Probar examen" (`ExamGrader`) | `CHAPTER_NOT_FOUND`, `CHAPTER_NOT_EXAM` |
+
+- **`p_answers`:** arreglo JSON `[{"answer", "is_correct": 0|1, "weight"}]`, en el orden en que se muestran. Se lee con `JSON_TABLE` (`FOR ORDINALITY` da el `sort_order`).
+- **Reglas que el SP vuelve a exigir:** de 2 a 8 opciones con texto; `single` con exactamente una correcta y `multiple` con al menos una; peso mayor a 0 en las correctas y 0 en las incorrectas, como pide `ck_answer_weight`. El modo se compara con `COLLATE utf8mb4_bin`.
+- **`EXAM_HAS_ATTEMPTS`:** si la pregunta ya está en `test_attempt_question`, no se cambia ni se borra; las opciones las referencia `test_attempt_answer`.
+
+### Catálogo público
+
+Solo cursos con `active = 1` y `published_at` con fecha. No exponen las URIs del contenido de los capítulos ni las preguntas de los exámenes.
+
+**`sp_catalog_search(p_query, p_category_id, p_sort, p_limit, p_offset)`**
+- `p_query`: busca con `LIKE` en el título y en el nombre completo del instructor. PHP ya escapó `%`, `_` y `\`. La colación de la base no distingue mayúsculas ni acentos. NULL o vacío = todos.
+- `p_category_id`: solo los que tienen esa categoría activa. NULL = todas.
+- `p_sort`: `recientes` (publicación más nueva), `titulo` o `precio` (`full_course_price` o, si es NULL, la suma de los niveles).
+- **Resultados:** 1) las tarjetas de la página (`id, title, cover_image, full_course_price, currency, published_at, instructor_name, category_names` separadas por `|`, `level_count, chapter_count, level_price_total`), que lee `App\Models\Dto\CatalogCourse`; 2) `total`.
+
+**`sp_catalog_course(p_course_id)`**
+
+Cuatro result sets, que lee `App\Models\Dto\PublicCourse`:
+1. el curso con `instructor_name`, `instructor_avatar` e `instructor_description`;
+2. las categorías activas;
+3. los niveles por orden, con su precio y su video de presentación;
+4. los capítulos, con `is_test`, `duration_seconds` del video principal y `question_count`.
+
+**Error:** `COURSE_NOT_FOUND` si no existe, es borrador o está dado de baja.

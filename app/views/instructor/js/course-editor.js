@@ -112,20 +112,30 @@
 
     /* ---------- Capítulos (agregar y renombrar) ---------- */
     section.querySelectorAll('[data-chapter-add]').forEach(function (form) {
+        const type = form.querySelector('[data-chapter-type]');
+        const grade = form.querySelector('[data-chapter-grade]');
+        type.addEventListener('change', function () {
+            grade.hidden = type.value !== 'examen';
+        });
+
         form.addEventListener('submit', function (event) {
             event.preventDefault();
+            ui.clearErrors(form);
             if (form.elements.titulo.value.trim() === '') {
                 ui.showError(form, 'titulo', 'Escribe el título del capítulo.');
                 return;
             }
+            const isExam = type.value === 'examen';
+            const body = { titulo: form.elements.titulo.value, tipo: type.value };
+            if (isExam) {
+                body.minimo = form.elements.minimo.value;
+            }
             submitForm(
                 form,
                 function () {
-                    return send('POST', 'api/instructor/levels/' + form.dataset.levelId + '/chapters', {
-                        titulo: form.elements.titulo.value,
-                    });
+                    return send('POST', 'api/instructor/levels/' + form.dataset.levelId + '/chapters', body);
                 },
-                'Capítulo agregado. Sube su video principal.',
+                isExam ? 'Examen agregado. Ahora escribe sus preguntas.' : 'Capítulo agregado. Sube su video principal.',
                 function (result) {
                     return 'chapter-' + result.body.data.chapter.id;
                 }
@@ -137,10 +147,14 @@
         form.addEventListener('submit', function (event) {
             event.preventDefault();
             const chapterId = form.dataset.chapterId;
+            const body = { titulo: form.elements.titulo.value };
+            if (form.elements.minimo) {
+                body.minimo = form.elements.minimo.value;
+            }
             submitForm(
                 form,
                 function () {
-                    return send('PATCH', 'api/instructor/chapters/' + chapterId, { titulo: form.elements.titulo.value });
+                    return send('PATCH', 'api/instructor/chapters/' + chapterId, body);
                 },
                 'Capítulo renombrado.',
                 function () {
@@ -282,18 +296,25 @@
         });
     });
 
-    /* ---------- Reordenar niveles y capítulos ---------- */
+    /* ---------- Reordenar niveles, capítulos y preguntas ---------- */
+    const MOVES = {
+        level: { path: 'levels/', done: 'Nivel movido.' },
+        chapter: { path: 'chapters/', done: 'Capítulo movido.' },
+        question: { path: 'questions/', done: 'Pregunta movida.' },
+    };
+
     section.querySelectorAll('[data-move]').forEach(function (button) {
         button.addEventListener('click', function () {
             const kind = button.dataset.move;
             button.disabled = true;
             ui.hideAlert(pageAlert);
-            send('POST', 'api/instructor/' + (kind === 'level' ? 'levels/' : 'chapters/') + button.dataset.id + '/move', {
+            const target = MOVES[kind];
+            send('POST', 'api/instructor/' + target.path + button.dataset.id + '/move', {
                 direccion: button.dataset.direction,
             })
                 .then(function (result) {
                     if (result.ok) {
-                        reloadAt(kind + '-' + button.dataset.id, kind === 'level' ? 'Nivel movido.' : 'Capítulo movido.');
+                        reloadAt(kind + '-' + button.dataset.id, target.done);
                         return;
                     }
                     button.disabled = false;
@@ -322,6 +343,11 @@
             url: 'api/instructor/contents/',
             confirm: '¿Quitar "%s" del capítulo? El archivo se borra de forma permanente.',
             done: 'Contenido eliminado.',
+        },
+        question: {
+            url: 'api/instructor/questions/',
+            confirm: '¿Eliminar la %s con sus opciones? No se puede deshacer.',
+            done: 'Pregunta eliminada.',
         },
     };
 

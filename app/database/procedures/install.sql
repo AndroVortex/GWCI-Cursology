@@ -53,3 +53,14 @@ SOURCE app/database/procedures/course/sp_chapter_delete.sql;
 SOURCE app/database/procedures/course/sp_chapter_move.sql;
 SOURCE app/database/procedures/course/sp_content_add.sql;
 SOURCE app/database/procedures/course/sp_content_delete.sql;
+
+-- Exámenes (preguntas y opciones)
+SOURCE app/database/procedures/course/sp_question_create.sql;
+SOURCE app/database/procedures/course/sp_question_update.sql;
+SOURCE app/database/procedures/course/sp_question_delete.sql;
+SOURCE app/database/procedures/course/sp_question_move.sql;
+SOURCE app/database/procedures/course/sp_exam_get_for_owner.sql;
+
+-- Catálogo público
+SOURCE app/database/procedures/catalog/sp_catalog_search.sql;
+SOURCE app/database/procedures/catalog/sp_catalog_course.sql;

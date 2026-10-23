@@ -40,6 +40,9 @@ $typeLabels = ['video' => 'Video', 'document' => 'Documento', 'image' => 'Imagen
         </p>
     </div>
     <div class="page-actions">
+        <?php if ($isPublished && $course->active()): ?>
+            <a class="btn btn-ghost" href="?view=course&amp;id=<?= e($course->id()) ?>" target="_blank" rel="noopener">Ver página pública</a>
+        <?php endif; ?>
         <a class="btn btn-secondary" href="?view=dashboard">Volver al panel</a>
     </div>
 </div>
@@ -178,7 +181,12 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                         <div class="chapter-header">
                             <span class="chapter-number"><?= $level->sortOrder() ?>.<?= $chapter->sortOrder() ?></span>
                             <strong class="chapter-title"><?= e($chapter->title()) ?></strong>
-                            <?php if ($main !== null): ?>
+                            <?php if ($chapter->isTest()): ?>
+                                <span class="badge badge-exam">Examen · aprueba con <?= e($chapter->minimumPassingGrade()) ?></span>
+                                <?php if ($outline->questions($chapter->id()) === []): ?>
+                                    <span class="badge badge-warning">Sin preguntas</span>
+                                <?php endif; ?>
+                            <?php elseif ($main !== null): ?>
                                 <span class="badge badge-success">Con video</span>
                             <?php else: ?>
                                 <span class="badge badge-warning">Falta el video</span>
@@ -198,12 +206,22 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                                 <input class="form-control" type="text" id="chapter-titulo-<?= e($chapter->id()) ?>" name="titulo" maxlength="200" value="<?= e($chapter->title()) ?>">
                                 <p class="field-error" aria-live="polite"></p>
                             </div>
+                            <?php if ($chapter->isTest()): ?>
+                                <div class="form-field chapter-grade-field">
+                                    <label class="visually-hidden" for="chapter-minimo-<?= e($chapter->id()) ?>">Calificación mínima para aprobar</label>
+                                    <input class="form-control" type="text" inputmode="decimal" id="chapter-minimo-<?= e($chapter->id()) ?>" name="minimo" value="<?= e($chapter->minimumPassingGrade()) ?>" title="Calificación mínima para aprobar (1 a 100)">
+                                    <p class="field-error" aria-live="polite"></p>
+                                </div>
+                            <?php endif; ?>
                             <div class="inline-row-actions">
                                 <button type="button" class="btn btn-ghost btn-sm" data-toggle="chapter-rename-<?= e($chapter->id()) ?>">Cancelar</button>
                                 <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
                             </div>
                         </form>
 
+                        <?php if ($chapter->isTest()): ?>
+                            <?php require __DIR__ . '/exam-chapter.html'; ?>
+                        <?php else: ?>
                         <div class="chapter-body">
                             <div class="chapter-section">
                                 <p class="chapter-section-title">Video principal</p>
@@ -300,14 +318,28 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                                 </form>
                             </div>
                         </div>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
 
-                <form class="inline-row chapter-add" data-chapter-add data-level-id="<?= e($level->id()) ?>" novalidate>
+                <form class="chapter-add" data-chapter-add data-level-id="<?= e($level->id()) ?>" novalidate>
                     <div class="form-alert" role="alert" data-form-alert hidden></div>
-                    <div class="form-field">
+                    <div class="form-field chapter-add-title">
                         <label class="visually-hidden" for="chapter-new-<?= e($level->id()) ?>">Título del nuevo capítulo</label>
                         <input class="form-control" type="text" id="chapter-new-<?= e($level->id()) ?>" name="titulo" maxlength="200" placeholder="Título del nuevo capítulo">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field">
+                        <label class="visually-hidden" for="chapter-tipo-<?= e($level->id()) ?>">Tipo de capítulo</label>
+                        <select class="form-control" id="chapter-tipo-<?= e($level->id()) ?>" name="tipo" data-chapter-type>
+                            <option value="video">Video</option>
+                            <option value="examen">Examen</option>
+                        </select>
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field" data-chapter-grade hidden>
+                        <label class="visually-hidden" for="chapter-minimo-new-<?= e($level->id()) ?>">Calificación mínima para aprobar</label>
+                        <input class="form-control" type="text" inputmode="decimal" id="chapter-minimo-new-<?= e($level->id()) ?>" name="minimo" value="70" placeholder="Mínimo para aprobar" title="Calificación mínima para aprobar (1 a 100)">
                         <p class="field-error" aria-live="polite"></p>
                     </div>
                     <div class="inline-row-actions">

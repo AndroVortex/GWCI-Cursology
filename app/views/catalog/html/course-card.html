@@ -1,0 +1,17 @@
+<?php
+/* Tarjeta de un curso del catálogo. Requiere $card (App\Models\Dto\CatalogCourse). */
+?>
+<article class="course-card">
+    <a class="course-card-link" href="?view=course&amp;id=<?= e($card->id) ?>">
+        <img class="course-card-cover" src="<?= e($card->coverImage) ?>" alt="" loading="lazy">
+        <div class="course-card-body">
+            <?php if ($card->categoryNames !== []): ?>
+                <p class="course-card-category"><?= e(implode(' · ', $card->categoryNames)) ?></p>
+            <?php endif; ?>
+            <h3 class="course-card-title"><?= e($card->title) ?></h3>
+            <p class="course-card-instructor"><?= e($card->instructorName) ?></p>
+            <p class="course-card-meta"><?= $card->levelCount ?> nivel(es) · <?= $card->chapterCount ?> capítulo(s)</p>
+            <p class="course-card-price"><?= e(course_price_label($card->fullCoursePrice, $card->levelPriceTotal, $card->currency)) ?></p>
+        </div>
+    </a>
+</article>

@@ -1,12 +1,13 @@
 -- sp_course_publish: publica un curso del instructor. Es la última palabra sobre si se
 -- puede publicar (la lista del editor solo ayuda a completarlo). Requisitos, en orden:
 --   activo, aún no publicado, una categoría activa, al menos un nivel, cada nivel con al
---   menos un capítulo y cada capítulo de video con su video principal.
+--   menos un capítulo, cada capítulo de video con su video principal y cada examen con al
+--   menos una pregunta.
 -- Los precios ya son coherentes con la forma de cobro: los aseguran sp_course_update y los
 -- SP de nivel (curso gratis = niveles en 0) y la validación de PHP (paquete > 0).
 -- Resultado: la fila de course. Errores: COURSE_NOT_FOUND, COURSE_INACTIVE,
 -- COURSE_ALREADY_PUBLISHED, NO_ACTIVE_CATEGORY, NO_LEVELS, LEVEL_WITHOUT_CHAPTERS,
--- CHAPTER_WITHOUT_VIDEO.
+-- CHAPTER_WITHOUT_VIDEO, EXAM_WITHOUT_QUESTIONS.
 -- Transacción propia: bloquea el curso.
 
 DROP PROCEDURE IF EXISTS sp_course_publish;
@@ -80,6 +81,17 @@ BEGIN
            )
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CHAPTER_WITHOUT_VIDEO';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+          FROM course_chapter ch
+          JOIN course_level l ON l.id = ch.course_level_id
+         WHERE l.course_id = p_course_id
+           AND ch.is_test = 1
+           AND NOT EXISTS (SELECT 1 FROM course_chapter_test_question q WHERE q.course_chapter_id = ch.id)
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'EXAM_WITHOUT_QUESTIONS';
     END IF;
 
     UPDATE course

@@ -21,8 +21,11 @@ use App\Models\Dto\LockedAccount;
 use App\Models\Dto\PublishChecklist;
 use App\Models\Entities\AppUser;
 use App\Models\Enums\ContentType;
+use App\Models\Enums\SelectionMode;
 use App\Models\Enums\UserRole;
+use App\Services\CatalogService;
 use App\Services\CourseValidator;
+use App\Services\ExamGrader;
 use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\ValidationException;
 use App\Services\MediaService;
@@ -165,8 +168,95 @@ try {
         failedFields(static fn () => $courses->validateLevel(['titulo' => '', 'descripcion' => '', 'costo' => '-5'], true)) === ['titulo', 'descripcion', 'costo', 'video'],
         'nivel vacío con costo negativo y sin video -> cuatro errores',
     );
-    check($courses->validateChapterTitle(['titulo' => ' Variables ']) === 'Variables', 'capítulo: título recortado');
-    check(failedFields(static fn () => $courses->validateChapterTitle(['titulo' => ' '])) === ['titulo'], 'capítulo sin título se rechaza');
+    $videoChapter = $courses->validateChapter(['titulo' => ' Variables ', 'tipo' => 'video', 'minimo' => '80'], true);
+    check($videoChapter->title === 'Variables' && !$videoChapter->isTest && $videoChapter->minimumPassingGrade === null, 'capítulo de video: título recortado y sin mínimo');
+    check(failedFields(static fn () => $courses->validateChapter(['titulo' => ' ', 'tipo' => 'video'], true)) === ['titulo'], 'capítulo sin título se rechaza');
+    check(failedFields(static fn () => $courses->validateChapter(['titulo' => 'A', 'tipo' => 'lectura'], true)) === ['tipo'], 'tipo de capítulo desconocido se rechaza');
+
+    // -----------------------------------------------------------
+    Report::section('Exámenes: capítulo y preguntas');
+    $exam = $courses->validateChapter(['titulo' => 'Examen final', 'tipo' => 'examen', 'minimo' => '70.5'], true);
+    check($exam->isTest && $exam->minimumPassingGrade === '70.50', "examen con mínimo '70.5' -> 70.50");
+    check($courses->validateChapter(['titulo' => 'E', 'tipo' => 'examen', 'minimo' => '100'], true)->minimumPassingGrade === '100.00', 'mínimo de 100 se acepta');
+    foreach (['', '0', '100.01', '101', '-5', 'setenta'] as $grade) {
+        check(failedFields(static fn () => $courses->validateChapter(['titulo' => 'E', 'tipo' => 'examen', 'minimo' => $grade], true)) === ['minimo'], "mínimo '$grade' se rechaza");
+    }
+    check($courses->validateChapter(['titulo' => 'Renombrado'], false)->minimumPassingGrade === null, 'al editar sin mínimo se conserva el actual (null)');
+    check($courses->validateChapter(['titulo' => 'R', 'minimo' => '85'], false)->minimumPassingGrade === '85.00', 'al editar se puede cambiar el mínimo');
+
+    $answer = static fn (string $text, bool $correct, ?string $weight = null): array => ['texto' => $text, 'correcta' => $correct] + ($weight === null ? [] : ['peso' => $weight]);
+    $single = $courses->validateQuestion(['pregunta' => ' ¿2 + 2? ', 'modo' => 'unica', 'respuestas' => [$answer('4', true), $answer('5', false, '3')]]);
+    check($single->question === '¿2 + 2?' && $single->mode === SelectionMode::Single, 'opción única: texto recortado');
+    check($single->answers[0]['weight'] === '1.00' && $single->answers[1]['weight'] === '0.00', 'la correcta vale 1 por omisión y la incorrecta 0 aunque traiga peso');
+    check(
+        $single->answersJson() === '[{"answer":"4","is_correct":1,"weight":"1.00"},{"answer":"5","is_correct":0,"weight":"0.00"}]',
+        'answersJson() en el formato que lee JSON_TABLE',
+    );
+    $multiple = $courses->validateQuestion(['pregunta' => 'Lenguajes del servidor', 'modo' => 'multiple', 'respuestas' => [
+        $answer('PHP', true, '2'), $answer('Python', true, '3.5'), $answer('CSS', false),
+    ]]);
+    check($multiple->mode === SelectionMode::Multiple && $multiple->answers[1]['weight'] === '3.50', 'opción múltiple con pesos propios');
+    $invalidQuestions = [
+        'opción única con dos correctas' => ['modo' => 'unica', 'respuestas' => [$answer('A', true), $answer('B', true)]],
+        'sin correctas' => ['modo' => 'multiple', 'respuestas' => [$answer('A', false), $answer('B', false)]],
+        'una sola opción' => ['modo' => 'unica', 'respuestas' => [$answer('A', true)]],
+        'nueve opciones' => ['modo' => 'multiple', 'respuestas' => array_map(static fn (int $n): array => $answer("Opción $n", $n === 1), range(1, 9))],
+        'opción sin texto' => ['modo' => 'unica', 'respuestas' => [$answer('A', true), $answer(' ', false)]],
+        'peso 0 en una correcta' => ['modo' => 'unica', 'respuestas' => [$answer('A', true, '0'), $answer('B', false)]],
+        'peso mayor a 1000' => ['modo' => 'unica', 'respuestas' => [$answer('A', true, '1000.01'), $answer('B', false)]],
+        'respuestas que no son lista' => ['modo' => 'unica', 'respuestas' => ['a' => $answer('A', true), 'b' => $answer('B', false)]],
+    ];
+    foreach ($invalidQuestions as $label => $input) {
+        check(failedFields(static fn () => $courses->validateQuestion(['pregunta' => 'P'] + $input)) === ['respuestas'], "pregunta inválida ($label)");
+    }
+    check(
+        failedFields(static fn () => $courses->validateQuestion(['pregunta' => '', 'modo' => 'abierta', 'respuestas' => [$answer('A', true), $answer('B', false)]])) === ['pregunta', 'modo'],
+        'pregunta vacía y modo desconocido',
+    );
+
+    // -----------------------------------------------------------
+    Report::section('Calificación de exámenes (regla A)');
+    $grader = new ExamGrader();
+    $q = static fn (string $id, SelectionMode $mode, array $answers): array => [
+        'id' => $id, 'mode' => $mode,
+        'answers' => array_map(static fn (array $a): array => ['id' => $a[0], 'correct' => $a[1], 'weight' => $a[2]], $answers),
+    ];
+    // Ejemplo acordado: X=2 e Y=3 correctas, Z incorrecta.
+    $xyz = $q('q1', SelectionMode::Multiple, [['x', true, '2.00'], ['y', true, '3.00'], ['z', false, '0.00']]);
+    $cases = [
+        'solo X' => [['x'], '2.00', '40.00'],
+        'X e Y' => [['x', 'y'], '5.00', '100.00'],
+        'X y Z' => [['x', 'z'], '0.00', '0.00'],
+        'X, Y y Z' => [['x', 'y', 'z'], '0.00', '0.00'],
+        'nada' => [[], '0.00', '0.00'],
+    ];
+    foreach ($cases as $label => [$marked, $points, $grade]) {
+        $result = $grader->grade([$xyz], ['q1' => $marked], '60.00');
+        check($result->earnedPoints === $points && $result->maxPoints === '5.00' && $result->grade === $grade, "marcar $label -> $points de 5 ($grade)");
+    }
+    check($grader->grade([$xyz], ['q1' => ['x', 'z']], '60.00')->questions[0]['markedWrong'], 'marcar una incorrecta queda señalado');
+    $singleQ = $q('q2', SelectionMode::Single, [['a', true, '1.00'], ['b', false, '0.00']]);
+    $both = $grader->grade([$xyz, $singleQ], ['q1' => ['x'], 'q2' => ['a']], '50.00');
+    check($both->earnedPoints === '3.00' && $both->maxPoints === '6.00' && $both->grade === '50.00' && $both->passed, 'dos preguntas: 3 de 6 = 50.00, aprueba con mínimo 50');
+    check(!$grader->grade([$xyz, $singleQ], ['q1' => ['x'], 'q2' => ['b']], '50.00')->passed, 'opción única incorrecta: 2 de 6 no aprueba');
+    $third = $q('q3', SelectionMode::Single, [['t', true, '1.00'], ['f', false, '0.00']]);
+    $thirds = [$third, $q('q4', SelectionMode::Single, [['t4', true, '1.00'], ['f4', false, '0.00']]), $q('q5', SelectionMode::Single, [['t5', true, '1.00'], ['f5', false, '0.00']])];
+    check($grader->grade($thirds, ['q3' => ['t']], '33.33')->grade === '33.33', '1 de 3 = 33.33 (redondeo a dos decimales)');
+    check($grader->grade($thirds, ['q3' => ['t'], 'q4' => ['t4']], '66.67')->grade === '66.67' && $grader->grade($thirds, ['q3' => ['t'], 'q4' => ['t4']], '66.67')->passed, '2 de 3 = 66.67 y aprueba justo con 66.67');
+    check(thrown(InvalidArgumentException::class, static fn () => $grader->grade([], [], '70.00')) !== null, 'un examen sin preguntas no se califica');
+
+    // -----------------------------------------------------------
+    Report::section('Catálogo');
+    check(CatalogService::escapeLike('100%_a\\b') === '100\\%\\_a\\\\b', 'escapa %, _ y la diagonal invertida para LIKE');
+    $filters = CatalogService::filters(['q' => '  ' . str_repeat('á', 120) . ' ', 'categoria' => 'abc', 'orden' => 'popular', 'pagina' => '0']);
+    check(mb_strlen($filters['q']) === 100 && $filters['categoria'] === null && $filters['orden'] === 'recientes' && $filters['pagina'] === 1, 'filtros inválidos vuelven a su valor por omisión');
+    $filters = CatalogService::filters(['q' => 'php', 'categoria' => '5', 'orden' => 'precio', 'pagina' => '3']);
+    check($filters === ['q' => 'php', 'categoria' => '5', 'orden' => 'precio', 'pagina' => 3], 'filtros válidos se conservan');
+    check(CatalogService::filters(['pagina' => '5000'])['pagina'] === 1000 && CatalogService::filters(['pagina' => '99999'])['pagina'] === 1, 'página máxima 1000');
+    check(CatalogService::filters([])['q'] === '' && CatalogService::filters(['q' => ['x']])['q'] === '', 'sin texto o con un arreglo -> búsqueda vacía');
+    check(course_price_label('0.00', '0.00') === 'Gratis' && course_price_label('899.00', '599.90') === '$899.00 MXN', 'precio: gratis y curso completo');
+    check(course_price_label(null, '599.90') === 'Por niveles · $599.90 MXN' && course_price_label(null, '0.00') === 'Gratis', 'precio por niveles (todos en 0 = gratis)');
+    check(Request::create('GET', '/api/catalog/courses', [], '', [], [], ['q' => 'php'])->queryParams() === ['q' => 'php'], 'Request expone los parámetros de la URL');
 
     // -----------------------------------------------------------
     Report::section('Contenido del capítulo y enlaces');
@@ -380,7 +470,23 @@ try {
             && !$outlineOf($courseRow(null, 1, null, 3))->pricingLocked(),
         'la forma de cobro solo se fija si está publicado y con alumnos',
     );
-    foreach (['PRICING_LOCKED' => 409, 'COURSE_INACTIVE' => 409, 'COURSE_ALREADY_PUBLISHED' => 409, 'COURSE_HAS_STUDENTS' => 409, 'NO_LEVELS' => 422, 'CHAPTER_WITHOUT_VIDEO' => 422] as $code => $status) {
+    $examOutline = $outlineOf(
+        $courseRow(null),
+        [$levelRow('1', 1)],
+        [$chapterRow('11', '1', 1), ['is_test' => 1, 'minimum_passing_grade' => '70.00'] + $chapterRow('12', '1', 2)],
+        [$videoRow('101', '11')],
+    );
+    $examList = PublishChecklist::for($examOutline);
+    check($pending($examList) === ['exams'] && str_contains((string) array_column($examList->items, 'detail', 'key')['exams'], '1.2'), 'un examen sin preguntas queda pendiente (y no pide video)');
+    $withQuestion = CourseOutline::fromResultSets([
+        [$courseRow(null)], [], [$levelRow('1', 1)],
+        [$chapterRow('11', '1', 1), ['is_test' => 1, 'minimum_passing_grade' => '70.00'] + $chapterRow('12', '1', 2)],
+        [$videoRow('101', '11')],
+        [['id' => '501', 'course_chapter_id' => '12', 'sort_order' => 1, 'question' => '¿?', 'selection_mode' => 'single']],
+        [['id' => '601', 'question_id' => '501', 'sort_order' => 1, 'answer' => 'Sí', 'is_correct' => 1, 'weight' => '1.00']],
+    ]);
+    check(PublishChecklist::for($withQuestion)->ready() && count($withQuestion->questions('12')) === 1 && count($withQuestion->answers('501')) === 1, 'con una pregunta el examen cumple');
+    foreach (['PRICING_LOCKED' => 409, 'COURSE_INACTIVE' => 409, 'COURSE_ALREADY_PUBLISHED' => 409, 'COURSE_HAS_STUDENTS' => 409, 'NO_LEVELS' => 422, 'CHAPTER_WITHOUT_VIDEO' => 422, 'EXAM_WITHOUT_QUESTIONS' => 422, 'CHAPTER_IS_EXAM' => 409, 'INVALID_ANSWERS' => 422, 'EXAM_HAS_ATTEMPTS' => 409, 'QUESTION_NOT_FOUND' => 404] as $code => $status) {
         check(BusinessRuleException::of($code)->status === $status, "$code -> $status");
     }
     check(BusinessRuleException::of('PRICING_LOCKED')->fields() !== [] && isset(BusinessRuleException::of('PRICING_LOCKED')->fields()['precio_modo']), 'PRICING_LOCKED se muestra en la forma de cobro');

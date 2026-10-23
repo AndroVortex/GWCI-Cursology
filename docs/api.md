@@ -160,8 +160,8 @@ Instructor; los que modifican, además con CSRF. Los archivos se mandan como el 
 | `PATCH /api/instructor/levels/{id}` | `titulo, descripcion, costo, video?` (`null` = conservar) | `200 {"data": {"level"}}` |
 | `DELETE /api/instructor/levels/{id}` | — | `204` (solo sin capítulos) |
 | `POST /api/instructor/levels/{id}/move` | `{direccion: "arriba" \| "abajo"}` | `200 {"data": {"level"}}` |
-| `POST /api/instructor/levels/{id}/chapters` | `{titulo}` | `201 {"data": {"chapter"}}` al final del nivel |
-| `PATCH /api/instructor/chapters/{id}` | `{titulo}` | `200 {"data": {"chapter"}}` |
+| `POST /api/instructor/levels/{id}/chapters` | `{titulo, tipo: "video" \| "examen", minimo}` (`minimo` solo en examen, de 1 a 100) | `201 {"data": {"chapter"}}` al final del nivel, con `type` y `minimumPassingGrade` |
+| `PATCH /api/instructor/chapters/{id}` | `{titulo, minimo?}` (sin `minimo` se conserva; el tipo no cambia) | `200 {"data": {"chapter"}}` |
 | `DELETE /api/instructor/chapters/{id}` | — | `204`; borra su contenido y sus archivos |
 | `POST /api/instructor/chapters/{id}/move` | `{direccion: "arriba" \| "abajo"}` | `200 {"data": {"chapter"}}` |
 | `POST /api/instructor/chapters/{id}/contents` | `tipo` y, según el tipo, `archivo`, `url` o `texto`; `titulo` | `201 {"data": {"content"}}` con su `url` (temporal si es protegido) |
@@ -180,7 +180,84 @@ Instructor; los que modifican, además con CSRF. Los archivos se mandan como el 
 
 **Tipos de contenido (`tipo`):** `video_principal` (uno por capítulo, `409 MAIN_VIDEO_EXISTS`), `documento`, `imagen`, `audio`, `archivo` (con `archivo`), `enlace` (con `url` http/https y `titulo`) y `texto` (con `texto` y `titulo`). En los archivos, sin `titulo` se usa el nombre original.
 
-**Publicar:** el curso necesita, en este orden, estar activo (`409 COURSE_INACTIVE`), no estar publicado (`409 COURSE_ALREADY_PUBLISHED`), una categoría activa (`422 NO_ACTIVE_CATEGORY`), al menos un nivel (`422 NO_LEVELS`), cada nivel con al menos un capítulo (`422 LEVEL_WITHOUT_CHAPTERS`) y cada capítulo con su video principal (`422 CHAPTER_WITHOUT_VIDEO`). Volver a borrador solo sin alumnos (`409 COURSE_HAS_STUDENTS`; si los tiene, se da de baja). Un borrador no se "despublica" (`409 COURSE_NOT_PUBLISHED`).
+**Publicar:** el curso necesita, en este orden:
+- estar activo (`409 COURSE_INACTIVE`) y no estar publicado (`409 COURSE_ALREADY_PUBLISHED`);
+- una categoría activa (`422 NO_ACTIVE_CATEGORY`);
+- al menos un nivel (`422 NO_LEVELS`);
+- cada nivel con al menos un capítulo (`422 LEVEL_WITHOUT_CHAPTERS`);
+- cada capítulo de video con su video principal (`422 CHAPTER_WITHOUT_VIDEO`);
+- cada examen con al menos una pregunta (`422 EXAM_WITHOUT_QUESTIONS`).
+
+Volver a borrador solo se puede sin alumnos (`409 COURSE_HAS_STUDENTS`; si los tiene, se da de baja). Un borrador no se "despublica" (`409 COURSE_NOT_PUBLISHED`).
+
+### Exámenes
+
+Un examen es un capítulo de tipo `examen`, con su calificación mínima para aprobar. No lleva video ni recursos (`409 CHAPTER_IS_EXAM`), solo preguntas. Instructor + CSRF:
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `POST /api/instructor/chapters/{id}/questions` | `{pregunta, modo: "unica" \| "multiple", respuestas: [{texto, correcta: bool, peso?}]}` | `201 {"data": {"question"}}` al final del examen |
+| `PATCH /api/instructor/questions/{id}` | Igual; reemplaza el texto, el modo y las opciones | `200 {"data": {"question"}}` |
+| `DELETE /api/instructor/questions/{id}` | — | `204`; las siguientes se renumeran |
+| `POST /api/instructor/questions/{id}/move` | `{direccion: "arriba" \| "abajo"}` | `200 {"data": {"question": {id, sortOrder}}}` |
+| `POST /api/instructor/chapters/{id}/preview-grade` | `{respuestas: {"<id de pregunta>": ["<id de opción>", ...]}}` | `200 {"data": {"result"}}`; califica sin guardar nada ("Probar examen") |
+
+**Reglas de las preguntas:**
+- De 2 a 8 opciones.
+- En opción única, exactamente una correcta; en múltiple, al menos una.
+- Las correctas valen su `peso` (1 si no se indica, de 0.01 a 1000) y las incorrectas 0.
+- Los puntos de una pregunta son la suma de los pesos de sus correctas.
+- Errores: `422 VALIDATION_FAILED` en `pregunta`, `modo` o `respuestas`, y `422 INVALID_ANSWERS` si el SP las rechaza.
+
+`question` incluye las claves (`answers[].correct` y `weight`) porque solo la ve su instructor. El catálogo público nunca las expone.
+
+**Calificación (regla acordada):**
+- se suman los pesos de las correctas que se marcaron;
+- si se marcó alguna incorrecta, esa pregunta vale 0;
+- la calificación es `ROUND(100 * puntos / máximo, 2)` y aprueba si es mayor o igual al mínimo.
+
+| Pregunta con X=2 e Y=3 correctas, Z incorrecta | Puntos |
+|---|---|
+| Marca X | 2 de 5 |
+| Marca X e Y | 5 de 5 |
+| Marca X y Z | 0 |
+| Marca X, Y y Z | 0 |
+
+`result` = `{grade, minimumPassingGrade, passed, earnedPoints, maxPoints, questions: [{id, maxPoints, earnedPoints, markedWrong}]}`. Una opción que no es de su pregunta, o dos opciones en una pregunta de opción única, dan `422`.
+
+**Más errores:**
+- `404 QUESTION_NOT_FOUND`;
+- `409 CHAPTER_NOT_EXAM` (preguntas o "Probar examen" en un capítulo de video);
+- `422 INVALID_PASSING_GRADE` (en `minimo`);
+- `409 EXAM_HAS_ATTEMPTS` (cambiar o borrar preguntas que ya presentó algún alumno, en la siguiente entrega).
+
+### Catálogo público
+
+Sin sesión. Solo muestra cursos **publicados y activos**; un borrador o un curso dado de baja no aparece y su detalle da `404 COURSE_NOT_FOUND`.
+
+**`GET /api/catalog/courses?q=&categoria=&orden=&pagina=`**
+- `q`: hasta 100 caracteres; se busca en el título y en el nombre del instructor, sin distinguir mayúsculas ni acentos. `%` y `_` se buscan como texto.
+- `categoria`: id de la categoría.
+- `orden`: `recientes` (por omisión), `titulo` o `precio` (de menor a mayor; el del curso completo o la suma de los niveles).
+- `pagina`: 12 cursos por página.
+- Un filtro inválido vuelve a su valor por omisión; nunca es un error.
+
+```json
+{"data": {"courses": [{"id": "4", "title": "...", "coverImage": "https://...", "instructor": "Ana López",
+  "categories": ["Desarrollo web"], "pricingMode": "niveles", "fullCoursePrice": null, "levelPriceTotal": "199.00",
+  "currency": "MXN", "levels": 1, "chapters": 2, "publishedAt": "..."}], "total": 1, "page": 1, "pages": 1,
+  "filters": {"q": "php", "categoria": null, "orden": "recientes", "pagina": 1}}}
+```
+
+**`GET /api/catalog/courses/{id}`**
+- El curso con su instructor (nombre, avatar y descripción) y sus categorías.
+- Sus niveles, cada uno con su precio, su video de presentación (público), su duración y sus capítulos (`{title, sortOrder, isExam, durationSeconds, questionCount}`).
+- Nunca trae las URIs del contenido ni las preguntas de los exámenes.
+
+**Vistas:**
+- `?view=home`: categorías y cursos recientes.
+- `?view=catalog`: búsqueda; el buscador del header apunta aquí.
+- `?view=course&id=N`: página del curso, o un 404 con su mensaje.
 
 **Otros errores:** `409 LEVEL_NOT_EMPTY` (borrar un nivel con capítulos), `409 HAS_ENROLLMENTS` (borrar un nivel o capítulo al que ya tienen acceso alumnos), `422 CATEGORY_NOT_AVAILABLE` (en `categorias`), `422 VALIDATION_FAILED` (`direccion`, `activo` y los campos del formulario).
 

@@ -43,6 +43,18 @@ $views = [
         'css'   => ['home/css/home.css'],
         'js'    => [],
     ],
+    'catalog' => [
+        'title' => 'Catálogo',
+        'file'  => BASE_PATH . '/app/views/catalog/html/catalog.html',
+        'css'   => ['catalog/css/catalog.css'],
+        'js'    => [],
+    ],
+    'course' => [
+        'title' => 'Curso',
+        'file'  => BASE_PATH . '/app/views/catalog/html/course.html',
+        'css'   => ['catalog/css/catalog.css'],
+        'js'    => [],
+    ],
     'login' => [
         'title' => 'Iniciar sesión',
         'file'  => BASE_PATH . '/app/views/base/html/login.html',
@@ -76,7 +88,7 @@ $views = [
         'title' => 'Editar curso',
         'file'  => BASE_PATH . '/app/views/instructor/html/course-editor.html',
         'css'   => ['instructor/css/course.css'],
-        'js'    => ['base/js/media-upload.js', 'instructor/js/course-form.js', 'instructor/js/course-editor.js'],
+        'js'    => ['base/js/media-upload.js', 'instructor/js/course-form.js', 'instructor/js/course-editor.js', 'instructor/js/exam-editor.js'],
         'auth'  => true,
         'roles' => [UserRole::Instructor],
     ],
@@ -123,8 +135,27 @@ if ($view === 'dashboard') {
     $views['dashboard'] = $dashboards[$currentUser->role()->value] + ['css' => [], 'js' => []];
 }
 
+// Página pública de un curso: si no existe, es borrador o está dado de baja, la vista lo dice (404).
+if ($view === 'course') {
+    try {
+        $publicCourse = $catalogService->course(is_string($_GET['id'] ?? null) ? $_GET['id'] : '');
+        $views['course']['title'] = $publicCourse->title;
+    } catch (BusinessRuleException) {
+        $publicCourse = null;
+        http_response_code(404);
+    }
+}
+
 // Datos de cada vista, siempre a través de los servicios (que llaman a los SP).
 try {
+    if ($view === 'home') {
+        $homeCategories = $categoryService->active();
+        $recentCourses = $catalogService->recent(8);
+    }
+    if ($view === 'catalog') {
+        $catalogPage = $catalogService->search($_GET);
+        $catalogCategories = $categoryService->active();
+    }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Instructor) {
         $instructorCourses = $courseService->listMine($currentUser);
     }

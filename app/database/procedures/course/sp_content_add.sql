@@ -1,8 +1,10 @@
 -- sp_content_add: agrega el video principal (p_is_main = 1) o un recurso a un capítulo.
 -- PHP ya verificó el archivo en Cloudinary; content_type 'text' usa p_text_content y
 -- el resto p_content_uri (los CHECK del DDL lo vuelven a exigir).
+-- Los exámenes (is_test = 1) no llevan video ni recursos: solo preguntas.
 -- Resultado: la fila de course_chapter_content.
--- Errores: CHAPTER_NOT_FOUND, MAIN_VIDEO_EXISTS (uq_content_main: un solo video principal).
+-- Errores: CHAPTER_NOT_FOUND, CHAPTER_IS_EXAM, MAIN_VIDEO_EXISTS (uq_content_main: un solo
+-- video principal).
 
 DROP PROCEDURE IF EXISTS sp_content_add;
 
@@ -23,18 +25,22 @@ CREATE PROCEDURE sp_content_add(
 )
 BEGIN
     DECLARE v_content_id BIGINT UNSIGNED;
+    DECLARE v_is_test BOOLEAN DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR 1062
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'MAIN_VIDEO_EXISTS';
 
-    IF NOT EXISTS (
-        SELECT 1
-          FROM course_chapter ch
-          JOIN course_level l ON l.id = ch.course_level_id
-          JOIN course c ON c.id = l.course_id
-         WHERE ch.id = p_chapter_id AND c.created_by = p_instructor_id
-    ) THEN
+    SELECT ch.is_test INTO v_is_test
+      FROM course_chapter ch
+      JOIN course_level l ON l.id = ch.course_level_id
+      JOIN course c ON c.id = l.course_id
+     WHERE ch.id = p_chapter_id AND c.created_by = p_instructor_id;
+
+    IF v_is_test IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CHAPTER_NOT_FOUND';
+    END IF;
+    IF v_is_test = 1 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CHAPTER_IS_EXAM';
     END IF;
 
     INSERT INTO course_chapter_content (

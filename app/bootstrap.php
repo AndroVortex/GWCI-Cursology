@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 use App\Controllers\AccountController;
 use App\Controllers\AuthController;
+use App\Controllers\CatalogController;
 use App\Controllers\CategoryController;
 use App\Controllers\CourseController;
 use App\Controllers\MediaController;
@@ -22,11 +23,13 @@ use App\Http\Router;
 use App\Http\Session;
 use App\Integrations\CloudinaryClient;
 use App\Models\Enums\UserRole;
+use App\Repositories\CatalogRepository;
 use App\Repositories\CategoryRepository;
 use App\Repositories\CourseRepository;
 use App\Repositories\UserRepository;
 use App\Services\AccountAdminService;
 use App\Services\AuthService;
+use App\Services\CatalogService;
 use App\Services\CategoryService;
 use App\Services\CourseService;
 use App\Services\CourseValidator;
@@ -54,6 +57,7 @@ $profileService = new ProfileService($users, new ProfileValidator(), $cloudinary
 $accountService = new AccountAdminService($users);
 $categoryService = new CategoryService(new CategoryRepository($procedures));
 $courseService = new CourseService(new CourseRepository($procedures), new CourseValidator(), $mediaService);
+$catalogService = new CatalogService(new CatalogRepository($procedures));
 
 // ---------------------------------------------------------------
 // API: rutas y middleware (sesión -> rol -> CSRF -> controlador)
@@ -64,6 +68,7 @@ $accountController = new AccountController($accountService);
 $categoryController = new CategoryController($categoryService);
 $mediaController = new MediaController($mediaService);
 $courseController = new CourseController($courseService);
+$catalogController = new CatalogController($catalogService);
 
 $csrf = new RequireCsrf($session);
 $requireAuth = new RequireAuth($session, $auth);
@@ -87,6 +92,8 @@ $router->add('GET', '/api/admin/users/locked', $accountController->listLocked(..
 $router->add('POST', '/api/admin/users/{id}/unlock', $accountController->unlock(...), [...$adminOnly, $csrf]);
 
 $router->add('GET', '/api/categories', $categoryController->listActive(...));
+$router->add('GET', '/api/catalog/courses', $catalogController->search(...));
+$router->add('GET', '/api/catalog/courses/{id}', $catalogController->show(...));
 $router->add('GET', '/api/admin/categories', $categoryController->listAll(...), $adminOnly);
 $router->add('POST', '/api/admin/categories', $categoryController->create(...), [...$adminOnly, $csrf]);
 $router->add('PATCH', '/api/admin/categories/{id}', $categoryController->update(...), [...$adminOnly, $csrf]);
@@ -108,6 +115,11 @@ $router->add('POST', '/api/instructor/levels/{id}/chapters', $courseController->
 $router->add('PATCH', '/api/instructor/chapters/{id}', $courseController->updateChapter(...), [...$instructorOnly, $csrf]);
 $router->add('DELETE', '/api/instructor/chapters/{id}', $courseController->deleteChapter(...), [...$instructorOnly, $csrf]);
 $router->add('POST', '/api/instructor/chapters/{id}/move', $courseController->moveChapter(...), [...$instructorOnly, $csrf]);
+$router->add('POST', '/api/instructor/chapters/{id}/questions', $courseController->addQuestion(...), [...$instructorOnly, $csrf]);
+$router->add('POST', '/api/instructor/chapters/{id}/preview-grade', $courseController->previewGrade(...), [...$instructorOnly, $csrf]);
+$router->add('PATCH', '/api/instructor/questions/{id}', $courseController->updateQuestion(...), [...$instructorOnly, $csrf]);
+$router->add('DELETE', '/api/instructor/questions/{id}', $courseController->deleteQuestion(...), [...$instructorOnly, $csrf]);
+$router->add('POST', '/api/instructor/questions/{id}/move', $courseController->moveQuestion(...), [...$instructorOnly, $csrf]);
 $router->add('POST', '/api/instructor/chapters/{id}/contents', $courseController->addContent(...), [...$instructorOnly, $csrf]);
 $router->add('DELETE', '/api/instructor/contents/{id}', $courseController->deleteContent(...), [...$instructorOnly, $csrf]);
 

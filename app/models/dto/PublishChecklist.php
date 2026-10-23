@@ -22,14 +22,18 @@ final class PublishChecklist
     {
         $levelsWithoutChapters = [];
         $chaptersWithoutVideo = [];
+        $examsWithoutQuestions = [];
         foreach ($outline->levels as $level) {
             $chapters = $outline->chapters($level->id());
             if ($chapters === []) {
                 $levelsWithoutChapters[] = sprintf('Nivel %d (%s)', $level->sortOrder(), $level->title());
             }
             foreach ($chapters as $chapter) {
-                if (!$chapter->isTest() && $outline->mainVideo($chapter->id()) === null) {
-                    $chaptersWithoutVideo[] = $level->sortOrder() . '.' . $chapter->sortOrder();
+                $number = $level->sortOrder() . '.' . $chapter->sortOrder();
+                if ($chapter->isTest() && $outline->questions($chapter->id()) === []) {
+                    $examsWithoutQuestions[] = $number;
+                } elseif (!$chapter->isTest() && $outline->mainVideo($chapter->id()) === null) {
+                    $chaptersWithoutVideo[] = $number;
                 }
             }
         }
@@ -63,9 +67,15 @@ final class PublishChecklist
             ],
             [
                 'key' => 'videos',
-                'label' => 'Cada capítulo con su video principal',
+                'label' => 'Cada capítulo de video con su video principal',
                 'ok' => $outline->chapterCount() > 0 && $chaptersWithoutVideo === [],
                 'detail' => $chaptersWithoutVideo === [] ? null : 'Falta el video en: ' . implode(', ', $chaptersWithoutVideo) . '.',
+            ],
+            [
+                'key' => 'exams',
+                'label' => 'Cada examen con al menos una pregunta',
+                'ok' => $examsWithoutQuestions === [],
+                'detail' => $examsWithoutQuestions === [] ? null : 'Sin preguntas: examen ' . implode(', ', $examsWithoutQuestions) . '.',
             ],
             [
                 'key' => 'pricing',
