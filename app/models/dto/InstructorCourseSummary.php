@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models\Dto;
 
 use App\Models\Mapping\RowReader;
+use App\Services\PricingMode;
 use DateTimeImmutable;
 
 /** Fila de sp_course_list_by_instructor: un curso con sus conteos para el panel. */
@@ -23,6 +24,7 @@ final class InstructorCourseSummary
         public readonly int $levelCount,
         public readonly int $chapterCount,
         public readonly int $studentCount,
+        public readonly string $levelPriceTotal,
     ) {
     }
 
@@ -44,11 +46,17 @@ final class InstructorCourseSummary
             $r->intUnsigned('level_count'),
             $r->intUnsigned('chapter_count'),
             $r->intUnsigned('student_count'),
+            $r->decimal('level_price_total', 14, 2),
         );
     }
 
     public function isPublished(): bool
     {
         return $this->publishedAt !== null;
+    }
+
+    public function pricingMode(): PricingMode
+    {
+        return PricingMode::fromFullCoursePrice($this->fullCoursePrice);
     }
 }

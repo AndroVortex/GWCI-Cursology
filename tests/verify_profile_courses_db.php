@@ -18,6 +18,7 @@ use App\Database\Connection;
 use App\Database\ProcedureException;
 use App\Database\StoredProcedures;
 use App\Integrations\CloudinaryClient;
+use App\Models\Dto\PublishChecklist;
 use App\Models\Entities\AppUser;
 use App\Models\Enums\AccountStatus;
 use App\Models\Enums\ContentType;
@@ -191,7 +192,7 @@ try {
     $promo = "https://res.cloudinary.com/prueba/video/upload/v1/$folder/promos/promo-$mark.mp4";
     $courseForm = [
         'titulo' => "Curso de prueba $mark", 'descripcion' => 'Descripción del curso.', 'certificador' => '',
-        'precio_modo' => 'fijo', 'precio' => '1249.9', 'categorias' => [$category->id()], 'portada' => [], 'video' => [],
+        'precio_modo' => 'paquete', 'precio' => '1249.9', 'categorias' => [$category->id()], 'portada' => [], 'video' => [],
     ];
     $courseInput = $validator->validateCourse($courseForm, creating: true);
 
@@ -295,12 +296,104 @@ try {
     check(count($remaining) === 1 && $remaining[0]->id() === $chapter2->id() && $remaining[0]->sortOrder() === 1, 'el capítulo siguiente pasa a ser el 1');
     check($courseRepository->deleteChapter($instructor->id(), $chapter2->id()) === [], 'un capítulo solo con texto no tiene archivos que borrar');
 
-    $summary = array_values(array_filter($courseService->listMine($instructor), static fn ($s): bool => $s->id === $course->id()))[0];
+    $summaryOf = static fn (string $courseId) => array_values(array_filter(
+        $courseService->listMine($instructor),
+        static fn ($s): bool => $s->id === $courseId,
+    ))[0] ?? null;
+    $summary = $summaryOf($course->id());
     check($summary->levelCount === 2 && $summary->chapterCount === 0 && $summary->studentCount === 0, '"Mis cursos" cuenta niveles, capítulos y alumnos');
+    check($summary->levelPriceTotal === '300.00', '"Mis cursos" suma los precios de los niveles (0 + 300)');
+
+    // -----------------------------------------------------------
+    Report::section('Forma de cobro');
+    $costs = static fn (): array => array_map(static fn ($l): string => $l->cost(), $courseService->outline($instructor, $course->id())->levels);
+    $withMode = static fn (string $mode, string $price = '') => $validator->validateCourse(['precio_modo' => $mode, 'precio' => $price] + $courseForm, false);
+    [$free] = $courseRepository->update($instructor->id(), $course->id(), $withMode('gratis'), null, null);
+    check($free->fullCoursePrice() === '0.00' && $costs() === ['0.00', '0.00'], 'pasar a gratis pone en 0 todos los niveles');
+    $freeLevel = $courseRepository->createLevel($instructor->id(), $course->id(), $levelInput('Nivel extra', '450'), $levelVideo(4));
+    check($freeLevel->cost() === '0.00' && $freeLevel->sortOrder() === 3, 'en un curso gratis, un nivel nuevo queda en 0 aunque llegue un precio');
+    [$stillFree] = $courseRepository->updateLevel($instructor->id(), $levels[3]->id(), $levelInput('Nivel 3', '99'), null);
+    check($stillFree->cost() === '0.00', 'y editar un nivel tampoco le pone precio');
+    [$bundle] = $courseRepository->update($instructor->id(), $course->id(), $withMode('paquete', '799'), null, null);
+    [$priced] = $courseRepository->updateLevel($instructor->id(), $levels[3]->id(), $levelInput('Nivel 3', '120.5'), null);
+    check($bundle->fullCoursePrice() === '799.00' && $priced->cost() === '120.50', 'en curso completo + niveles, cada nivel vuelve a tener precio');
+    check($summaryOf($course->id())?->levelPriceTotal === '120.50', 'la suma de niveles se actualiza');
+    // PRICING_LOCKED necesita alumnos inscritos: se prueba con la entrega de inscripciones y pagos.
+
+    // -----------------------------------------------------------
+    Report::section('Orden de niveles y capítulos');
+    $levelOrder = static fn (): array => array_map(static fn ($l): string => $l->id(), $courseService->outline($instructor, $course->id())->levels);
+    check($levelOrder() === [$levels[1]->id(), $levels[3]->id(), $freeLevel->id()], 'orden inicial: 1, 3 y el extra');
+    $moved = $courseRepository->moveLevel($instructor->id(), $freeLevel->id(), 'up');
+    check($moved->sortOrder() === 2 && $levelOrder() === [$levels[1]->id(), $freeLevel->id(), $levels[3]->id()], 'subir el último lo intercambia con su vecino');
+    check($courseRepository->moveLevel($instructor->id(), $levels[1]->id(), 'up')->sortOrder() === 1, 'subir el primero no cambia nada');
+    check($courseRepository->moveLevel($instructor->id(), $levels[3]->id(), 'down')->sortOrder() === 3, 'bajar el último no cambia nada');
+    check(
+        array_map(static fn ($l): int => $l->sortOrder(), $courseService->outline($instructor, $course->id())->levels) === [1, 2, 3],
+        'los órdenes quedan 1, 2, 3 sin huecos ni repetidos',
+    );
+    check(ruleCode(static fn () => $courseRepository->moveLevel($otherInstructor->id(), $levels[1]->id(), 'down')) === 'LEVEL_NOT_FOUND', 'otro instructor no mueve niveles');
+    $badDirection = thrown(ProcedureException::class, static fn () => $courseRepository->moveLevel($instructor->id(), $levels[1]->id(), 'left'));
+    check($badDirection !== null && $badDirection->is('INVALID_DIRECTION'), 'el SP rechaza una dirección desconocida');
+
+    $chapterIds = array_map(
+        static fn (string $title): string => $courseRepository->createChapter($instructor->id(), $levelId, $title)->id(),
+        ['A', 'B', 'C'],
+    );
+    $chapterOrder = static fn (): array => array_map(static fn ($c): string => $c->title(), $courseService->outline($instructor, $course->id())->chapters($levelId));
+    $courseService->moveChapter($instructor, $chapterIds[2], ['direccion' => 'arriba']);
+    check($chapterOrder() === ['A', 'C', 'B'], 'subir un capítulo: A, C, B');
+    $courseService->moveChapter($instructor, $chapterIds[0], ['direccion' => 'abajo']);
+    check($chapterOrder() === ['C', 'A', 'B'], 'bajar un capítulo: C, A, B');
+    check($courseService->moveChapter($instructor, $chapterIds[1], ['direccion' => 'abajo'])->sortOrder() === 3, 'bajar el último capítulo no cambia nada');
+    check(ruleCode(static fn () => $courseRepository->moveChapter($otherInstructor->id(), $chapterIds[0], 'up')) === 'CHAPTER_NOT_FOUND', 'otro instructor no mueve capítulos');
+    check(failedFields(static fn () => $courseService->moveChapter($instructor, $chapterIds[0], ['direccion' => 'up'])) === ['direccion'], 'la API pide arriba o abajo');
+
+    // -----------------------------------------------------------
+    Report::section('Publicación y baja lógica');
+    $publishCategory = $categories->create($admin, ['nombre' => "Prueba $mark publicar"]);
+    $draftInput = $validator->validateCourse(['titulo' => "Publicable $mark", 'categorias' => [$publishCategory->id()], 'precio_modo' => 'niveles'] + $courseForm, true);
+    $draft = $courseRepository->create($instructor->id(), $draftInput, $cover, $promo);
+    $publish = static fn () => $courseService->publish($instructor, $draft->id());
+    $categories->update($admin, $publishCategory->id(), ['activa' => false]);
+    check(ruleCode($publish) === 'NO_ACTIVE_CATEGORY', 'sin categoría activa -> NO_ACTIVE_CATEGORY');
+    $categories->update($admin, $publishCategory->id(), ['activa' => true]);
+    check(ruleCode($publish) === 'NO_LEVELS', 'sin niveles -> NO_LEVELS');
+    $draftLevel = $courseRepository->createLevel($instructor->id(), $draft->id(), $levelInput('Único', '0'), $levelVideo(7));
+    check(ruleCode($publish) === 'LEVEL_WITHOUT_CHAPTERS', 'un nivel sin capítulos -> LEVEL_WITHOUT_CHAPTERS');
+    $draftChapter = $courseRepository->createChapter($instructor->id(), $draftLevel->id(), 'Bienvenida');
+    check(ruleCode($publish) === 'CHAPTER_WITHOUT_VIDEO', 'un capítulo sin video -> CHAPTER_WITHOUT_VIDEO');
+    check(!PublishChecklist::for($courseService->outline($instructor, $draft->id()))->ready(), 'la lista del editor también marca el pendiente');
+    $courseRepository->addContent($instructor->id(), $draftChapter->id(), $mainInput, 'Bienvenida', $video);
+    check(PublishChecklist::for($courseService->outline($instructor, $draft->id()))->ready(), 'con el video, la lista queda completa');
+    check(ruleCode(static fn () => $courseService->publish($otherInstructor, $draft->id())) === 'COURSE_NOT_FOUND', 'otro instructor no lo publica');
+
+    $published = $publish();
+    check($published->publishedAt() !== null && $published->active(), 'publicado: published_at con fecha');
+    check(ruleCode($publish) === 'COURSE_ALREADY_PUBLISHED', 'publicarlo otra vez -> COURSE_ALREADY_PUBLISHED');
+    check($summaryOf($draft->id())?->isPublished() === true, '"Mis cursos" lo muestra publicado');
+    check(ruleCode(static fn () => $categories->update($admin, $publishCategory->id(), ['activa' => false])) === 'CATEGORY_IN_USE', 'su única categoría ya no se puede desactivar (CATEGORY_IN_USE)');
+
+    check($courseService->unpublish($instructor, $draft->id())->publishedAt() === null, 'sin alumnos puede volver a borrador');
+    check(ruleCode(static fn () => $courseService->unpublish($instructor, $draft->id())) === 'COURSE_NOT_PUBLISHED', 'un borrador no se "despublica" -> COURSE_NOT_PUBLISHED');
+    $published = $publish();
+
+    $inactive = $courseService->setActive($instructor, $draft->id(), ['activo' => false]);
+    check(!$inactive->active() && $inactive->deactivatedAt() !== null && $inactive->publishedAt() !== null, 'dado de baja: inactivo, con fecha de baja y conserva published_at');
+    check($courseService->setActive($instructor, $draft->id(), ['activo' => false])->deactivatedAt() == $inactive->deactivatedAt(), 'darlo de baja otra vez no cambia la fecha');
+    check(ruleCode($publish) === 'COURSE_INACTIVE', 'dado de baja no se publica -> COURSE_INACTIVE');
+    check(failedFields(static fn () => $courseService->setActive($instructor, $draft->id(), ['activo' => 'no'])) === ['activo'], 'activo debe ser true o false');
+    check(ruleCode(static fn () => $courseService->setActive($otherInstructor, $draft->id(), ['activo' => true])) === 'COURSE_NOT_FOUND', 'otro instructor no lo reactiva');
+    $reactivated = $courseService->setActive($instructor, $draft->id(), ['activo' => true]);
+    check($reactivated->active() && $reactivated->deactivatedAt() === null && $reactivated->publishedAt() == $published->publishedAt(), 'reactivado vuelve a estar publicado como antes');
+
+    // Limpieza: dado de baja, su categoría ya se puede desactivar.
+    $courseService->setActive($instructor, $draft->id(), ['activo' => false]);
+    $categories->update($admin, $publishCategory->id(), ['activa' => false]);
 
     // Deja la lista de categorías del instructor sin las de prueba (el curso es un borrador).
     $categories->update($admin, $category->id(), ['activa' => false]);
-    check(!in_array($category->id(), array_map(static fn ($c): string => $c->id(), $categories->active()), true), 'la categoría de prueba se desactiva al terminar');
+    check(!in_array($category->id(), array_map(static fn ($c): string => $c->id(), $categories->active()), true), 'las categorías de prueba se desactivan al terminar');
 } catch (Throwable $exception) {
     fwrite(STDERR, sprintf('Error inesperado: %s: %s (%s:%d)%s', $exception::class, $exception->getMessage(), $exception->getFile(), $exception->getLine(), PHP_EOL));
     if ($exception->getPrevious() !== null) {

@@ -66,6 +66,22 @@ final class CourseRepository
         return [Course::fromRow(self::first($sets, 0, 'sp_course_update')), self::mediaRefs($sets[1][0] ?? [])];
     }
 
+    public function publish(string $instructorId, string $courseId): Course
+    {
+        return Course::fromRow($this->requiredRow('sp_course_publish', [$instructorId, $courseId]));
+    }
+
+    public function unpublish(string $instructorId, string $courseId): Course
+    {
+        return Course::fromRow($this->requiredRow('sp_course_unpublish', [$instructorId, $courseId]));
+    }
+
+    /** $active = false: baja lógica; true: reactivar. */
+    public function setActive(string $instructorId, string $courseId, bool $active): Course
+    {
+        return Course::fromRow($this->requiredRow('sp_course_set_active', [$instructorId, $courseId, $active]));
+    }
+
     /** @return list<InstructorCourseSummary> */
     public function listByInstructor(string $instructorId): array
     {
@@ -98,6 +114,18 @@ final class CourseRepository
         ]);
 
         return [CourseLevel::fromRow(self::first($sets, 0, 'sp_level_update')), self::mediaRefs($sets[1][0] ?? [])];
+    }
+
+    /** @param 'up'|'down' $direction */
+    public function moveLevel(string $instructorId, string $levelId, string $direction): CourseLevel
+    {
+        return CourseLevel::fromRow($this->requiredRow('sp_level_move', [$instructorId, $levelId, $direction]));
+    }
+
+    /** @param 'up'|'down' $direction */
+    public function moveChapter(string $instructorId, string $chapterId, string $direction): CourseChapter
+    {
+        return CourseChapter::fromRow($this->requiredRow('sp_chapter_move', [$instructorId, $chapterId, $direction]));
     }
 
     /** @return list<string> referencias de los archivos del nivel eliminado */

@@ -1,8 +1,8 @@
 -- sp_course_get_for_owner: el curso completo para el editor de su instructor.
 -- Resultados (en este orden, aunque alguno venga vacío):
---   1) course                  4) course_chapter (por nivel y orden)
---   2) course_category activas 5) course_chapter_content (video principal primero)
---   3) course_level (por orden)
+--   1) course + student_count y active_category_count (categorías asignadas que siguen activas)
+--   2) course_category activas 4) course_chapter (por nivel y orden)
+--   3) course_level (por orden) 5) course_chapter_content (video principal primero)
 -- Errores: COURSE_NOT_FOUND (no existe o no es del instructor).
 
 DROP PROCEDURE IF EXISTS sp_course_get_for_owner;
@@ -21,7 +21,12 @@ BEGIN
     SELECT
         id, title, description, cover_image, onboarding_video, certificate_template, certifier_name,
         full_course_price, currency, active, created_by, created_at, updated_by, updated_at,
-        published_at, deactivated_at
+        published_at, deactivated_at,
+        (SELECT COUNT(*) FROM user_courses uc WHERE uc.course_id = p_course_id) AS student_count,
+        (SELECT COUNT(*)
+           FROM course_category cc
+           JOIN category cat ON cat.id = cc.category_id
+          WHERE cc.course_id = p_course_id AND cc.active = 1 AND cat.active = 1) AS active_category_count
     FROM course
     WHERE id = p_course_id;
 

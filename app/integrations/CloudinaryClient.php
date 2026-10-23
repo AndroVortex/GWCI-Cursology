@@ -81,6 +81,7 @@ final class CloudinaryClient
 
     /**
      * Datos reales del recurso según la Admin API (bytes, formato, duración...).
+     * La duración de videos y audios solo viene con media_metadata=true.
      *
      * @return array<string, mixed>
      * @throws MediaUploadException
@@ -88,7 +89,8 @@ final class CloudinaryClient
     public function resource(string $resourceType, string $type, string $publicId): array
     {
         $path = 'resources/' . $resourceType . '/' . $type . '/'
-            . implode('/', array_map('rawurlencode', explode('/', $publicId)));
+            . implode('/', array_map('rawurlencode', explode('/', $publicId)))
+            . ($resourceType === 'video' ? '?media_metadata=true' : '');
 
         return $this->request('GET', $path);
     }

@@ -233,6 +233,79 @@
         });
     });
 
+    /* ---------- Publicar, volver a borrador, dar de baja y reactivar ---------- */
+    const COURSE_ACTIONS = {
+        publicar: {
+            confirm: '¿Publicar el curso? Los alumnos podrán encontrarlo e inscribirse.',
+            request: function () { return send('POST', 'api/instructor/courses/' + courseId + '/publish'); },
+            done: 'Curso publicado.',
+        },
+        borrador: {
+            confirm: '¿Regresar el curso a borrador? Dejará de mostrarse hasta que lo publiques de nuevo.',
+            request: function () { return send('POST', 'api/instructor/courses/' + courseId + '/unpublish'); },
+            done: 'El curso volvió a ser borrador.',
+        },
+        baja: {
+            confirm: '¿Dar de baja el curso? Ya no se ofrecerá en el catálogo, pero sus alumnos conservan el acceso.',
+            request: function () { return send('PATCH', 'api/instructor/courses/' + courseId + '/status', { activo: false }); },
+            done: 'Curso dado de baja.',
+        },
+        reactivar: {
+            confirm: null,
+            request: function () { return send('PATCH', 'api/instructor/courses/' + courseId + '/status', { activo: true }); },
+            done: 'Curso reactivado.',
+        },
+    };
+
+    document.querySelectorAll('[data-course-action]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const action = COURSE_ACTIONS[button.dataset.courseAction];
+            if (action.confirm && !window.confirm(action.confirm)) {
+                return;
+            }
+            button.disabled = true;
+            ui.hideAlert(pageAlert);
+            action.request()
+                .then(function (result) {
+                    if (result.ok) {
+                        reloadAt('course-publish', action.done);
+                        return;
+                    }
+                    button.disabled = false;
+                    ui.showAlert(pageAlert, errorMessage(result));
+                    pageAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                })
+                .catch(function () {
+                    button.disabled = false;
+                    ui.showAlert(pageAlert, ui.NETWORK_ERROR);
+                });
+        });
+    });
+
+    /* ---------- Reordenar niveles y capítulos ---------- */
+    section.querySelectorAll('[data-move]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const kind = button.dataset.move;
+            button.disabled = true;
+            ui.hideAlert(pageAlert);
+            send('POST', 'api/instructor/' + (kind === 'level' ? 'levels/' : 'chapters/') + button.dataset.id + '/move', {
+                direccion: button.dataset.direction,
+            })
+                .then(function (result) {
+                    if (result.ok) {
+                        reloadAt(kind + '-' + button.dataset.id, kind === 'level' ? 'Nivel movido.' : 'Capítulo movido.');
+                        return;
+                    }
+                    button.disabled = false;
+                    ui.showAlert(pageAlert, errorMessage(result));
+                })
+                .catch(function () {
+                    button.disabled = false;
+                    ui.showAlert(pageAlert, ui.NETWORK_ERROR);
+                });
+        });
+    });
+
     /* ---------- Eliminar niveles, capítulos y contenido ---------- */
     const DELETES = {
         level: {

@@ -84,6 +84,33 @@ final class CourseService
         return $course;
     }
 
+    /** @throws BusinessRuleException COURSE_INACTIVE, COURSE_ALREADY_PUBLISHED o el requisito que falte */
+    public function publish(AppUser $instructor, string $courseId): Course
+    {
+        return $this->courses->publish($instructor->id(), $courseId);
+    }
+
+    /** @throws BusinessRuleException COURSE_NOT_PUBLISHED, COURSE_HAS_STUDENTS */
+    public function unpublish(AppUser $instructor, string $courseId): Course
+    {
+        return $this->courses->unpublish($instructor->id(), $courseId);
+    }
+
+    /**
+     * Baja lógica o reactivación.
+     *
+     * @param array<string, mixed> $input {activo: bool}
+     * @throws ValidationException|BusinessRuleException
+     */
+    public function setActive(AppUser $instructor, string $courseId, array $input): Course
+    {
+        if (!is_bool($input['activo'] ?? null)) {
+            throw new ValidationException(['activo' => 'Indica si el curso queda activo (true o false).']);
+        }
+
+        return $this->courses->setActive($instructor->id(), $courseId, $input['activo']);
+    }
+
     /** @param array<string, mixed> $input */
     public function addLevel(AppUser $instructor, string $courseId, array $input): CourseLevel
     {
@@ -114,6 +141,18 @@ final class CourseService
     public function deleteLevel(AppUser $instructor, string $levelId): void
     {
         $this->discardAll($this->courses->deleteLevel($instructor->id(), $levelId));
+    }
+
+    /** @param array<string, mixed> $input {direccion: arriba | abajo} */
+    public function moveLevel(AppUser $instructor, string $levelId, array $input): CourseLevel
+    {
+        return $this->courses->moveLevel($instructor->id(), $levelId, $this->validator->validateMoveDirection($input));
+    }
+
+    /** @param array<string, mixed> $input {direccion: arriba | abajo} */
+    public function moveChapter(AppUser $instructor, string $chapterId, array $input): CourseChapter
+    {
+        return $this->courses->moveChapter($instructor->id(), $chapterId, $this->validator->validateMoveDirection($input));
     }
 
     /** @param array<string, mixed> $input */

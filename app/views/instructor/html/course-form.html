@@ -2,11 +2,20 @@
 /*
  * Datos generales del curso; lo comparten "Nuevo curso" y el editor.
  * Requiere $formCourse (Course o null si es nuevo), $selectedCategoryIds y $activeCategories.
+ * Opcionales (editor): $pricingLocked (ya tiene alumnos) y $pricedLevelCount (niveles con precio).
  */
+use App\Services\PricingMode;
+
 $isNewCourse = $formCourse === null;
 $price = $formCourse?->fullCoursePrice();
-$priceMode = $price === null ? 'niveles' : ($price === '0.00' ? 'gratis' : 'fijo');
-$priceModes = ['niveles' => 'Suma de los niveles', 'gratis' => 'Gratis', 'fijo' => 'Precio fijo'];
+$pricingMode = PricingMode::fromFullCoursePrice($price);
+$pricingLocked ??= false;
+$pricedLevelCount ??= 0;
+$pricingHelp = [
+    PricingMode::Free->value => 'Todo el curso es gratuito, incluidos los niveles que agregues después. Los niveles no llevan precio.',
+    PricingMode::Levels->value => 'Cada nivel tiene su precio y el alumno compra los que quiera. Puedes dejar alguno en $0 como muestra.',
+    PricingMode::Bundle->value => 'Un precio por todo el curso, que incluye los niveles que agregues después. Cada nivel también se vende por separado.',
+];
 ?>
 <form class="panel-body course-form" id="course-form" data-course-id="<?= e($formCourse?->id()) ?>" novalidate>
     <div class="form-alert" role="alert" data-form-alert hidden></div>
@@ -72,21 +81,28 @@ $priceModes = ['niveles' => 'Suma de los niveles', 'gratis' => 'Gratis', 'fijo' 
         <p class="field-error" aria-live="polite"></p>
     </fieldset>
 
-    <fieldset class="form-field fieldset-reset">
-        <legend class="form-label">Precio del curso completo</legend>
-        <div class="check-grid">
-            <?php foreach ($priceModes as $mode => $label): ?>
-                <label class="check-option">
-                    <input type="radio" name="precio_modo" value="<?= e($mode) ?>"<?= $priceMode === $mode ? ' checked' : '' ?>>
-                    <?= e($label) ?>
+    <fieldset class="form-field fieldset-reset" data-pricing data-initial-mode="<?= e($pricingMode->value) ?>" data-priced-levels="<?= (int) $pricedLevelCount ?>">
+        <legend class="form-label">Forma de cobro</legend>
+        <div class="pricing-options">
+            <?php foreach (PricingMode::cases() as $mode): ?>
+                <label class="check-option pricing-option">
+                    <input type="radio" name="precio_modo" value="<?= e($mode->value) ?>"<?= $pricingMode === $mode ? ' checked' : '' ?><?= $pricingLocked && $pricingMode !== $mode ? ' disabled' : '' ?>>
+                    <span>
+                        <strong><?= e($mode->label()) ?></strong>
+                        <span class="pricing-help"><?= e($pricingHelp[$mode->value]) ?></span>
+                    </span>
                 </label>
             <?php endforeach; ?>
         </div>
-        <div class="price-amount" data-price-amount<?= $priceMode === 'fijo' ? '' : ' hidden' ?>>
-            <label class="form-label" for="course-precio">Precio en MXN</label>
-            <input class="form-control" type="text" inputmode="decimal" id="course-precio" name="precio" placeholder="0.00" value="<?= $priceMode === 'fijo' ? e($price) : '' ?>">
+        <div class="price-amount" data-price-amount<?= $pricingMode === PricingMode::Bundle ? '' : ' hidden' ?>>
+            <label class="form-label" for="course-precio">Precio del curso completo (MXN)</label>
+            <input class="form-control" type="text" inputmode="decimal" id="course-precio" name="precio" placeholder="0.00" value="<?= $pricingMode === PricingMode::Bundle ? e($price) : '' ?>">
         </div>
-        <p class="form-hint">Cada nivel tiene además su propio precio para venderlo por separado.</p>
+        <?php if ($pricingLocked): ?>
+            <p class="form-hint">El curso ya tiene alumnos: puedes cambiar los importes, pero no la forma de cobro.</p>
+        <?php else: ?>
+            <p class="form-hint">El precio de cada nivel se captura al agregarlo. Mientras el curso no tenga alumnos puedes cambiar la forma de cobro.</p>
+        <?php endif; ?>
         <p class="field-error" aria-live="polite"></p>
     </fieldset>
 

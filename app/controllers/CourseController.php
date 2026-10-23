@@ -55,6 +55,30 @@ final class CourseController
         return JsonResponse::data(['course' => CoursePresenter::course($course)]);
     }
 
+    /** POST /api/instructor/courses/{id}/publish */
+    public function publish(Request $request): JsonResponse
+    {
+        $course = $this->courses->publish($this->user($request), $this->id($request));
+
+        return JsonResponse::data(['course' => CoursePresenter::course($course)]);
+    }
+
+    /** POST /api/instructor/courses/{id}/unpublish */
+    public function unpublish(Request $request): JsonResponse
+    {
+        $course = $this->courses->unpublish($this->user($request), $this->id($request));
+
+        return JsonResponse::data(['course' => CoursePresenter::course($course)]);
+    }
+
+    /** PATCH /api/instructor/courses/{id}/status ({activo: bool}) */
+    public function setStatus(Request $request): JsonResponse
+    {
+        $course = $this->courses->setActive($this->user($request), $this->id($request), $request->json());
+
+        return JsonResponse::data(['course' => CoursePresenter::course($course)]);
+    }
+
     /** POST /api/instructor/courses/{id}/levels */
     public function addLevel(Request $request): JsonResponse
     {
@@ -69,6 +93,22 @@ final class CourseController
         $level = $this->courses->updateLevel($this->user($request), $this->id($request), $request->json());
 
         return JsonResponse::data(['level' => CoursePresenter::level($level)]);
+    }
+
+    /** POST /api/instructor/levels/{id}/move ({direccion: arriba | abajo}) */
+    public function moveLevel(Request $request): JsonResponse
+    {
+        $level = $this->courses->moveLevel($this->user($request), $this->id($request), $request->json());
+
+        return JsonResponse::data(['level' => CoursePresenter::level($level)]);
+    }
+
+    /** POST /api/instructor/chapters/{id}/move ({direccion: arriba | abajo}) */
+    public function moveChapter(Request $request): JsonResponse
+    {
+        $chapter = $this->courses->moveChapter($this->user($request), $this->id($request), $request->json());
+
+        return JsonResponse::data(['chapter' => CoursePresenter::chapter($chapter)]);
     }
 
     /** DELETE /api/instructor/levels/{id} */

@@ -12,6 +12,8 @@
     const alert = form.querySelector('[data-form-alert]');
     const courseId = form.dataset.courseId;
     const amount = form.querySelector('[data-price-amount]');
+    const pricing = form.querySelector('[data-pricing]');
+    const pricedLevels = Number(pricing.dataset.pricedLevels || 0);
 
     function priceMode() {
         const checked = form.querySelector('input[name="precio_modo"]:checked');
@@ -20,7 +22,7 @@
 
     form.querySelectorAll('input[name="precio_modo"]').forEach(function (radio) {
         radio.addEventListener('change', function () {
-            amount.hidden = priceMode() !== 'fijo';
+            amount.hidden = priceMode() !== 'paquete';
             if (!amount.hidden) {
                 form.elements.precio.focus();
             }
@@ -45,8 +47,14 @@
         } else if (body.categorias.length > 5) {
             errors.categorias = 'Elige como máximo 5 categorías.';
         }
-        if (body.precio_modo === 'fijo' && !/^(0|[1-9]\d{0,9})(\.\d{1,2})?$/.test(body.precio.trim())) {
-            errors.precio = 'Escribe un precio válido, por ejemplo 499 o 499.90.';
+        if (body.precio_modo === '') {
+            errors.precio = 'Elige cómo se cobra el curso.';
+        } else if (body.precio_modo === 'paquete') {
+            if (!/^(0|[1-9]\d{0,9})(\.\d{1,2})?$/.test(body.precio.trim())) {
+                errors.precio = 'Escribe un precio válido, por ejemplo 499 o 499.90.';
+            } else if (Number(body.precio) === 0) {
+                errors.precio = 'Un curso completo de $0 es gratis: elige "Gratis".';
+            }
         }
         if (!courseId && !body.portada) {
             errors.portada = 'Sube la portada del curso.';
@@ -88,6 +96,13 @@
                 ui.showError(form, name, errors[name]);
             });
             ui.showAlert(alert, 'Revisa los campos marcados.');
+            return;
+        }
+
+        const becomesFree = body.precio_modo === 'gratis' && pricing.dataset.initialMode !== 'gratis';
+        if (becomesFree && pricedLevels > 0 && !window.confirm(
+            'El curso será gratis: el precio de ' + pricedLevels + ' nivel(es) se pondrá en $0. ¿Continuar?'
+        )) {
             return;
         }
 

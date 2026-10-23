@@ -36,6 +36,15 @@ final class BusinessRuleException extends RuntimeException
         'LEVEL_NOT_EMPTY' => [409, 'Primero elimina los capítulos de este nivel.', null],
         'HAS_ENROLLMENTS' => [409, 'Ya hay alumnos con acceso a este contenido; no se puede eliminar.', null],
         'MAIN_VIDEO_EXISTS' => [409, 'Este capítulo ya tiene un video principal. Quítalo antes de subir otro.', 'archivo'],
+        'PRICING_LOCKED' => [409, 'El curso ya tiene alumnos: puedes cambiar los importes, pero no la forma de cobro.', 'precio_modo'],
+        'COURSE_INACTIVE' => [409, 'El curso está dado de baja. Reactívalo antes de publicarlo.', null],
+        'COURSE_ALREADY_PUBLISHED' => [409, 'El curso ya está publicado.', null],
+        'COURSE_NOT_PUBLISHED' => [409, 'El curso todavía es un borrador.', null],
+        'COURSE_HAS_STUDENTS' => [409, 'El curso ya tiene alumnos: no puede volver a borrador. Si ya no quieres ofrecerlo, dalo de baja.', null],
+        'NO_ACTIVE_CATEGORY' => [422, 'Para publicar, el curso necesita al menos una categoría activa.', null],
+        'NO_LEVELS' => [422, 'Para publicar, agrega al menos un nivel.', null],
+        'LEVEL_WITHOUT_CHAPTERS' => [422, 'Para publicar, cada nivel necesita al menos un capítulo.', null],
+        'CHAPTER_WITHOUT_VIDEO' => [422, 'Para publicar, cada capítulo necesita su video principal.', null],
     ];
 
     private function __construct(

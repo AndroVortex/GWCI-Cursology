@@ -14,11 +14,11 @@ Si la app vive en una subcarpeta, las rutas son relativas a ella; el frontend us
   - Error: `{"error": {"code": "CODIGO", "message": "Texto para mostrar", "fields": {"campo": "mensaje"}}}`. `fields` solo aparece en errores de campos, con los mismos nombres que el formulario.
   - `204`: sin cuerpo.
 - **Sesión:** cookie `CURSOLOGYSESSID` (`HttpOnly`, `SameSite=Lax`, `Secure` con HTTPS). La sesión solo guarda el id del usuario; en cada petición se vuelve a comprobar que la cuenta siga activa y sin ban.
-- **CSRF:** toda petición `POST` exige el header `X-CSRF-Token`.
+- **CSRF:** toda petición que modifica (`POST`, `PUT`, `PATCH`, `DELETE`) exige el header `X-CSRF-Token`.
   - En las páginas, el token está en `<meta name="csrf-token">`.
   - Fuera del navegador (Postman, curl) se obtiene con `GET /api/auth/csrf`, conservando la cookie de sesión.
   - El token cambia al iniciar sesión.
-- **CORS:** solo los orígenes listados en `APP_ALLOWED_ORIGINS` (`.env`, separados por coma) reciben cabeceras CORS (`Allow-Credentials`, métodos `GET, POST, OPTIONS`, headers `Accept, Content-Type, X-CSRF-Token`). Vacío significa que solo el propio sitio puede leer las respuestas. Las preflight `OPTIONS` responden `204`.
+- **CORS:** solo los orígenes listados en `APP_ALLOWED_ORIGINS` (`.env`, separados por coma) reciben cabeceras CORS (`Allow-Credentials`, métodos `GET, POST, PUT, PATCH, DELETE, OPTIONS`, headers `Accept, Content-Type, X-CSRF-Token`). Vacío significa que solo el propio sitio puede leer las respuestas. Las preflight `OPTIONS` responden `204`.
 
 ### Errores comunes
 
@@ -100,6 +100,90 @@ Requiere sesión (middleware `RequireAuth`).
 - `200`: `{"data": {"user": {...}}}`.
 - `401` (`UNAUTHENTICATED`): sin sesión, o si la cuenta se bloqueó o se baneó después de iniciar sesión.
 
+### Rutas con `{id}`, roles y reglas de negocio
+
+- `{id}` solo acepta enteros positivos de hasta 20 dígitos; cualquier otra cosa es `404 NOT_FOUND`.
+- Las rutas `/api/admin/*` exigen rol admin y las `/api/instructor/*` y `/api/media/*`, rol instructor: `403 FORBIDDEN` si no.
+- Las reglas de negocio que señala un SP llegan como `{"error": {"code", "message", "fields"?}}` con su estado (`404` no existe, `409` conflicto, `422` dato inválido). Algunos códigos se atribuyen a un campo del formulario (`fields`).
+- **Recursos de otro instructor:** responden `404` (`COURSE_NOT_FOUND`, `LEVEL_NOT_FOUND`, `CHAPTER_NOT_FOUND`, `CONTENT_NOT_FOUND`), igual que si no existieran, para no revelar qué ids existen.
+
+### Perfil (`/api/users/me`)
+
+Requieren sesión y `X-CSRF-Token`.
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `PATCH /api/users/me` | JSON: `nombre, apellido_paterno, apellido_materno, genero, fecha_nacimiento, descripcion, email` y, si cambia el email, `current_password` | `200 {"data": {"user"}}` |
+| `POST /api/users/me/avatar` | `multipart/form-data`, campo `foto` (JPG, PNG o WEBP, 5 MB) | `200 {"data": {"user"}}`; la foto anterior se borra de Cloudinary |
+| `DELETE /api/users/me/avatar` | — | `200 {"data": {"user"}}` con el avatar por defecto |
+| `PUT /api/users/me/password` | JSON: `current_password, new_password, confirm_password` | `204`; la sesión se regenera |
+
+Errores: `422 VALIDATION_FAILED` por campo (contraseña actual incorrecta va en `current_password`), `409 EMAIL_TAKEN` en `email`, `502 MEDIA_UPLOAD_FAILED` / `503 MEDIA_UNAVAILABLE` si Cloudinary falla o no está configurado.
+
+### Categorías
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/categories` | Público | — | `{"data": {"categories": [...]}}`, solo activas |
+| `GET /api/admin/categories` | Admin | — | Todas, activas e inactivas |
+| `POST /api/admin/categories` | Admin + CSRF | `{nombre, descripcion?}` | `201 {"data": {"category"}}` |
+| `PATCH /api/admin/categories/{id}` | Admin + CSRF | `{nombre, descripcion}` y/o `{activa: bool}` | `200 {"data": {"category"}}` |
+
+Cada categoría: `{id, name, description, active, updatedAt}`. Errores: `409 CATEGORY_NAME_TAKEN` (en `nombre`), `404 CATEGORY_NOT_FOUND`, `409 CATEGORY_IN_USE` (desactivarla dejaría un curso publicado sin categoría activa).
+
+### Subidas a Cloudinary (`POST /api/media/upload-ticket`)
+
+Instructor + CSRF. Cuerpo `{"purpose": "course_cover"}`. Responde los campos firmados para que el navegador suba el archivo directo a Cloudinary:
+
+```json
+{"data": {"upload_url": "https://api.cloudinary.com/v1_1/<cloud>/video/upload",
+  "fields": {"folder": "cursology/courses/u7/content", "type": "authenticated", "timestamp": "...", "api_key": "...", "signature": "..."},
+  "resource_type": "video", "max_bytes": 104857600, "formats": ["mp4", "webm", "mov"]}}
+```
+
+Después, el navegador manda al endpoint del curso `{public_id, version, signature, original_filename}` tal como respondió Cloudinary, y el servidor lo verifica. Propósitos, límites y formatos: [media.md](media.md).
+
+### Cursos del instructor (`/api/instructor/...`)
+
+Instructor; los que modifican, además con CSRF. Los archivos se mandan como el objeto de la subida verificada (ver arriba).
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `GET /api/instructor/courses` | — | `{"data": {"courses": [...]}}`: `id, title, coverImage, pricingMode, fullCoursePrice, levelPriceTotal, currency, status, levels, chapters, students, updatedAt` |
+| `POST /api/instructor/courses` | `titulo, descripcion, certificador?, categorias[], precio_modo, precio?, portada, video` | `201 {"data": {"course"}}` como borrador |
+| `GET /api/instructor/courses/{id}` | — | El curso con `categoryIds` y `levels[].chapters[]` (cada capítulo con `mainVideo` y `resources`) |
+| `PATCH /api/instructor/courses/{id}` | Igual que al crear; `portada`/`video` `null` = conservar | `200 {"data": {"course"}}` |
+| `POST /api/instructor/courses/{id}/publish` | — | `200` con `status: "published"` |
+| `POST /api/instructor/courses/{id}/unpublish` | — | `200` con `status: "draft"` |
+| `PATCH /api/instructor/courses/{id}/status` | `{activo: bool}` | `200` con `status: "inactive"` o como estaba al reactivarlo |
+| `POST /api/instructor/courses/{id}/levels` | `titulo, descripcion, costo, video` | `201 {"data": {"level"}}` al final del curso |
+| `PATCH /api/instructor/levels/{id}` | `titulo, descripcion, costo, video?` (`null` = conservar) | `200 {"data": {"level"}}` |
+| `DELETE /api/instructor/levels/{id}` | — | `204` (solo sin capítulos) |
+| `POST /api/instructor/levels/{id}/move` | `{direccion: "arriba" \| "abajo"}` | `200 {"data": {"level"}}` |
+| `POST /api/instructor/levels/{id}/chapters` | `{titulo}` | `201 {"data": {"chapter"}}` al final del nivel |
+| `PATCH /api/instructor/chapters/{id}` | `{titulo}` | `200 {"data": {"chapter"}}` |
+| `DELETE /api/instructor/chapters/{id}` | — | `204`; borra su contenido y sus archivos |
+| `POST /api/instructor/chapters/{id}/move` | `{direccion: "arriba" \| "abajo"}` | `200 {"data": {"chapter"}}` |
+| `POST /api/instructor/chapters/{id}/contents` | `tipo` y, según el tipo, `archivo`, `url` o `texto`; `titulo` | `201 {"data": {"content"}}` con su `url` (temporal si es protegido) |
+| `DELETE /api/instructor/contents/{id}` | — | `204`; borra el archivo de Cloudinary |
+
+**Forma de cobro (`precio_modo`):**
+
+| Valor | `fullCoursePrice` | Niveles |
+|---|---|---|
+| `gratis` | `"0.00"` | Todos en 0; el `costo` que llegue se ignora |
+| `niveles` | `null` | Cada uno con su precio; puede haber niveles de 0 (muestra gratis) |
+| `paquete` | Importe mayor a 0 (`precio`) | Cada uno con su precio; el paquete incluye los niveles que se agreguen después |
+
+- Pasar a `gratis` pone en 0 los niveles existentes.
+- Con el curso publicado y con alumnos, la forma de cobro ya no cambia (`409 PRICING_LOCKED`, en `precio_modo`); los importes sí.
+
+**Tipos de contenido (`tipo`):** `video_principal` (uno por capítulo, `409 MAIN_VIDEO_EXISTS`), `documento`, `imagen`, `audio`, `archivo` (con `archivo`), `enlace` (con `url` http/https y `titulo`) y `texto` (con `texto` y `titulo`). En los archivos, sin `titulo` se usa el nombre original.
+
+**Publicar:** el curso necesita, en este orden, estar activo (`409 COURSE_INACTIVE`), no estar publicado (`409 COURSE_ALREADY_PUBLISHED`), una categoría activa (`422 NO_ACTIVE_CATEGORY`), al menos un nivel (`422 NO_LEVELS`), cada nivel con al menos un capítulo (`422 LEVEL_WITHOUT_CHAPTERS`) y cada capítulo con su video principal (`422 CHAPTER_WITHOUT_VIDEO`). Volver a borrador solo sin alumnos (`409 COURSE_HAS_STUDENTS`; si los tiene, se da de baja). Un borrador no se "despublica" (`409 COURSE_NOT_PUBLISHED`).
+
+**Otros errores:** `409 LEVEL_NOT_EMPTY` (borrar un nivel con capítulos), `409 HAS_ENROLLMENTS` (borrar un nivel o capítulo al que ya tienen acceso alumnos), `422 CATEGORY_NOT_AVAILABLE` (en `categorias`), `422 VALIDATION_FAILED` (`direccion`, `activo` y los campos del formulario).
+
 ### `GET /api/admin/users/locked`
 
 Cuentas bloqueadas por 3 contraseñas incorrectas consecutivas, de la más reciente a la más antigua. Requiere sesión de **admin** (`RequireAuth` + `RequireRole`).
@@ -146,23 +230,22 @@ APP_ALLOWED_ORIGINS=
 
 Sin las credenciales de Cloudinary, el registro sin foto funciona y el registro con foto responde `503`. Las fotos se suben a la carpeta `cursology/avatars` con una petición firmada desde el servidor; el secret nunca llega al navegador.
 
-### Certificados detrás de un proxy (Zscaler)
-
-Si las subidas responden `502` (`MEDIA_UPLOAD_FAILED`, "No se pudo procesar el archivo") y en `C:\laragon\tmp\php_errors.log` aparece `unable to get local issuer certificate (20)`, un proxy que inspecciona HTTPS (como Zscaler en la red de la empresa) está volviendo a firmar el certificado de Cloudinary con su propia raíz.
-
-- **El navegador sí confía en esa raíz** porque está instalada en Windows; por eso la subida directa desde el navegador funciona.
-- **El `cacert.pem` de PHP no la trae**, así que fallaban las llamadas del servidor: subir el avatar y verificar la portada y los videos con la Admin API.
-- **Corrección:** `CloudinaryClient::tlsOptions()` agrega `CURLSSLOPT_NATIVE_CA` en Windows, para que curl use también los certificados de Windows. **La verificación SSL sigue activa:** nunca se desactiva `CURLOPT_SSL_VERIFYPEER`. En Linux (producción) no cambia nada.
-- **Comprobarlo:** `php tests/verify_cloudinary_live.php` sube, verifica y borra archivos reales.
+Si las subidas responden `502` (`MEDIA_UPLOAD_FAILED`) en la red de la empresa, revisa [media.md](media.md), sección "Certificados detrás de un proxy (Zscaler)".
 
 ## Probar
 
 ```powershell
-# Sin base de datos
+# Sin base de datos ni red
+php tests/verify_model_mapping.php
 php tests/verify_auth_unit.php
+php tests/verify_profile_courses_unit.php
 
-# Contra la base local (con los SP instalados; crea 2 cuentas de prueba por corrida)
+# Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida)
 php tests/verify_auth_db.php
+php tests/verify_profile_courses_db.php
+
+# Contra Cloudinary real (opcional; sube y borra archivos de prueba)
+php tests/verify_cloudinary_live.php
 ```
 
 Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`):

@@ -97,12 +97,17 @@ $router->add('GET', '/api/instructor/courses', $courseController->listMine(...),
 $router->add('POST', '/api/instructor/courses', $courseController->create(...), [...$instructorOnly, $csrf]);
 $router->add('GET', '/api/instructor/courses/{id}', $courseController->show(...), $instructorOnly);
 $router->add('PATCH', '/api/instructor/courses/{id}', $courseController->update(...), [...$instructorOnly, $csrf]);
+$router->add('POST', '/api/instructor/courses/{id}/publish', $courseController->publish(...), [...$instructorOnly, $csrf]);
+$router->add('POST', '/api/instructor/courses/{id}/unpublish', $courseController->unpublish(...), [...$instructorOnly, $csrf]);
+$router->add('PATCH', '/api/instructor/courses/{id}/status', $courseController->setStatus(...), [...$instructorOnly, $csrf]);
 $router->add('POST', '/api/instructor/courses/{id}/levels', $courseController->addLevel(...), [...$instructorOnly, $csrf]);
 $router->add('PATCH', '/api/instructor/levels/{id}', $courseController->updateLevel(...), [...$instructorOnly, $csrf]);
 $router->add('DELETE', '/api/instructor/levels/{id}', $courseController->deleteLevel(...), [...$instructorOnly, $csrf]);
+$router->add('POST', '/api/instructor/levels/{id}/move', $courseController->moveLevel(...), [...$instructorOnly, $csrf]);
 $router->add('POST', '/api/instructor/levels/{id}/chapters', $courseController->addChapter(...), [...$instructorOnly, $csrf]);
 $router->add('PATCH', '/api/instructor/chapters/{id}', $courseController->updateChapter(...), [...$instructorOnly, $csrf]);
 $router->add('DELETE', '/api/instructor/chapters/{id}', $courseController->deleteChapter(...), [...$instructorOnly, $csrf]);
+$router->add('POST', '/api/instructor/chapters/{id}/move', $courseController->moveChapter(...), [...$instructorOnly, $csrf]);
 $router->add('POST', '/api/instructor/chapters/{id}/contents', $courseController->addContent(...), [...$instructorOnly, $csrf]);
 $router->add('DELETE', '/api/instructor/contents/{id}', $courseController->deleteContent(...), [...$instructorOnly, $csrf]);
 

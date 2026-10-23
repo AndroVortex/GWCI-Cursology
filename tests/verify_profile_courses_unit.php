@@ -16,7 +16,9 @@ use App\Http\Middleware\RequireRole;
 use App\Http\Request;
 use App\Http\Router;
 use App\Integrations\CloudinaryClient;
+use App\Models\Dto\CourseOutline;
 use App\Models\Dto\LockedAccount;
+use App\Models\Dto\PublishChecklist;
 use App\Models\Entities\AppUser;
 use App\Models\Enums\ContentType;
 use App\Models\Enums\UserRole;
@@ -24,6 +26,7 @@ use App\Services\CourseValidator;
 use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\ValidationException;
 use App\Services\MediaService;
+use App\Services\PricingMode;
 use App\Services\ProfileValidator;
 use App\Services\Validation\UserRules;
 use App\Services\VerifiedMedia;
@@ -114,7 +117,7 @@ try {
     $media = ['public_id' => 'x', 'version' => '1', 'signature' => 's'];
     $course = [
         'titulo' => '  PHP desde cero ', 'descripcion' => 'Aprende PHP.', 'certificador' => '',
-        'precio_modo' => 'fijo', 'precio' => '1249.9', 'categorias' => ['3', 3, '5'], 'portada' => $media, 'video' => $media,
+        'precio_modo' => 'paquete', 'precio' => '1249.9', 'categorias' => ['3', 3, '5'], 'portada' => $media, 'video' => $media,
     ];
     $input = $courses->validateCourse($course, creating: true);
     check($input->title === 'PHP desde cero' && $input->certifierName === null, 'título recortado y certificador vacío -> NULL');
@@ -127,6 +130,20 @@ try {
         check(failedFields(static fn () => $courses->validateCourse(['precio' => $price] + $course, true)) === ['precio'], "precio '$price' se rechaza");
     }
     check(failedFields(static fn () => $courses->validateCourse(['precio_modo' => 'otro'] + $course, true)) === ['precio'], 'modo de precio desconocido se rechaza');
+    check(failedFields(static fn () => $courses->validateCourse(['precio_modo' => 'fijo'] + $course, true)) === ['precio'], "el modo anterior 'fijo' ya no existe");
+    foreach (['0', '0.00'] as $zero) {
+        $exception = thrown(ValidationException::class, static fn () => $courses->validateCourse(['precio' => $zero] + $course, true));
+        check($exception !== null && str_contains($exception->fields['precio'] ?? '', 'Gratis'), "paquete de \$$zero -> sugiere elegir Gratis");
+    }
+    check(
+        PricingMode::fromFullCoursePrice(null) === PricingMode::Levels && PricingMode::fromFullCoursePrice('0.00') === PricingMode::Free
+            && PricingMode::fromFullCoursePrice('0') === PricingMode::Free && PricingMode::fromFullCoursePrice('899.00') === PricingMode::Bundle,
+        'forma de cobro: NULL = por niveles, 0 = gratis, importe = curso completo',
+    );
+    check($courses->validateMoveDirection(['direccion' => 'arriba']) === 'up' && $courses->validateMoveDirection(['direccion' => 'abajo']) === 'down', 'arriba/abajo -> up/down');
+    foreach (['up', '', 'izquierda'] as $direction) {
+        check(failedFields(static fn () => $courses->validateMoveDirection(['direccion' => $direction])) === ['direccion'], "dirección '$direction' se rechaza");
+    }
     foreach (['vacías' => [], 'seis' => ['1', '2', '3', '4', '5', '6'], 'no numérica' => ['abc'], 'cero' => ['0'], 'texto' => '3'] as $label => $ids) {
         check(failedFields(static fn () => $courses->validateCourse(['categorias' => $ids] + $course, true)) === ['categorias'], "categorías ($label) se rechazan");
     }
@@ -308,6 +325,65 @@ try {
     check($exception !== null && array_keys($exception->fields) === ['portada'], 'archivo de otra carpeta (otro usuario) se rechaza sin consultar Cloudinary');
     $forged = ['public_id' => 'cursology/courses/u7/covers/abc', 'version' => '1', 'signature' => str_repeat('0', 40)];
     check(thrown(ValidationException::class, static fn () => $stranger(userWithRole(UserRole::Instructor), 'course_cover', $forged, 'portada')) !== null, 'firma falsa se rechaza');
+
+    // -----------------------------------------------------------
+    Report::section('Requisitos para publicar');
+    $t = '2026-10-21 18:00:00.000000';
+    $courseRow = static fn (?string $price, int $activeCategories = 1, ?string $publishedAt = null, int $students = 0): array => [
+        'id' => '9', 'title' => 'PHP', 'description' => 'PHP.', 'cover_image' => 'https://x/c.jpg', 'onboarding_video' => 'https://x/v.mp4',
+        'certificate_template' => null, 'certifier_name' => null, 'full_course_price' => $price, 'currency' => 'MXN', 'active' => 1,
+        'created_by' => '7', 'created_at' => $t, 'updated_by' => null, 'updated_at' => $t, 'published_at' => $publishedAt,
+        'deactivated_at' => null, 'student_count' => $students, 'active_category_count' => $activeCategories,
+    ];
+    $levelRow = static fn (string $id, int $order, string $cost = '0.00'): array => [
+        'id' => $id, 'course_id' => '9', 'title' => "Nivel $id", 'description' => 'D.', 'onboarding_video' => 'https://x/l.mp4',
+        'sort_order' => $order, 'cost' => $cost, 'created_at' => $t, 'updated_at' => $t,
+    ];
+    $chapterRow = static fn (string $id, string $levelId, int $order): array => [
+        'id' => $id, 'course_level_id' => $levelId, 'title' => "Capítulo $id", 'sort_order' => $order, 'is_test' => 0,
+        'minimum_passing_grade' => null, 'created_at' => $t, 'updated_at' => $t,
+    ];
+    $videoRow = static fn (string $id, string $chapterId): array => [
+        'id' => $id, 'course_chapter_id' => $chapterId, 'title' => 'Clase', 'content_type' => 'video',
+        'content_uri' => 'cloudinary:authenticated/video/x', 'text_content' => null, 'mime_type' => 'video/mp4',
+        'original_filename' => 'clase.mp4', 'size_bytes' => '1000', 'duration_seconds' => 60, 'is_main' => 1, 'main_slot' => 1, 'created_at' => $t,
+    ];
+    $outlineOf = static fn (array $course, array $levels = [], array $chapters = [], array $contents = []): CourseOutline
+        => CourseOutline::fromResultSets([[$course], [['course_id' => '9', 'category_id' => '3', 'active' => 1]], $levels, $chapters, $contents]);
+    $pending = static fn (PublishChecklist $list): array => array_values(array_map(
+        static fn (array $item): string => $item['key'],
+        array_filter($list->items, static fn (array $item): bool => !$item['ok']),
+    ));
+
+    $empty = PublishChecklist::for($outlineOf($courseRow(null, 0)));
+    check($pending($empty) === ['category', 'levels', 'chapters', 'videos'] && !$empty->ready(), 'curso vacío: faltan categoría, niveles, capítulos y videos');
+    $partial = PublishChecklist::for($outlineOf(
+        $courseRow(null),
+        [$levelRow('1', 1, '199.00'), $levelRow('2', 2, '0.00')],
+        [$chapterRow('11', '1', 1), $chapterRow('12', '1', 2)],
+        [$videoRow('101', '11')],
+    ));
+    $details = array_column($partial->items, 'detail', 'key');
+    check($pending($partial) === ['chapters', 'videos'] && $partial->pendingCount() === 2, 'un nivel sin capítulos y un capítulo sin video');
+    check(str_contains((string) $details['chapters'], 'Nivel 2') && str_contains((string) $details['videos'], '1.2'), 'la lista dice qué nivel y qué capítulo');
+    $complete = PublishChecklist::for($outlineOf($courseRow('899.00'), [$levelRow('1', 1, '500.00')], [$chapterRow('11', '1', 1)], [$videoRow('101', '11')]));
+    check($complete->ready() && $complete->pendingCount() === 0, 'curso completo: listo para publicar');
+    $freeWithPrice = PublishChecklist::for($outlineOf($courseRow('0.00'), [$levelRow('1', 1, '50.00')], [$chapterRow('11', '1', 1)], [$videoRow('101', '11')]));
+    check($pending($freeWithPrice) === ['pricing'], 'curso gratis con un nivel de pago: precios incoherentes');
+
+    $bundle = $outlineOf($courseRow('899.00'), [$levelRow('1', 1, '300.00'), $levelRow('2', 2, '349.90')]);
+    check($bundle->levelPriceTotal() === '649.90' && $bundle->bundleExceedsLevels(), 'suma exacta de niveles y aviso de paquete caro (899.00 > 649.90)');
+    check(!$outlineOf($courseRow('500.00'), [$levelRow('1', 1, '649.90')])->bundleExceedsLevels(), 'paquete más barato que los niveles: sin aviso');
+    check(!$outlineOf($courseRow(null), [$levelRow('1', 1, '1.00')])->bundleExceedsLevels(), 'por niveles: nunca hay aviso de paquete');
+    check(
+        $outlineOf($courseRow(null, 1, $t, 3))->pricingLocked() && !$outlineOf($courseRow(null, 1, $t, 0))->pricingLocked()
+            && !$outlineOf($courseRow(null, 1, null, 3))->pricingLocked(),
+        'la forma de cobro solo se fija si está publicado y con alumnos',
+    );
+    foreach (['PRICING_LOCKED' => 409, 'COURSE_INACTIVE' => 409, 'COURSE_ALREADY_PUBLISHED' => 409, 'COURSE_HAS_STUDENTS' => 409, 'NO_LEVELS' => 422, 'CHAPTER_WITHOUT_VIDEO' => 422] as $code => $status) {
+        check(BusinessRuleException::of($code)->status === $status, "$code -> $status");
+    }
+    check(BusinessRuleException::of('PRICING_LOCKED')->fields() !== [] && isset(BusinessRuleException::of('PRICING_LOCKED')->fields()['precio_modo']), 'PRICING_LOCKED se muestra en la forma de cobro');
 
     // -----------------------------------------------------------
     Report::section('Cuentas bloqueadas');

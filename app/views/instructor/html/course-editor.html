@@ -1,9 +1,17 @@
 <?php
 /** @var \App\Models\Dto\CourseOutline $outline */
+use App\Services\PricingMode;
+
 $course = $outline->course;
 $formCourse = $course;
 $selectedCategoryIds = $outline->categoryIds;
 $chapterTotal = $outline->chapterCount();
+$pricingMode = $outline->pricingMode();
+$pricingLocked = $outline->pricingLocked();
+$pricedLevelCount = count(array_filter($outline->levels, static fn ($level): bool => $level->cost() !== '0.00'));
+$levelPriceTotal = format_money($outline->levelPriceTotal(), $course->currency());
+$checklist = \App\Models\Dto\PublishChecklist::for($outline);
+$isPublished = $course->publishedAt() !== null;
 
 // Tipos de recurso que acepta CourseValidator, con lo que necesita el campo de subida.
 $resourceKinds = [
@@ -21,10 +29,12 @@ $typeLabels = ['video' => 'Video', 'document' => 'Documento', 'image' => 'Imagen
         <p class="breadcrumb"><a href="?view=dashboard">Mis cursos</a> / Editar</p>
         <h1 class="page-title"><?= e($course->title()) ?></h1>
         <p class="page-subtitle">
-            <?php if ($course->publishedAt() === null): ?>
-                <span class="badge">Borrador</span>
-            <?php else: ?>
+            <?php if (!$course->active()): ?>
+                <span class="badge badge-warning">Dado de baja</span>
+            <?php elseif ($isPublished): ?>
                 <span class="badge badge-success">Publicado</span>
+            <?php else: ?>
+                <span class="badge">Borrador</span>
             <?php endif; ?>
             <?= count($outline->levels) ?> nivel(es) · <?= $chapterTotal ?> capítulo(s) · actualizado el <?= e(format_date($course->updatedAt())) ?>
         </p>
@@ -37,9 +47,54 @@ $typeLabels = ['video' => 'Video', 'document' => 'Documento', 'image' => 'Imagen
 <div class="form-alert page-alert" role="status" data-page-alert hidden></div>
 
 <?php
-$previewMessage = 'El curso queda como borrador. Los exámenes por capítulo, el orden de niveles y capítulos y la publicación llegan en la siguiente entrega.';
+$previewMessage = 'Los exámenes por capítulo llegan en la siguiente entrega; por ahora los capítulos son de video.';
 require BASE_PATH . '/app/views/base/html/preview-notice.html';
 ?>
+
+<section class="panel" id="course-publish" aria-labelledby="course-publish-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="course-publish-title">Publicación</h2>
+            <p class="panel-description">
+                <?php if (!$course->active()): ?>
+                    Dado de baja el <?= e(format_date($course->deactivatedAt())) ?>: ya no se ofrece en el catálogo, pero sus alumnos conservan el acceso.
+                <?php elseif ($isPublished): ?>
+                    Publicado el <?= e(format_date($course->publishedAt())) ?>. Puedes seguir editándolo; la lista queda como aviso.
+                <?php elseif ($checklist->ready()): ?>
+                    Todo listo: al publicarlo, los alumnos podrán encontrarlo e inscribirse.
+                <?php else: ?>
+                    Borrador: solo tú lo ves. Te falta <?= $checklist->pendingCount() ?> requisito(s) para publicarlo.
+                <?php endif; ?>
+            </p>
+        </div>
+        <div class="page-actions">
+            <?php if (!$course->active()): ?>
+                <button type="button" class="btn btn-primary" data-course-action="reactivar">Reactivar</button>
+            <?php elseif ($isPublished): ?>
+                <?php if ($outline->studentCount === 0): ?>
+                    <button type="button" class="btn btn-ghost" data-course-action="borrador">Volver a borrador</button>
+                <?php endif; ?>
+                <button type="button" class="btn btn-danger" data-course-action="baja">Dar de baja</button>
+            <?php else: ?>
+                <button type="button" class="btn btn-primary" data-course-action="publicar"<?= $checklist->ready() ? '' : ' disabled' ?>>Publicar curso</button>
+            <?php endif; ?>
+        </div>
+    </div>
+    <ul class="checklist">
+        <?php foreach ($checklist->items as $item): ?>
+            <li class="checklist-item <?= $item['ok'] ? 'is-ok' : 'is-pending' ?>" data-check="<?= e($item['key']) ?>">
+                <span class="checklist-mark" aria-hidden="true"><?= $item['ok'] ? '✓' : '!' ?></span>
+                <span>
+                    <span class="checklist-label"><?= e($item['label']) ?></span>
+                    <span class="visually-hidden"><?= $item['ok'] ? '(listo)' : '(pendiente)' ?></span>
+                    <?php if ($item['detail'] !== null): ?>
+                        <span class="checklist-detail"><?= e($item['detail']) ?></span>
+                    <?php endif; ?>
+                </span>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
 
 <section class="panel" id="course-info" aria-labelledby="course-info-title">
     <div class="panel-header">
@@ -55,9 +110,24 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
     <div class="panel-header">
         <div>
             <h2 class="panel-title" id="course-levels-title">Niveles y capítulos</h2>
-            <p class="panel-description">Cada nivel tiene su video de introducción y su precio; cada capítulo, un video principal y recursos opcionales.</p>
+            <p class="panel-description">
+                <?php if ($pricingMode === PricingMode::Free): ?>
+                    Curso gratis: los niveles no llevan precio.
+                <?php elseif ($pricingMode === PricingMode::Levels): ?>
+                    Cada nivel se vende por separado. Suma de los niveles: <?= e($levelPriceTotal) ?>.
+                <?php else: ?>
+                    Curso completo: <?= e(format_money($course->fullCoursePrice(), $course->currency())) ?>. Cada nivel también se vende por separado (suma: <?= e($levelPriceTotal) ?>).
+                <?php endif; ?>
+                Cada capítulo lleva un video principal y recursos opcionales.
+            </p>
         </div>
     </div>
+
+    <?php if ($outline->bundleExceedsLevels()): ?>
+        <div class="notice notice-warning" role="note">
+            <p>El curso completo (<?= e(format_money($course->fullCoursePrice(), $course->currency())) ?>) cuesta más que comprar todos los niveles por separado (<?= e($levelPriceTotal) ?>). Nadie elegiría el paquete: revisa los precios.</p>
+        </div>
+    <?php endif; ?>
 
     <?php if ($outline->levels === []): ?>
         <div class="empty-state">
@@ -66,7 +136,7 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
         </div>
     <?php endif; ?>
 
-    <?php foreach ($outline->levels as $level): ?>
+    <?php foreach ($outline->levels as $levelIndex => $level): ?>
         <?php $chapters = $outline->chapters($level->id()); ?>
         <article class="level" id="level-<?= e($level->id()) ?>">
             <header class="level-header">
@@ -79,6 +149,8 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                     </p>
                 </div>
                 <div class="table-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" data-move="level" data-id="<?= e($level->id()) ?>" data-direction="arriba" aria-label="Subir el nivel <?= e($level->title()) ?>"<?= $levelIndex === 0 ? ' disabled' : '' ?>>Subir</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-move="level" data-id="<?= e($level->id()) ?>" data-direction="abajo" aria-label="Bajar el nivel <?= e($level->title()) ?>"<?= $levelIndex === count($outline->levels) - 1 ? ' disabled' : '' ?>>Bajar</button>
                     <button type="button" class="btn btn-ghost btn-sm" data-toggle="level-edit-<?= e($level->id()) ?>">Editar</button>
                     <button type="button" class="btn btn-danger btn-sm" data-delete="level" data-id="<?= e($level->id()) ?>" data-title="<?= e($level->title()) ?>">Eliminar</button>
                 </div>
@@ -97,7 +169,7 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
             </form>
 
             <div class="chapters">
-                <?php foreach ($chapters as $chapter): ?>
+                <?php foreach ($chapters as $chapterIndex => $chapter): ?>
                     <?php
                     $main = $outline->mainVideo($chapter->id());
                     $resources = $outline->resources($chapter->id());
@@ -112,6 +184,8 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                                 <span class="badge badge-warning">Falta el video</span>
                             <?php endif; ?>
                             <div class="table-actions">
+                                <button type="button" class="btn btn-ghost btn-sm" data-move="chapter" data-id="<?= e($chapter->id()) ?>" data-direction="arriba" aria-label="Subir el capítulo <?= e($chapter->title()) ?>"<?= $chapterIndex === 0 ? ' disabled' : '' ?>>Subir</button>
+                                <button type="button" class="btn btn-ghost btn-sm" data-move="chapter" data-id="<?= e($chapter->id()) ?>" data-direction="abajo" aria-label="Bajar el capítulo <?= e($chapter->title()) ?>"<?= $chapterIndex === count($chapters) - 1 ? ' disabled' : '' ?>>Bajar</button>
                                 <button type="button" class="btn btn-ghost btn-sm" data-toggle="chapter-rename-<?= e($chapter->id()) ?>">Renombrar</button>
                                 <button type="button" class="btn btn-danger btn-sm" data-delete="chapter" data-id="<?= e($chapter->id()) ?>" data-title="<?= e($chapter->title()) ?>">Eliminar</button>
                             </div>

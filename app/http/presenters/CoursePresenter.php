@@ -10,6 +10,7 @@ use App\Models\Entities\Course;
 use App\Models\Entities\CourseChapter;
 use App\Models\Entities\CourseChapterContent;
 use App\Models\Entities\CourseLevel;
+use App\Services\PricingMode;
 
 /**
  * JSON de los cursos para su instructor. Solo incluye lo que el dueño necesita ver;
@@ -30,9 +31,10 @@ final class CoursePresenter
             'coverImage' => $course->coverImage(),
             'onboardingVideo' => $course->onboardingVideo(),
             'certifierName' => $course->certifierName(),
+            'pricingMode' => PricingMode::fromFullCoursePrice($course->fullCoursePrice())->value,
             'fullCoursePrice' => $course->fullCoursePrice(),
             'currency' => $course->currency(),
-            'status' => $course->publishedAt() === null ? 'draft' : 'published',
+            'status' => self::status($course->active(), $course->publishedAt() !== null),
             'active' => $course->active(),
             'categoryIds' => $categoryIds,
             'updatedAt' => $course->updatedAt()->format(DATE_ATOM),
@@ -46,14 +48,26 @@ final class CoursePresenter
             'id' => $summary->id,
             'title' => $summary->title,
             'coverImage' => $summary->coverImage,
+            'pricingMode' => $summary->pricingMode()->value,
             'fullCoursePrice' => $summary->fullCoursePrice,
+            'levelPriceTotal' => $summary->levelPriceTotal,
             'currency' => $summary->currency,
-            'status' => $summary->isPublished() ? 'published' : 'draft',
+            'status' => self::status($summary->active, $summary->isPublished()),
             'levels' => $summary->levelCount,
             'chapters' => $summary->chapterCount,
             'students' => $summary->studentCount,
             'updatedAt' => $summary->updatedAt->format(DATE_ATOM),
         ];
+    }
+
+    /** draft = borrador, published = publicado, inactive = dado de baja. */
+    private static function status(bool $active, bool $published): string
+    {
+        return match (true) {
+            !$active => 'inactive',
+            $published => 'published',
+            default => 'draft',
+        };
     }
 
     /** @return array<string, mixed> */

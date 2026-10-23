@@ -44,17 +44,18 @@ $user = AppUser::fromRow([
 ]);
 
 /**
- * Subida como la hace media-upload.js: los campos del ticket tal cual, más el archivo.
+ * Subida como la hace media-upload.js: los campos del ticket tal cual, más el archivo
+ * (o la URL de un archivo remoto, que Cloudinary descarga por su cuenta).
  *
  * @param array{upload_url: string, fields: array<string, string>} $ticket
  * @return array<string, mixed>
  */
-function browserUpload(array $ticket, string $path, string $filename, string $mimeType): array
+function browserUpload(array $ticket, CURLFile|string $file): array
 {
     $curl = curl_init($ticket['upload_url']);
     curl_setopt_array($curl, CloudinaryClient::tlsOptions() + [
         CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $ticket['fields'] + ['file' => new CURLFile($path, $mimeType, $filename)],
+        CURLOPT_POSTFIELDS => $ticket['fields'] + ['file' => $file],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 60,
     ]);
@@ -112,7 +113,7 @@ try {
     $tempFiles[] = $png;
     file_put_contents($png, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', true));
 
-    $response = browserUpload($media->ticket($user, 'course_cover'), $png, 'portada.png', 'image/png');
+    $response = browserUpload($media->ticket($user, 'course_cover'), new CURLFile($png, 'image/png', 'portada.png'));
     check(str_starts_with((string) ($response['public_id'] ?? ''), "$folder/covers/"), 'Cloudinary acepta el ticket firmado y respeta la carpeta del usuario');
     $upload = uploadOf($response, 'portada.png');
 
@@ -149,7 +150,7 @@ try {
     $tempFiles[] = $txt;
     file_put_contents($txt, $content);
 
-    $response = browserUpload($media->ticket($user, 'chapter_document'), $txt, 'guia.txt', 'text/plain');
+    $response = browserUpload($media->ticket($user, 'chapter_document'), new CURLFile($txt, 'text/plain', 'guia.txt'));
     check(($response['type'] ?? null) === 'authenticated' && ($response['resource_type'] ?? null) === 'raw', 'se sube como raw authenticated');
     $document = $media->confirm($user, 'chapter_document', uploadOf($response, 'guia.txt'), 'archivo');
     $uploaded[] = $document;
@@ -163,9 +164,18 @@ try {
     check($download['status'] === 200 && $download['body'] === $content, 'la URL temporal firmada sí lo descarga');
 
     // -----------------------------------------------------------
+    Report::section('Video protegido (duración)');
+    // Cloudinary descarga el video de muestra de su cuenta demo: no hace falta un archivo local.
+    $response = browserUpload($media->ticket($user, 'chapter_video'), 'https://res.cloudinary.com/demo/video/upload/dog.mp4');
+    $video = $media->confirm($user, 'chapter_video', uploadOf($response, 'clase.mp4'), 'archivo');
+    $uploaded[] = $video;
+    check($video->type === 'authenticated' && $video->format === 'mp4' && $video->mimeType === 'video/mp4', 'video principal protegido en MP4');
+    check($video->durationSeconds !== null && $video->durationSeconds > 0, "confirm() lee la duración real ({$video->durationSeconds} s)");
+
+    // -----------------------------------------------------------
     Report::section('Formato no permitido');
     // En raw Cloudinary no filtra formatos: lo hace confirm() y borra el archivo.
-    $response = browserUpload($media->ticket($user, 'chapter_archive'), $txt, 'no-es-zip.txt', 'text/plain');
+    $response = browserUpload($media->ticket($user, 'chapter_archive'), new CURLFile($txt, 'text/plain', 'no-es-zip.txt'));
     $rejectedUpload = uploadOf($response, 'no-es-zip.txt');
     $exception = thrown(ValidationException::class, static fn () => $media->confirm($user, 'chapter_archive', $rejectedUpload, 'archivo'));
     check($exception !== null && str_contains($exception->fields['archivo'] ?? '', 'ZIP'), 'un .txt como archivo comprimido se rechaza');

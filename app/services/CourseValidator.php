@@ -162,20 +162,39 @@ final class CourseValidator
     }
 
     /**
-     * NULL = suma de los niveles, "0.00" = gratis, importe = precio del paquete.
+     * Dirección para reordenar un nivel o capítulo.
+     *
+     * @param array<string, mixed> $input {direccion: arriba | abajo}
+     * @return 'up'|'down'
+     * @throws ValidationException
+     */
+    public function validateMoveDirection(array $input): string
+    {
+        return match (UserRules::text($input, 'direccion')) {
+            'arriba' => 'up',
+            'abajo' => 'down',
+            default => throw new ValidationException(['direccion' => 'Indica si se mueve hacia arriba o hacia abajo.']),
+        };
+    }
+
+    /**
+     * Precio del curso completo según el modelo de cobro (ver PricingMode):
+     * NULL = por niveles, "0.00" = gratis, importe mayor a 0 = curso completo + niveles.
      *
      * @param array<string, mixed> $input
      * @return array{0: ?string, 1: ?string} [precio, error]
      */
     private static function fullCoursePrice(array $input): array
     {
-        return match (UserRules::text($input, 'precio_modo')) {
-            'niveles' => [null, null],
-            'gratis' => ['0.00', null],
-            'fijo' => ($price = self::money($input['precio'] ?? null)) === null
-                ? [null, 'Escribe el precio del curso completo.']
-                : [$price, null],
-            default => [null, 'Elige cómo se cobra el curso completo.'],
+        return match (PricingMode::tryFrom(UserRules::text($input, 'precio_modo'))) {
+            PricingMode::Levels => [null, null],
+            PricingMode::Free => ['0.00', null],
+            PricingMode::Bundle => match (true) {
+                ($price = self::money($input['precio'] ?? null)) === null => [null, 'Escribe el precio del curso completo.'],
+                $price === '0.00' => [null, 'Un curso completo de $0 es gratis: elige "Gratis".'],
+                default => [$price, null],
+            },
+            null => [null, 'Elige cómo se cobra el curso.'],
         };
     }
 

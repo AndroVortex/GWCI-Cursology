@@ -37,12 +37,19 @@ SOURCE app/database/procedures/course/sp_course_update.sql;
 SOURCE app/database/procedures/course/sp_course_list_by_instructor.sql;
 SOURCE app/database/procedures/course/sp_course_get_for_owner.sql;
 
+-- Publicación y baja lógica
+SOURCE app/database/procedures/course/sp_course_publish.sql;
+SOURCE app/database/procedures/course/sp_course_unpublish.sql;
+SOURCE app/database/procedures/course/sp_course_set_active.sql;
+
 -- Niveles, capítulos y contenido
 SOURCE app/database/procedures/course/sp_level_create.sql;
 SOURCE app/database/procedures/course/sp_level_update.sql;
 SOURCE app/database/procedures/course/sp_level_delete.sql;
+SOURCE app/database/procedures/course/sp_level_move.sql;
 SOURCE app/database/procedures/course/sp_chapter_create.sql;
 SOURCE app/database/procedures/course/sp_chapter_update.sql;
 SOURCE app/database/procedures/course/sp_chapter_delete.sql;
+SOURCE app/database/procedures/course/sp_chapter_move.sql;
 SOURCE app/database/procedures/course/sp_content_add.sql;
 SOURCE app/database/procedures/course/sp_content_delete.sql;
