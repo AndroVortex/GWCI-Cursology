@@ -6,14 +6,19 @@ namespace App\Repositories;
 
 use App\Database\StoredProcedures;
 use App\Models\Dto\CourseOutline;
+use App\Models\Dto\ExamOutline;
 use App\Models\Dto\InstructorCourseSummary;
 use App\Models\Entities\Course;
 use App\Models\Entities\CourseChapter;
 use App\Models\Entities\CourseChapterContent;
+use App\Models\Entities\CourseChapterTestQuestion;
 use App\Models\Entities\CourseLevel;
+use App\Models\Entities\TestQuestionAnswer;
+use App\Services\ChapterInput;
 use App\Services\ContentInput;
 use App\Services\CourseInput;
 use App\Services\LevelInput;
+use App\Services\QuestionInput;
 use App\Services\VerifiedMedia;
 use UnexpectedValueException;
 
@@ -66,6 +71,22 @@ final class CourseRepository
         return [Course::fromRow(self::first($sets, 0, 'sp_course_update')), self::mediaRefs($sets[1][0] ?? [])];
     }
 
+    public function publish(string $instructorId, string $courseId): Course
+    {
+        return Course::fromRow($this->requiredRow('sp_course_publish', [$instructorId, $courseId]));
+    }
+
+    public function unpublish(string $instructorId, string $courseId): Course
+    {
+        return Course::fromRow($this->requiredRow('sp_course_unpublish', [$instructorId, $courseId]));
+    }
+
+    /** $active = false: baja lógica; true: reactivar. */
+    public function setActive(string $instructorId, string $courseId, bool $active): Course
+    {
+        return Course::fromRow($this->requiredRow('sp_course_set_active', [$instructorId, $courseId, $active]));
+    }
+
     /** @return list<InstructorCourseSummary> */
     public function listByInstructor(string $instructorId): array
     {
@@ -100,20 +121,69 @@ final class CourseRepository
         return [CourseLevel::fromRow(self::first($sets, 0, 'sp_level_update')), self::mediaRefs($sets[1][0] ?? [])];
     }
 
+    /** @param 'up'|'down' $direction */
+    public function moveLevel(string $instructorId, string $levelId, string $direction): CourseLevel
+    {
+        return CourseLevel::fromRow($this->requiredRow('sp_level_move', [$instructorId, $levelId, $direction]));
+    }
+
+    /** @param 'up'|'down' $direction */
+    public function moveChapter(string $instructorId, string $chapterId, string $direction): CourseChapter
+    {
+        return CourseChapter::fromRow($this->requiredRow('sp_chapter_move', [$instructorId, $chapterId, $direction]));
+    }
+
     /** @return list<string> referencias de los archivos del nivel eliminado */
     public function deleteLevel(string $instructorId, string $levelId): array
     {
         return $this->deletedMediaRefs('sp_level_delete', [$instructorId, $levelId]);
     }
 
-    public function createChapter(string $instructorId, string $levelId, string $title): CourseChapter
+    public function createChapter(string $instructorId, string $levelId, ChapterInput $data): CourseChapter
     {
-        return CourseChapter::fromRow($this->requiredRow('sp_chapter_create', [$instructorId, $levelId, $title]));
+        return CourseChapter::fromRow($this->requiredRow('sp_chapter_create', [
+            $instructorId, $levelId, $data->title, $data->isTest, $data->minimumPassingGrade,
+        ]));
     }
 
-    public function updateChapter(string $instructorId, string $chapterId, string $title): CourseChapter
+    public function updateChapter(string $instructorId, string $chapterId, ChapterInput $data): CourseChapter
     {
-        return CourseChapter::fromRow($this->requiredRow('sp_chapter_update', [$instructorId, $chapterId, $title]));
+        return CourseChapter::fromRow($this->requiredRow('sp_chapter_update', [
+            $instructorId, $chapterId, $data->title, $data->minimumPassingGrade,
+        ]));
+    }
+
+    /** @return array{0: CourseChapterTestQuestion, 1: list<TestQuestionAnswer>} */
+    public function createQuestion(string $instructorId, string $chapterId, QuestionInput $data): array
+    {
+        return self::question($this->resultSets('sp_question_create', [
+            $instructorId, $chapterId, $data->question, $data->mode, $data->answersJson(),
+        ]), 'sp_question_create');
+    }
+
+    /** @return array{0: CourseChapterTestQuestion, 1: list<TestQuestionAnswer>} */
+    public function updateQuestion(string $instructorId, string $questionId, QuestionInput $data): array
+    {
+        return self::question($this->resultSets('sp_question_update', [
+            $instructorId, $questionId, $data->question, $data->mode, $data->answersJson(),
+        ]), 'sp_question_update');
+    }
+
+    /** @return string id del examen al que pertenecía */
+    public function deleteQuestion(string $instructorId, string $questionId): string
+    {
+        return (string) $this->requiredRow('sp_question_delete', [$instructorId, $questionId])['course_chapter_id'];
+    }
+
+    /** @param 'up'|'down' $direction */
+    public function moveQuestion(string $instructorId, string $questionId, string $direction): CourseChapterTestQuestion
+    {
+        return CourseChapterTestQuestion::fromRow($this->requiredRow('sp_question_move', [$instructorId, $questionId, $direction]));
+    }
+
+    public function exam(string $instructorId, string $chapterId): ExamOutline
+    {
+        return ExamOutline::fromResultSets($this->resultSets('sp_exam_get_for_owner', [$instructorId, $chapterId]));
     }
 
     /** @return list<string> referencias del contenido del capítulo eliminado */
@@ -143,6 +213,18 @@ final class CourseRepository
     public function deleteContent(string $instructorId, string $contentId): array
     {
         return $this->deletedMediaRefs('sp_content_delete', [$instructorId, $contentId]);
+    }
+
+    /**
+     * @param list<list<array<string, mixed>>> $sets 1) la pregunta; 2) sus opciones
+     * @return array{0: CourseChapterTestQuestion, 1: list<TestQuestionAnswer>}
+     */
+    private static function question(array $sets, string $procedure): array
+    {
+        return [
+            CourseChapterTestQuestion::fromRow(self::first($sets, 0, $procedure)),
+            array_map(static fn (array $row): TestQuestionAnswer => TestQuestionAnswer::fromRow($row), $sets[1] ?? []),
+        ];
     }
 
     /**

@@ -81,6 +81,7 @@ final class CloudinaryClient
 
     /**
      * Datos reales del recurso según la Admin API (bytes, formato, duración...).
+     * La duración de videos y audios solo viene con media_metadata=true.
      *
      * @return array<string, mixed>
      * @throws MediaUploadException
@@ -88,7 +89,8 @@ final class CloudinaryClient
     public function resource(string $resourceType, string $type, string $publicId): array
     {
         $path = 'resources/' . $resourceType . '/' . $type . '/'
-            . implode('/', array_map('rawurlencode', explode('/', $publicId)));
+            . implode('/', array_map('rawurlencode', explode('/', $publicId)))
+            . ($resourceType === 'video' ? '?media_metadata=true' : '');
 
         return $this->request('GET', $path);
     }
@@ -207,18 +209,10 @@ final class CloudinaryClient
         ]);
     }
 
-    /**
-     * Opciones TLS de curl. En Windows también se confía en el almacén de certificados del
-     * sistema: un proxy que inspecciona HTTPS (p. ej. Zscaler) instala ahí su raíz, que no
-     * viene en el cacert.pem de PHP. La verificación del certificado sigue activa.
-     *
-     * @return array<int, mixed>
-     */
+    /** @return array<int, mixed> ver Tls::curlOptions() */
     public static function tlsOptions(): array
     {
-        return PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA')
-            ? [CURLOPT_SSL_OPTIONS => CURLSSLOPT_NATIVE_CA]
-            : [];
+        return Tls::curlOptions();
     }
 
     /**
@@ -240,10 +234,7 @@ final class CloudinaryClient
         curl_close($curl);
 
         if (!is_string($body)) {
-            $hint = str_contains($curlError, 'SSL certificate')
-                ? ' Revisa si un proxy o antivirus intercepta HTTPS y si PHP confía en su certificado raíz (curl.cainfo).'
-                : '';
-            throw MediaUploadException::failed('no hubo respuesta (' . $curlError . ').' . $hint);
+            throw MediaUploadException::failed('no hubo respuesta (' . $curlError . ').' . Tls::hint($curlError));
         }
 
         $data = json_decode($body, true);

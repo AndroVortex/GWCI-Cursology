@@ -839,6 +839,49 @@ strong {
     font-size: 0.875rem;
 }
 
+/* ---------- Contenido de capítulos (editor, catálogo y reproductor) ---------- */
+.content-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.content-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+}
+
+.content-name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.content-name summary {
+    cursor: pointer;
+}
+
+.content-text {
+    margin: 6px 0 0;
+    color: var(--text-muted);
+}
+
+.content-meta,
+.content-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Insignias ---------- */
 .badge {
     display: inline-flex;
@@ -871,6 +914,78 @@ strong {
     border-color: transparent;
     background: var(--danger-soft);
     color: var(--danger);
+}
+
+.badge-exam {
+    border-color: transparent;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+/* ---------- Tarjetas de curso (inicio y catálogo) ---------- */
+.course-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+}
+
+.course-card {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.course-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+.course-card-link {
+    display: block;
+    height: 100%;
+    color: inherit;
+    text-decoration: none;
+}
+
+.course-card-cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--surface-2);
+    object-fit: cover;
+}
+
+.course-card-body {
+    display: grid;
+    gap: 4px;
+    padding: 12px 14px 14px;
+}
+
+.course-card-category,
+.course-card-instructor,
+.course-card-meta {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+}
+
+.course-card-category {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.course-card-title {
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.35;
+}
+
+.course-card-price {
+    margin: 6px 0 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
 }
 
 /* ---------- Listas simples ---------- */

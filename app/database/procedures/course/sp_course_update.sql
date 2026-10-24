@@ -1,9 +1,13 @@
 -- sp_course_update: actualiza los datos de un curso del instructor y reemplaza sus categorías.
 -- Las categorías que se quitan quedan con active = 0 (se conserva el historial).
 -- p_cover_image / p_onboarding_video NULL = conservar los actuales.
+-- Modelo de cobro (p_full_course_price): NULL = por niveles, 0 = gratis, > 0 = curso
+-- completo + niveles. Al pasar a gratis, todos los niveles quedan en 0. Si el curso está
+-- publicado y tiene alumnos, el modelo no puede cambiar (los importes sí).
 -- Resultados: 1) la fila de course; 2) media_refs: arreglo JSON con la portada y el video
 -- reemplazados, para que PHP los borre de Cloudinary después del commit.
--- Errores: COURSE_NOT_FOUND (no existe o no es del instructor), CATEGORY_NOT_AVAILABLE.
+-- Errores: COURSE_NOT_FOUND (no existe o no es del instructor), CATEGORY_NOT_AVAILABLE,
+-- PRICING_LOCKED.
 
 DROP PROCEDURE IF EXISTS sp_course_update;
 
@@ -24,6 +28,8 @@ BEGIN
     DECLARE v_owner BIGINT UNSIGNED DEFAULT NULL;
     DECLARE v_old_cover VARCHAR(2048);
     DECLARE v_old_video VARCHAR(2048);
+    DECLARE v_old_price DECIMAL(12,2);
+    DECLARE v_published_at DATETIME(6);
     DECLARE v_requested INT DEFAULT 0;
     DECLARE v_available INT DEFAULT 0;
     DECLARE v_refs JSON;
@@ -48,14 +54,21 @@ BEGIN
 
     START TRANSACTION;
 
-    SELECT created_by, cover_image, onboarding_video
-      INTO v_owner, v_old_cover, v_old_video
+    SELECT created_by, cover_image, onboarding_video, full_course_price, published_at
+      INTO v_owner, v_old_cover, v_old_video, v_old_price, v_published_at
       FROM course
      WHERE id = p_course_id
        FOR UPDATE;
 
     IF v_owner IS NULL OR v_owner <> p_instructor_id THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'COURSE_NOT_FOUND';
+    END IF;
+
+    -- El modelo es NULL (por niveles), 0 (gratis) o > 0 (curso completo): SIGN() los distingue.
+    IF v_published_at IS NOT NULL
+       AND NOT (COALESCE(SIGN(v_old_price), -1) <=> COALESCE(SIGN(p_full_course_price), -1))
+       AND EXISTS (SELECT 1 FROM user_courses WHERE course_id = p_course_id) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'PRICING_LOCKED';
     END IF;
 
     UPDATE course
@@ -67,6 +80,10 @@ BEGIN
            full_course_price = p_full_course_price,
            updated_by = p_instructor_id
      WHERE id = p_course_id;
+
+    IF p_full_course_price = 0 THEN
+        UPDATE course_level SET cost = 0 WHERE course_id = p_course_id AND cost <> 0;
+    END IF;
 
     UPDATE course_category
        SET active = 0

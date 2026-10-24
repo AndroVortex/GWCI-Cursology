@@ -1,8 +1,10 @@
 <?php
 /** @var list<\App\Models\Dto\InstructorCourseSummary> $instructorCourses */
-$publishedCount = count(array_filter($instructorCourses, static fn ($course): bool => $course->isPublished()));
+$publishedCount = count(array_filter($instructorCourses, static fn ($course): bool => $course->active && $course->isPublished()));
+$draftCount = count(array_filter($instructorCourses, static fn ($course): bool => $course->active && !$course->isPublished()));
+$inactiveCount = count(array_filter($instructorCourses, static fn ($course): bool => !$course->active));
 $studentTotal = array_sum(array_map(static fn ($course): int => $course->studentCount, $instructorCourses));
-$previewMessage = 'Tus cursos ya son reales. Ventas, mensajes y opiniones se llenarán cuando conectemos compras y alumnos.';
+$previewMessage = 'Ya puedes publicar tus cursos. Ventas, mensajes y opiniones se llenarán cuando conectemos compras y alumnos.';
 ?>
 <div class="page-header">
     <div>
@@ -25,7 +27,7 @@ $previewMessage = 'Tus cursos ya son reales. Ventas, mensajes y opiniones se lle
     <div class="stat">
         <p class="stat-label">Cursos publicados</p>
         <p class="stat-value"><?= $publishedCount ?></p>
-        <p class="stat-hint">Borradores: <?= count($instructorCourses) - $publishedCount ?></p>
+        <p class="stat-hint">Borradores: <?= $draftCount ?><?= $inactiveCount > 0 ? ' · Dados de baja: ' . $inactiveCount : '' ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Alumnos inscritos</p>
@@ -59,7 +61,7 @@ $previewMessage = 'Tus cursos ya son reales. Ventas, mensajes y opiniones se lle
                     <th scope="col" class="num">Niveles</th>
                     <th scope="col" class="num">Capítulos</th>
                     <th scope="col" class="num">Alumnos</th>
-                    <th scope="col">Precio completo</th>
+                    <th scope="col">Precio</th>
                     <th scope="col">Actualizado</th>
                     <th scope="col"><span class="visually-hidden">Acciones</span></th>
                 </tr>
@@ -74,7 +76,9 @@ $previewMessage = 'Tus cursos ya son reales. Ventas, mensajes y opiniones se lle
                             </div>
                         </td>
                         <td>
-                            <?php if ($course->isPublished()): ?>
+                            <?php if (!$course->active): ?>
+                                <span class="badge badge-warning">Dado de baja</span>
+                            <?php elseif ($course->isPublished()): ?>
                                 <span class="badge badge-success">Publicado</span>
                             <?php else: ?>
                                 <span class="badge">Borrador</span>
@@ -84,12 +88,12 @@ $previewMessage = 'Tus cursos ya son reales. Ventas, mensajes y opiniones se lle
                         <td class="num"><?= $course->chapterCount ?></td>
                         <td class="num"><?= $course->studentCount ?></td>
                         <td>
-                            <?php if ($course->fullCoursePrice === null): ?>
-                                <span class="text-muted">Suma de niveles</span>
-                            <?php elseif ($course->fullCoursePrice === '0.00'): ?>
+                            <?php if ($course->pricingMode() === \App\Services\PricingMode::Free): ?>
                                 Gratis
+                            <?php elseif ($course->pricingMode() === \App\Services\PricingMode::Levels): ?>
+                                Por niveles · <?= e(format_money($course->levelPriceTotal, $course->currency)) ?>
                             <?php else: ?>
-                                <?= e(format_money($course->fullCoursePrice, $course->currency)) ?>
+                                <?= e(format_money($course->fullCoursePrice, $course->currency)) ?> <span class="text-muted">(paquete)</span>
                             <?php endif; ?>
                         </td>
                         <td><?= e(format_date($course->updatedAt)) ?></td>

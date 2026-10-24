@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Enums\ContentType;
+use App\Models\Enums\SelectionMode;
 use App\Services\Exceptions\ValidationException;
 use App\Services\Validation\UserRules;
 
@@ -21,6 +22,12 @@ final class CourseValidator
     private const MAX_CERTIFIER_CHARS = 300;
     private const MAX_URL_CHARS = 2048;
     private const MAX_TEXT_CHARS = 20000;
+    private const MAX_QUESTION_CHARS = 2000;
+    private const MAX_ANSWER_CHARS = 1000;
+    private const MIN_ANSWERS = 2;
+    private const MAX_ANSWERS = 8;
+    /** Peso máximo de una opción; acota los enteros de ExamGrader. */
+    public const MAX_WEIGHT = 1000;
 
     /** tipo del formulario => [content_type, es video principal, propósito de la subida o null] */
     private const CONTENT_KINDS = [
@@ -94,15 +101,59 @@ final class CourseValidator
     }
 
     /**
+     * Al crear: {titulo, tipo: video | examen, minimo (solo examen)}. Al editar: {titulo, minimo?};
+     * el tipo no cambia y sin minimo se conserva el actual (en un capítulo de video se ignora).
+     *
      * @param array<string, mixed> $input
      * @throws ValidationException
      */
-    public function validateChapterTitle(array $input): string
+    public function validateChapter(array $input, bool $creating): ChapterInput
     {
         $title = UserRules::text($input, 'titulo');
-        self::fail(['titulo' => self::requiredText($title, self::MAX_TITLE_CHARS, 'Escribe el título del capítulo.')]);
+        $type = UserRules::text($input, 'tipo');
+        $isTest = $creating ? $type === 'examen' : false;
+        $rawGrade = $input['minimo'] ?? null;
+        $hasGrade = $rawGrade !== null && $rawGrade !== '';
+        $grade = $hasGrade ? self::passingGrade($rawGrade) : null;
 
-        return $title;
+        self::fail([
+            'titulo' => self::requiredText($title, self::MAX_TITLE_CHARS, 'Escribe el título del capítulo.'),
+            'tipo' => $creating && !in_array($type, ['video', 'examen'], true) ? 'Elige si es un capítulo de video o un examen.' : null,
+            'minimo' => match (true) {
+                $hasGrade && $grade === null => 'Escribe una calificación de 1 a 100 (hasta dos decimales).',
+                $creating && $isTest && !$hasGrade => 'Escribe la calificación mínima para aprobar (1 a 100).',
+                default => null,
+            },
+        ]);
+
+        return new ChapterInput($title, $isTest, $creating && !$isTest ? null : $grade);
+    }
+
+    /**
+     * {pregunta, modo: unica | multiple, respuestas: [{texto, correcta: bool, peso?}]}.
+     * De 2 a 8 opciones; en opción única exactamente una correcta y en múltiple al menos una.
+     * Las correctas valen su peso (1 si no se indica, máximo 1000) y las incorrectas 0.
+     *
+     * @param array<string, mixed> $input
+     * @throws ValidationException
+     */
+    public function validateQuestion(array $input): QuestionInput
+    {
+        $question = UserRules::text($input, 'pregunta');
+        $mode = match (UserRules::text($input, 'modo')) {
+            'unica' => SelectionMode::Single,
+            'multiple' => SelectionMode::Multiple,
+            default => null,
+        };
+        [$answers, $answersError] = self::answers($input['respuestas'] ?? null, $mode);
+
+        self::fail([
+            'pregunta' => self::requiredText($question, self::MAX_QUESTION_CHARS, 'Escribe la pregunta.'),
+            'modo' => $mode === null ? 'Elige si la pregunta es de opción única o múltiple.' : null,
+            'respuestas' => $answersError,
+        ]);
+
+        return new QuestionInput($question, $mode, $answers);
     }
 
     /**
@@ -162,21 +213,97 @@ final class CourseValidator
     }
 
     /**
-     * NULL = suma de los niveles, "0.00" = gratis, importe = precio del paquete.
+     * Dirección para reordenar un nivel o capítulo.
+     *
+     * @param array<string, mixed> $input {direccion: arriba | abajo}
+     * @return 'up'|'down'
+     * @throws ValidationException
+     */
+    public function validateMoveDirection(array $input): string
+    {
+        return match (UserRules::text($input, 'direccion')) {
+            'arriba' => 'up',
+            'abajo' => 'down',
+            default => throw new ValidationException(['direccion' => 'Indica si se mueve hacia arriba o hacia abajo.']),
+        };
+    }
+
+    /**
+     * Precio del curso completo según el modelo de cobro (ver PricingMode):
+     * NULL = por niveles, "0.00" = gratis, importe mayor a 0 = curso completo + niveles.
      *
      * @param array<string, mixed> $input
      * @return array{0: ?string, 1: ?string} [precio, error]
      */
     private static function fullCoursePrice(array $input): array
     {
-        return match (UserRules::text($input, 'precio_modo')) {
-            'niveles' => [null, null],
-            'gratis' => ['0.00', null],
-            'fijo' => ($price = self::money($input['precio'] ?? null)) === null
-                ? [null, 'Escribe el precio del curso completo.']
-                : [$price, null],
-            default => [null, 'Elige cómo se cobra el curso completo.'],
+        return match (PricingMode::tryFrom(UserRules::text($input, 'precio_modo'))) {
+            PricingMode::Levels => [null, null],
+            PricingMode::Free => ['0.00', null],
+            PricingMode::Bundle => match (true) {
+                ($price = self::money($input['precio'] ?? null)) === null => [null, 'Escribe el precio del curso completo.'],
+                $price === '0.00' => [null, 'Un curso completo de $0 es gratis: elige "Gratis".'],
+                default => [$price, null],
+            },
+            null => [null, 'Elige cómo se cobra el curso.'],
         };
+    }
+
+    /**
+     * @return array{0: list<array{answer: string, correct: bool, weight: string}>, 1: ?string} [opciones, error]
+     */
+    private static function answers(mixed $value, ?SelectionMode $mode): array
+    {
+        if (!is_array($value) || !array_is_list($value) || count($value) < self::MIN_ANSWERS || count($value) > self::MAX_ANSWERS) {
+            return [[], sprintf('Escribe de %d a %d opciones.', self::MIN_ANSWERS, self::MAX_ANSWERS)];
+        }
+
+        $answers = [];
+        foreach ($value as $index => $item) {
+            $number = $index + 1;
+            $text = is_array($item) ? UserRules::text($item, 'texto') : '';
+            if ($text === '' || mb_strlen($text) > self::MAX_ANSWER_CHARS) {
+                return [[], sprintf('La opción %d necesita un texto de hasta %d caracteres.', $number, self::MAX_ANSWER_CHARS)];
+            }
+            $correct = ($item['correcta'] ?? false) === true;
+            $rawWeight = $item['peso'] ?? null;
+            $weight = $correct ? self::weight($rawWeight === null || $rawWeight === '' ? '1' : $rawWeight) : '0.00';
+            if ($weight === null) {
+                return [[], sprintf('El peso de la opción %d debe ser mayor a 0 y de máximo %d.', $number, self::MAX_WEIGHT)];
+            }
+            $answers[] = ['answer' => $text, 'correct' => $correct, 'weight' => $weight];
+        }
+
+        $correctCount = count(array_filter($answers, static fn (array $answer): bool => $answer['correct']));
+
+        return match (true) {
+            $correctCount === 0 => [[], 'Marca al menos una opción correcta.'],
+            $mode === SelectionMode::Single && $correctCount !== 1 => [[], 'En opción única, marca exactamente una correcta.'],
+            default => [$answers, null],
+        };
+    }
+
+    /** Calificación mínima: más de 0 y hasta 100, con hasta dos decimales. */
+    private static function passingGrade(mixed $value): ?string
+    {
+        $grade = self::money($value);
+
+        return $grade === null || $grade === '0.00' || self::moneyCents($grade) > 10000 ? null : $grade;
+    }
+
+    /** Peso de una opción correcta: más de 0 y hasta MAX_WEIGHT, con hasta dos decimales. */
+    private static function weight(mixed $value): ?string
+    {
+        $weight = self::money($value);
+
+        return $weight === null || $weight === '0.00' || self::moneyCents($weight) > self::MAX_WEIGHT * 100 ? null : $weight;
+    }
+
+    private static function moneyCents(string $amount): int
+    {
+        [$integer, $fraction] = explode('.', $amount);
+
+        return (int) $integer * 100 + (int) $fraction;
     }
 
     /** Importe exacto de 0 a 9,999,999,999.99 normalizado a dos decimales; null si no es válido. */

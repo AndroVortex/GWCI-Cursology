@@ -1,0 +1,83 @@
+<?php
+/**
+ * @var \App\Models\Dto\CatalogPage $catalogPage
+ * @var list<\App\Models\Entities\Category> $catalogCategories
+ */
+$filters = $catalogPage->filters;
+$pageUrl = static fn (int $page): string => '?' . http_build_query(array_filter([
+    'view' => 'catalog',
+    'q' => $filters['q'],
+    'categoria' => $filters['categoria'],
+    'orden' => $filters['orden'] === 'recientes' ? null : $filters['orden'],
+    'pagina' => $page > 1 ? $page : null,
+], static fn ($value): bool => $value !== null && $value !== ''));
+$sortLabels = ['recientes' => 'Más recientes', 'titulo' => 'Título (A-Z)', 'precio' => 'Precio (menor a mayor)'];
+$hasFilters = $filters['q'] !== '' || $filters['categoria'] !== null;
+?>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Catálogo</h1>
+        <p class="page-subtitle">
+            <?= $catalogPage->total ?> curso(s)<?= $filters['q'] !== '' ? ' para "' . e($filters['q']) . '"' : '' ?>.
+        </p>
+    </div>
+</div>
+
+<form class="catalog-filters panel" method="get" role="search" aria-label="Buscar en el catálogo">
+    <input type="hidden" name="view" value="catalog">
+    <div class="form-field catalog-search">
+        <label class="form-label" for="catalog-q">Buscar</label>
+        <input class="form-control" type="search" id="catalog-q" name="q" maxlength="100" placeholder="Título o instructor" value="<?= e($filters['q']) ?>">
+    </div>
+    <div class="form-field">
+        <label class="form-label" for="catalog-categoria">Categoría</label>
+        <select class="form-control" id="catalog-categoria" name="categoria">
+            <option value="">Todas</option>
+            <?php foreach ($catalogCategories as $category): ?>
+                <option value="<?= e($category->id()) ?>"<?= $filters['categoria'] === $category->id() ? ' selected' : '' ?>><?= e($category->name()) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-field">
+        <label class="form-label" for="catalog-orden">Ordenar por</label>
+        <select class="form-control" id="catalog-orden" name="orden">
+            <?php foreach ($sortLabels as $value => $label): ?>
+                <option value="<?= e($value) ?>"<?= $filters['orden'] === $value ? ' selected' : '' ?>><?= e($label) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="catalog-filter-actions">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        <?php if ($hasFilters): ?>
+            <a class="btn btn-ghost" href="?view=catalog">Limpiar</a>
+        <?php endif; ?>
+    </div>
+</form>
+
+<?php if ($catalogPage->courses === []): ?>
+    <div class="empty-state">
+        <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+        <p class="empty-title"><?= $hasFilters ? 'No encontramos cursos con esos filtros' : 'Aún no hay cursos publicados' ?></p>
+        <p class="empty-text"><?= $hasFilters ? 'Prueba con otra palabra o quita la categoría.' : 'Los instructores están preparando su contenido.' ?></p>
+    </div>
+<?php else: ?>
+    <div class="course-grid">
+        <?php foreach ($catalogPage->courses as $card): ?>
+            <?php require BASE_PATH . '/app/views/catalog/html/course-card.html'; ?>
+        <?php endforeach; ?>
+    </div>
+
+    <?php if ($catalogPage->pages > 1): ?>
+        <nav class="pagination" aria-label="Páginas del catálogo">
+            <?php if ($catalogPage->page > 1): ?>
+                <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl($catalogPage->page - 1)) ?>">Anterior</a>
+            <?php endif; ?>
+            <span class="text-muted">Página <?= $catalogPage->page ?> de <?= $catalogPage->pages ?></span>
+            <?php if ($catalogPage->page < $catalogPage->pages): ?>
+                <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl($catalogPage->page + 1)) ?>">Siguiente</a>
+            <?php endif; ?>
+        </nav>
+    <?php endif; ?>
+<?php endif; ?>

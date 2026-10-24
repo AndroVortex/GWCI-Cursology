@@ -18,15 +18,19 @@ use App\Database\Connection;
 use App\Database\ProcedureException;
 use App\Database\StoredProcedures;
 use App\Integrations\CloudinaryClient;
+use App\Models\Dto\PublishChecklist;
 use App\Models\Entities\AppUser;
 use App\Models\Enums\AccountStatus;
 use App\Models\Enums\ContentType;
 use App\Models\Enums\UserRole;
+use App\Models\Enums\SelectionMode;
+use App\Repositories\CatalogRepository;
 use App\Repositories\CategoryRepository;
 use App\Repositories\CourseRepository;
 use App\Repositories\UserRepository;
 use App\Services\AccountAdminService;
 use App\Services\AuthService;
+use App\Services\CatalogService;
 use App\Services\CategoryService;
 use App\Services\CourseService;
 use App\Services\CourseValidator;
@@ -37,6 +41,7 @@ use App\Services\Exceptions\ValidationException;
 use App\Services\MediaService;
 use App\Services\ProfileService;
 use App\Services\ProfileValidator;
+use App\Services\QuestionInput;
 use App\Services\RegistrationValidator;
 use App\Services\VerifiedMedia;
 
@@ -54,6 +59,7 @@ $categories = new CategoryService($categoryRepository);
 $courseRepository = new CourseRepository($procedures);
 $validator = new CourseValidator();
 $courseService = new CourseService($courseRepository, $validator, new MediaService($noCloudinary));
+$catalog = new CatalogService(new CatalogRepository($procedures));
 
 try {
     $procedures->call('sp_category_list', [1]);
@@ -191,7 +197,7 @@ try {
     $promo = "https://res.cloudinary.com/prueba/video/upload/v1/$folder/promos/promo-$mark.mp4";
     $courseForm = [
         'titulo' => "Curso de prueba $mark", 'descripcion' => 'Descripción del curso.', 'certificador' => '',
-        'precio_modo' => 'fijo', 'precio' => '1249.9', 'categorias' => [$category->id()], 'portada' => [], 'video' => [],
+        'precio_modo' => 'paquete', 'precio' => '1249.9', 'categorias' => [$category->id()], 'portada' => [], 'video' => [],
     ];
     $courseInput = $validator->validateCourse($courseForm, creating: true);
 
@@ -251,12 +257,14 @@ try {
     // -----------------------------------------------------------
     Report::section('Capítulos y contenido');
     $levelId = $levels[1]->id();
-    $chapter1 = $courseRepository->createChapter($instructor->id(), $levelId, 'Introducción');
-    $chapter2 = $courseRepository->createChapter($instructor->id(), $levelId, 'Variables');
+    $videoChapter = static fn (string $title) => $validator->validateChapter(['titulo' => $title, 'tipo' => 'video'], true);
+    $renamed = static fn (string $title) => $validator->validateChapter(['titulo' => $title], false);
+    $chapter1 = $courseRepository->createChapter($instructor->id(), $levelId, $videoChapter('Introducción'));
+    $chapter2 = $courseRepository->createChapter($instructor->id(), $levelId, $videoChapter('Variables'));
     check($chapter1->sortOrder() === 1 && $chapter2->sortOrder() === 2 && !$chapter1->isTest(), 'capítulos de video numerados 1, 2');
-    check(ruleCode(static fn () => $courseRepository->createChapter($otherInstructor->id(), $levelId, 'Ajeno')) === 'LEVEL_NOT_FOUND', 'otro instructor no agrega capítulos');
-    check($courseRepository->updateChapter($instructor->id(), $chapter2->id(), 'Variables y tipos')->title() === 'Variables y tipos', 'renombrar capítulo');
-    check(ruleCode(static fn () => $courseRepository->updateChapter($otherInstructor->id(), $chapter2->id(), 'X')) === 'CHAPTER_NOT_FOUND', 'otro instructor no lo renombra');
+    check(ruleCode(static fn () => $courseRepository->createChapter($otherInstructor->id(), $levelId, $videoChapter('Ajeno'))) === 'LEVEL_NOT_FOUND', 'otro instructor no agrega capítulos');
+    check($courseRepository->updateChapter($instructor->id(), $chapter2->id(), $renamed('Variables y tipos'))->title() === 'Variables y tipos', 'renombrar capítulo');
+    check(ruleCode(static fn () => $courseRepository->updateChapter($otherInstructor->id(), $chapter2->id(), $renamed('X'))) === 'CHAPTER_NOT_FOUND', 'otro instructor no lo renombra');
     check(ruleCode(static fn () => $courseRepository->deleteLevel($instructor->id(), $levelId)) === 'LEVEL_NOT_EMPTY', 'un nivel con capítulos no se borra -> LEVEL_NOT_EMPTY');
 
     $video = new VerifiedMedia("$folder/content/clase-$mark", 'video', 'authenticated', 'mp4', 2_500_000, 95, 'clase.mp4', 'video/mp4', '');
@@ -295,12 +303,187 @@ try {
     check(count($remaining) === 1 && $remaining[0]->id() === $chapter2->id() && $remaining[0]->sortOrder() === 1, 'el capítulo siguiente pasa a ser el 1');
     check($courseRepository->deleteChapter($instructor->id(), $chapter2->id()) === [], 'un capítulo solo con texto no tiene archivos que borrar');
 
-    $summary = array_values(array_filter($courseService->listMine($instructor), static fn ($s): bool => $s->id === $course->id()))[0];
+    $summaryOf = static fn (string $courseId) => array_values(array_filter(
+        $courseService->listMine($instructor),
+        static fn ($s): bool => $s->id === $courseId,
+    ))[0] ?? null;
+    $summary = $summaryOf($course->id());
     check($summary->levelCount === 2 && $summary->chapterCount === 0 && $summary->studentCount === 0, '"Mis cursos" cuenta niveles, capítulos y alumnos');
+    check($summary->levelPriceTotal === '300.00', '"Mis cursos" suma los precios de los niveles (0 + 300)');
+
+    // -----------------------------------------------------------
+    Report::section('Forma de cobro');
+    $costs = static fn (): array => array_map(static fn ($l): string => $l->cost(), $courseService->outline($instructor, $course->id())->levels);
+    $withMode = static fn (string $mode, string $price = '') => $validator->validateCourse(['precio_modo' => $mode, 'precio' => $price] + $courseForm, false);
+    [$free] = $courseRepository->update($instructor->id(), $course->id(), $withMode('gratis'), null, null);
+    check($free->fullCoursePrice() === '0.00' && $costs() === ['0.00', '0.00'], 'pasar a gratis pone en 0 todos los niveles');
+    $freeLevel = $courseRepository->createLevel($instructor->id(), $course->id(), $levelInput('Nivel extra', '450'), $levelVideo(4));
+    check($freeLevel->cost() === '0.00' && $freeLevel->sortOrder() === 3, 'en un curso gratis, un nivel nuevo queda en 0 aunque llegue un precio');
+    [$stillFree] = $courseRepository->updateLevel($instructor->id(), $levels[3]->id(), $levelInput('Nivel 3', '99'), null);
+    check($stillFree->cost() === '0.00', 'y editar un nivel tampoco le pone precio');
+    [$bundle] = $courseRepository->update($instructor->id(), $course->id(), $withMode('paquete', '799'), null, null);
+    [$priced] = $courseRepository->updateLevel($instructor->id(), $levels[3]->id(), $levelInput('Nivel 3', '120.5'), null);
+    check($bundle->fullCoursePrice() === '799.00' && $priced->cost() === '120.50', 'en curso completo + niveles, cada nivel vuelve a tener precio');
+    check($summaryOf($course->id())?->levelPriceTotal === '120.50', 'la suma de niveles se actualiza');
+    // PRICING_LOCKED necesita alumnos inscritos: se prueba con la entrega de inscripciones y pagos.
+
+    // -----------------------------------------------------------
+    Report::section('Orden de niveles y capítulos');
+    $levelOrder = static fn (): array => array_map(static fn ($l): string => $l->id(), $courseService->outline($instructor, $course->id())->levels);
+    check($levelOrder() === [$levels[1]->id(), $levels[3]->id(), $freeLevel->id()], 'orden inicial: 1, 3 y el extra');
+    $moved = $courseRepository->moveLevel($instructor->id(), $freeLevel->id(), 'up');
+    check($moved->sortOrder() === 2 && $levelOrder() === [$levels[1]->id(), $freeLevel->id(), $levels[3]->id()], 'subir el último lo intercambia con su vecino');
+    check($courseRepository->moveLevel($instructor->id(), $levels[1]->id(), 'up')->sortOrder() === 1, 'subir el primero no cambia nada');
+    check($courseRepository->moveLevel($instructor->id(), $levels[3]->id(), 'down')->sortOrder() === 3, 'bajar el último no cambia nada');
+    check(
+        array_map(static fn ($l): int => $l->sortOrder(), $courseService->outline($instructor, $course->id())->levels) === [1, 2, 3],
+        'los órdenes quedan 1, 2, 3 sin huecos ni repetidos',
+    );
+    check(ruleCode(static fn () => $courseRepository->moveLevel($otherInstructor->id(), $levels[1]->id(), 'down')) === 'LEVEL_NOT_FOUND', 'otro instructor no mueve niveles');
+    $badDirection = thrown(ProcedureException::class, static fn () => $courseRepository->moveLevel($instructor->id(), $levels[1]->id(), 'left'));
+    check($badDirection !== null && $badDirection->is('INVALID_DIRECTION'), 'el SP rechaza una dirección desconocida');
+
+    $chapterIds = array_map(
+        static fn (string $title): string => $courseRepository->createChapter($instructor->id(), $levelId, $videoChapter($title))->id(),
+        ['A', 'B', 'C'],
+    );
+    $chapterOrder = static fn (): array => array_map(static fn ($c): string => $c->title(), $courseService->outline($instructor, $course->id())->chapters($levelId));
+    $courseService->moveChapter($instructor, $chapterIds[2], ['direccion' => 'arriba']);
+    check($chapterOrder() === ['A', 'C', 'B'], 'subir un capítulo: A, C, B');
+    $courseService->moveChapter($instructor, $chapterIds[0], ['direccion' => 'abajo']);
+    check($chapterOrder() === ['C', 'A', 'B'], 'bajar un capítulo: C, A, B');
+    check($courseService->moveChapter($instructor, $chapterIds[1], ['direccion' => 'abajo'])->sortOrder() === 3, 'bajar el último capítulo no cambia nada');
+    check(ruleCode(static fn () => $courseRepository->moveChapter($otherInstructor->id(), $chapterIds[0], 'up')) === 'CHAPTER_NOT_FOUND', 'otro instructor no mueve capítulos');
+    check(failedFields(static fn () => $courseService->moveChapter($instructor, $chapterIds[0], ['direccion' => 'up'])) === ['direccion'], 'la API pide arriba o abajo');
+
+    // -----------------------------------------------------------
+    Report::section('Exámenes');
+    $exam = $courseRepository->createChapter($instructor->id(), $levelId, $validator->validateChapter(['titulo' => 'Examen del nivel', 'tipo' => 'examen', 'minimo' => '70'], true));
+    check($exam->isTest() && $exam->minimumPassingGrade() === '70.00' && $exam->sortOrder() === 4, 'examen creado al final del nivel con mínimo 70.00');
+    check(ruleCode(static fn () => $courseRepository->addContent($instructor->id(), $exam->id(), $linkInput, 'X', null)) === 'CHAPTER_IS_EXAM', 'un examen no lleva contenido -> CHAPTER_IS_EXAM');
+    $questionInput = static fn (array $input) => $validator->validateQuestion($input);
+    $yesNo = $questionInput(['pregunta' => '¿PHP se ejecuta en el servidor?', 'modo' => 'unica', 'respuestas' => [
+        ['texto' => 'Sí', 'correcta' => true], ['texto' => 'No', 'correcta' => false],
+    ]]);
+    check(ruleCode(static fn () => $courseRepository->createQuestion($instructor->id(), $chapterIds[0], $yesNo)) === 'CHAPTER_NOT_EXAM', 'las preguntas solo van en exámenes -> CHAPTER_NOT_EXAM');
+    check(ruleCode(static fn () => $courseRepository->createQuestion($otherInstructor->id(), $exam->id(), $yesNo)) === 'CHAPTER_NOT_FOUND', 'otro instructor no agrega preguntas');
+
+    [$q1, $q1Answers] = $courseRepository->createQuestion($instructor->id(), $exam->id(), $yesNo);
+    check($q1->sortOrder() === 1 && count($q1Answers) === 2 && $q1Answers[0]->isCorrect() && $q1Answers[0]->weight() === '1.00' && $q1Answers[1]->weight() === '0.00', 'pregunta de opción única con sus opciones y pesos');
+    [$q2, $q2Answers] = $courseRepository->createQuestion($instructor->id(), $exam->id(), $questionInput(['pregunta' => 'Lenguajes del servidor', 'modo' => 'multiple', 'respuestas' => [
+        ['texto' => 'PHP', 'correcta' => true, 'peso' => '2'], ['texto' => 'Python', 'correcta' => true, 'peso' => '3'], ['texto' => 'CSS', 'correcta' => false],
+    ]]));
+    check($q2->sortOrder() === 2 && array_map(static fn ($a): int => $a->sortOrder(), $q2Answers) === [1, 2, 3], 'opción múltiple: opciones numeradas en su orden');
+    $forged = new QuestionInput('Forzada', SelectionMode::Single, [
+        ['answer' => 'A', 'correct' => true, 'weight' => '1.00'], ['answer' => 'B', 'correct' => true, 'weight' => '1.00'],
+    ]);
+    check(ruleCode(static fn () => $courseRepository->createQuestion($instructor->id(), $exam->id(), $forged)) === 'INVALID_ANSWERS', 'el SP también rechaza dos correctas en opción única');
+    $alone = new QuestionInput('Sola', SelectionMode::Multiple, [['answer' => 'A', 'correct' => true, 'weight' => '1.00']]);
+    check(ruleCode(static fn () => $courseRepository->createQuestion($instructor->id(), $exam->id(), $alone)) === 'INVALID_ANSWERS', 'y una sola opción');
+
+    [$edited, $editedAnswers] = $courseRepository->updateQuestion($instructor->id(), $q1->id(), $questionInput(['pregunta' => '¿Dónde se ejecuta PHP?', 'modo' => 'unica', 'respuestas' => [
+        ['texto' => 'En el servidor', 'correcta' => true], ['texto' => 'En el navegador', 'correcta' => false], ['texto' => 'En la base de datos', 'correcta' => false],
+    ]]));
+    check($edited->question() === '¿Dónde se ejecuta PHP?' && count($editedAnswers) === 3 && $editedAnswers[0]->id() !== $q1Answers[0]->id(), 'editar reemplaza el texto y las opciones');
+    check(ruleCode(static fn () => $courseRepository->updateQuestion($otherInstructor->id(), $q1->id(), $yesNo)) === 'QUESTION_NOT_FOUND', 'otro instructor no edita preguntas');
+    check($courseRepository->moveQuestion($instructor->id(), $q2->id(), 'up')->sortOrder() === 1, 'subir la pregunta 2');
+    $examOutline = $courseService->outline($instructor, $course->id());
+    check(array_map(static fn ($q): string => $q->id(), $examOutline->questions($exam->id())) === [$q2->id(), $q1->id()], 'el editor ve las preguntas en su nuevo orden');
+    check(count($examOutline->answers($q2->id())) === 3, 'con sus opciones');
+
+    $correctOf = static fn (array $answers): array => array_values(array_map(static fn ($a): string => $a->id(), array_filter($answers, static fn ($a): bool => $a->isCorrect())));
+    $wrongOf = static fn (array $answers): array => array_values(array_map(static fn ($a): string => $a->id(), array_filter($answers, static fn ($a): bool => !$a->isCorrect())));
+    $preview = static fn (array $answers) => $courseService->previewGrade($instructor, $exam->id(), ['respuestas' => $answers]);
+    $half = $preview([$q2->id() => [$correctOf($q2Answers)[0]], $q1->id() => $correctOf($editedAnswers)]);
+    check($half->earnedPoints === '3.00' && $half->maxPoints === '6.00' && $half->grade === '50.00' && !$half->passed, 'probar examen: PHP (2) + servidor (1) = 3 de 6, no aprueba con 70');
+    $full = $preview([$q2->id() => $correctOf($q2Answers), $q1->id() => $correctOf($editedAnswers)]);
+    check($full->grade === '100.00' && $full->passed, 'todas las correctas: 100.00, aprueba');
+    $wrong = $preview([$q2->id() => [...$correctOf($q2Answers), ...$wrongOf($q2Answers)], $q1->id() => $correctOf($editedAnswers)]);
+    check($wrong->earnedPoints === '1.00' && $wrong->questions[0]['markedWrong'], 'marcar una incorrecta deja la pregunta en 0');
+    check(failedFields(static fn () => $preview([$q1->id() => [$q2Answers[0]->id()]])) === ['respuestas'], 'una opción de otra pregunta se rechaza');
+    check(failedFields(static fn () => $preview([$q1->id() => $wrongOf($editedAnswers)])) === ['respuestas'], 'dos opciones en una pregunta de opción única se rechazan');
+    check(ruleCode(static fn () => $courseService->previewGrade($instructor, $chapterIds[0], ['respuestas' => []])) === 'CHAPTER_NOT_EXAM', 'un capítulo de video no se califica');
+
+    check($courseRepository->updateChapter($instructor->id(), $exam->id(), $validator->validateChapter(['titulo' => 'Examen', 'minimo' => '80'], false))->minimumPassingGrade() === '80.00', 'cambiar el mínimo a 80');
+    check($courseRepository->updateChapter($instructor->id(), $exam->id(), $renamed('Examen final'))->minimumPassingGrade() === '80.00', 'renombrar sin mínimo lo conserva');
+    check($courseRepository->deleteQuestion($instructor->id(), $q2->id()) === $exam->id(), 'borrar una pregunta');
+    check(array_map(static fn ($q): int => $q->sortOrder(), $courseService->outline($instructor, $course->id())->questions($exam->id())) === [1], 'la siguiente pasa a ser la 1');
+    check(ruleCode(static fn () => $courseRepository->deleteQuestion($instructor->id(), $q2->id())) === 'QUESTION_NOT_FOUND', 'borrarla otra vez -> QUESTION_NOT_FOUND');
+    check($courseRepository->deleteChapter($instructor->id(), $exam->id()) === [], 'borrar el examen borra sus preguntas (sin archivos)');
+
+    // -----------------------------------------------------------
+    Report::section('Publicación y baja lógica');
+    $publishCategory = $categories->create($admin, ['nombre' => "Prueba $mark publicar"]);
+    $draftInput = $validator->validateCourse(['titulo' => "Publicable $mark", 'categorias' => [$publishCategory->id()], 'precio_modo' => 'niveles'] + $courseForm, true);
+    $draft = $courseRepository->create($instructor->id(), $draftInput, $cover, $promo);
+    $publish = static fn () => $courseService->publish($instructor, $draft->id());
+    $categories->update($admin, $publishCategory->id(), ['activa' => false]);
+    check(ruleCode($publish) === 'NO_ACTIVE_CATEGORY', 'sin categoría activa -> NO_ACTIVE_CATEGORY');
+    $categories->update($admin, $publishCategory->id(), ['activa' => true]);
+    check(ruleCode($publish) === 'NO_LEVELS', 'sin niveles -> NO_LEVELS');
+    $draftLevel = $courseRepository->createLevel($instructor->id(), $draft->id(), $levelInput('Único', '0'), $levelVideo(7));
+    check(ruleCode($publish) === 'LEVEL_WITHOUT_CHAPTERS', 'un nivel sin capítulos -> LEVEL_WITHOUT_CHAPTERS');
+    $draftChapter = $courseRepository->createChapter($instructor->id(), $draftLevel->id(), $videoChapter('Bienvenida'));
+    check(ruleCode($publish) === 'CHAPTER_WITHOUT_VIDEO', 'un capítulo sin video -> CHAPTER_WITHOUT_VIDEO');
+    check(!PublishChecklist::for($courseService->outline($instructor, $draft->id()))->ready(), 'la lista del editor también marca el pendiente');
+    $courseRepository->addContent($instructor->id(), $draftChapter->id(), $mainInput, 'Bienvenida', $video);
+    $draftExam = $courseRepository->createChapter($instructor->id(), $draftLevel->id(), $validator->validateChapter(['titulo' => 'Examen de bienvenida', 'tipo' => 'examen', 'minimo' => '60'], true));
+    check(ruleCode($publish) === 'EXAM_WITHOUT_QUESTIONS', 'un examen sin preguntas -> EXAM_WITHOUT_QUESTIONS');
+    $courseRepository->createQuestion($instructor->id(), $draftExam->id(), $yesNo);
+    check(PublishChecklist::for($courseService->outline($instructor, $draft->id()))->ready(), 'con el video y la pregunta, la lista queda completa');
+    check(ruleCode(static fn () => $courseService->publish($otherInstructor, $draft->id())) === 'COURSE_NOT_FOUND', 'otro instructor no lo publica');
+
+    $published = $publish();
+    check($published->publishedAt() !== null && $published->active(), 'publicado: published_at con fecha');
+    check(ruleCode($publish) === 'COURSE_ALREADY_PUBLISHED', 'publicarlo otra vez -> COURSE_ALREADY_PUBLISHED');
+    check($summaryOf($draft->id())?->isPublished() === true, '"Mis cursos" lo muestra publicado');
+    check(ruleCode(static fn () => $categories->update($admin, $publishCategory->id(), ['activa' => false])) === 'CATEGORY_IN_USE', 'su única categoría ya no se puede desactivar (CATEGORY_IN_USE)');
+
+    check($courseService->unpublish($instructor, $draft->id())->publishedAt() === null, 'sin alumnos puede volver a borrador');
+    check(ruleCode(static fn () => $courseService->unpublish($instructor, $draft->id())) === 'COURSE_NOT_PUBLISHED', 'un borrador no se "despublica" -> COURSE_NOT_PUBLISHED');
+    $published = $publish();
+
+    $inactive = $courseService->setActive($instructor, $draft->id(), ['activo' => false]);
+    check(!$inactive->active() && $inactive->deactivatedAt() !== null && $inactive->publishedAt() !== null, 'dado de baja: inactivo, con fecha de baja y conserva published_at');
+    check($courseService->setActive($instructor, $draft->id(), ['activo' => false])->deactivatedAt() == $inactive->deactivatedAt(), 'darlo de baja otra vez no cambia la fecha');
+    check(ruleCode($publish) === 'COURSE_INACTIVE', 'dado de baja no se publica -> COURSE_INACTIVE');
+    check(failedFields(static fn () => $courseService->setActive($instructor, $draft->id(), ['activo' => 'no'])) === ['activo'], 'activo debe ser true o false');
+    check(ruleCode(static fn () => $courseService->setActive($otherInstructor, $draft->id(), ['activo' => true])) === 'COURSE_NOT_FOUND', 'otro instructor no lo reactiva');
+    $reactivated = $courseService->setActive($instructor, $draft->id(), ['activo' => true]);
+    check($reactivated->active() && $reactivated->deactivatedAt() === null && $reactivated->publishedAt() == $published->publishedAt(), 'reactivado vuelve a estar publicado como antes');
+
+    // -----------------------------------------------------------
+    Report::section('Catálogo público');
+    $find = static fn (array $filters): array => array_map(static fn ($c): string => $c->id, $catalog->search($filters)->courses);
+    $page = $catalog->search(['q' => "publicable $mark"]);
+    check($page->total === 1 && $page->courses[0]->id === $draft->id(), 'el curso publicado aparece al buscar su título (sin importar mayúsculas)');
+    $card = $page->courses[0];
+    check($card->instructorName === 'Instructora De Prueba Núñez' && $card->categoryNames === ["Prueba $mark publicar"] && $card->levelCount === 1 && $card->chapterCount === 2, 'tarjeta con instructor, categoría y conteos');
+    check(in_array($draft->id(), $find(['q' => 'Instructora De Prueba']), true), 'también se encuentra por el nombre del instructor');
+    check(in_array($draft->id(), $find(['q' => $mark, 'categoria' => $publishCategory->id()]), true) && !in_array($draft->id(), $find(['q' => $mark, 'categoria' => $category->id()]), true), 'el filtro de categoría funciona');
+    check($catalog->search(['q' => '%'])->total === 0 && $catalog->search(['q' => '_'])->total === 0, '% y _ se buscan como texto, no como comodines');
+    check(!in_array($course->id(), $find(['q' => $mark]), true), 'un borrador no aparece en el catálogo');
+    check(ruleCode(static fn () => $catalog->course($course->id())) === 'COURSE_NOT_FOUND', 'ni su página pública');
+    $second = $catalog->search(['q' => "publicable $mark", 'pagina' => '2']);
+    check($second->courses === [] && $second->total === 1 && $second->page === 2, 'paginación: la página 2 viene vacía con el total');
+    foreach (['titulo', 'precio'] as $sort) {
+        check(in_array($draft->id(), $find(['q' => $mark, 'orden' => $sort]), true), "ordenar por $sort");
+    }
+    $public = $catalog->course($draft->id());
+    $publicChapters = $public->levels[0]['chapters'];
+    check($public->title === "Publicable $mark" && $public->instructorName === 'Instructora De Prueba Núñez' && count($public->levels) === 1, 'página pública con su temario');
+    check($publicChapters[0]['durationSeconds'] === 95 && !$publicChapters[0]['isExam'] && $publicChapters[1]['isExam'] && $publicChapters[1]['questionCount'] === 1, 'capítulos con la duración del video y los exámenes con sus preguntas');
+    check($public->durationSeconds() === 95 && $public->examCount() === 1 && $public->levelPriceTotal() === '0.00', 'duración total, exámenes y precio');
+    check(!str_contains(json_encode(App\Http\Presenters\CatalogPresenter::course($public), JSON_THROW_ON_ERROR), 'cloudinary:'), 'el JSON público no trae referencias protegidas');
+
+    // Limpieza: dado de baja, su categoría ya se puede desactivar.
+    $courseService->setActive($instructor, $draft->id(), ['activo' => false]);
+    check(ruleCode(static fn () => $catalog->course($draft->id())) === 'COURSE_NOT_FOUND' && $catalog->search(['q' => "publicable $mark"])->total === 0, 'dado de baja desaparece del catálogo');
+    $categories->update($admin, $publishCategory->id(), ['activa' => false]);
 
     // Deja la lista de categorías del instructor sin las de prueba (el curso es un borrador).
     $categories->update($admin, $category->id(), ['activa' => false]);
-    check(!in_array($category->id(), array_map(static fn ($c): string => $c->id(), $categories->active()), true), 'la categoría de prueba se desactiva al terminar');
+    check(!in_array($category->id(), array_map(static fn ($c): string => $c->id(), $categories->active()), true), 'las categorías de prueba se desactivan al terminar');
 } catch (Throwable $exception) {
     fwrite(STDERR, sprintf('Error inesperado: %s: %s (%s:%d)%s', $exception::class, $exception->getMessage(), $exception->getFile(), $exception->getLine(), PHP_EOL));
     if ($exception->getPrevious() !== null) {

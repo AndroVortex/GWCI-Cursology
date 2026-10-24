@@ -1,10 +1,11 @@
 <?php
 /*
  * Campos de un nivel (agregar o editar). Requiere $levelFormLevel (CourseLevel o null)
- * y $course (para la moneda).
+ * y $course (moneda y forma de cobro: en un curso gratis el nivel no lleva precio).
  */
 $isNewLevel = $levelFormLevel === null;
 $levelSuffix = $isNewLevel ? 'new' : $levelFormLevel->id();
+$freeCourse = \App\Services\PricingMode::fromFullCoursePrice($course->fullCoursePrice()) === \App\Services\PricingMode::Free;
 ?>
 <div class="form-alert" role="alert" data-form-alert hidden></div>
 <div class="form-row">
@@ -13,12 +14,20 @@ $levelSuffix = $isNewLevel ? 'new' : $levelFormLevel->id();
         <input class="form-control" type="text" id="level-titulo-<?= e($levelSuffix) ?>" name="titulo" maxlength="200" placeholder="p. ej. Fundamentos" value="<?= e($levelFormLevel?->title()) ?>">
         <p class="field-error" aria-live="polite"></p>
     </div>
-    <div class="form-field">
-        <label class="form-label" for="level-costo-<?= e($levelSuffix) ?>">Precio del nivel (<?= e($course->currency()) ?>)</label>
-        <input class="form-control" type="text" inputmode="decimal" id="level-costo-<?= e($levelSuffix) ?>" name="costo" placeholder="0.00" value="<?= e($levelFormLevel?->cost() ?? '0.00') ?>">
-        <p class="form-hint">0.00 = gratis.</p>
-        <p class="field-error" aria-live="polite"></p>
-    </div>
+    <?php if ($freeCourse): ?>
+        <div class="form-field">
+            <span class="form-label">Precio del nivel</span>
+            <input type="hidden" name="costo" value="0">
+            <p class="form-hint">Curso gratis: todos los niveles son gratuitos.</p>
+        </div>
+    <?php else: ?>
+        <div class="form-field">
+            <label class="form-label" for="level-costo-<?= e($levelSuffix) ?>">Precio del nivel (<?= e($course->currency()) ?>)</label>
+            <input class="form-control" type="text" inputmode="decimal" id="level-costo-<?= e($levelSuffix) ?>" name="costo" placeholder="0.00" value="<?= e($levelFormLevel?->cost() ?? '0.00') ?>">
+            <p class="form-hint">Lo que cuesta este nivel comprado por separado. 0.00 = nivel de muestra gratis.</p>
+            <p class="field-error" aria-live="polite"></p>
+        </div>
+    <?php endif; ?>
 </div>
 <div class="form-field">
     <label class="form-label" for="level-descripcion-<?= e($levelSuffix) ?>">Descripción</label>

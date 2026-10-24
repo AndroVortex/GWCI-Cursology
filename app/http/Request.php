@@ -17,6 +17,7 @@ final class Request
      * @param array<string, mixed> $post
      * @param array<string, array{tmp_name: string, error: int, size: int, name: string}> $files
      * @param array<string, mixed> $attributes datos que agregan los middleware (p. ej. el usuario)
+     * @param array<string, mixed> $query parámetros de la URL (?q=...)
      */
     private function __construct(
         public readonly string $method,
@@ -26,6 +27,7 @@ final class Request
         private readonly array $post,
         private readonly array $files,
         private readonly array $attributes = [],
+        private readonly array $query = [],
     ) {
     }
 
@@ -77,7 +79,7 @@ final class Request
             ];
         }
 
-        return new self($method, $path, $headers, $body, $_POST, $files);
+        return new self($method, $path, $headers, $body, $_POST, $files, [], $_GET);
     }
 
     /**
@@ -86,6 +88,7 @@ final class Request
      * @param array<string, string> $headers
      * @param array<string, mixed> $post
      * @param array<string, array{tmp_name: string, error: int, size: int, name: string}> $files
+     * @param array<string, mixed> $query
      */
     public static function create(
         string $method,
@@ -94,8 +97,15 @@ final class Request
         string $body = '',
         array $post = [],
         array $files = [],
+        array $query = [],
     ): self {
-        return new self(strtoupper($method), $path, array_change_key_case($headers, CASE_LOWER), $body, $post, $files);
+        return new self(strtoupper($method), $path, array_change_key_case($headers, CASE_LOWER), $body, $post, $files, [], $query);
+    }
+
+    /** @return array<string, mixed> parámetros de la URL */
+    public function queryParams(): array
+    {
+        return $this->query;
     }
 
     public function header(string $name): ?string
@@ -166,6 +176,7 @@ final class Request
             $this->post,
             $this->files,
             [...$this->attributes, $name => $value],
+            $this->query,
         );
     }
 

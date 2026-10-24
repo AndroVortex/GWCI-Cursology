@@ -9,7 +9,7 @@
 
 <?php
 /** @var list<\App\Models\Dto\LockedAccount> $lockedAccounts */
-$previewMessage = 'Las categorías y la reactivación de cuentas ya funcionan. Reportes, formas de pago y moderación se conectarán en las siguientes entregas.';
+$previewMessage = 'Las categorías, las formas de pago y la reactivación de cuentas ya funcionan. Reportes y moderación se conectarán en las siguientes entregas.';
 require BASE_PATH . '/app/views/base/html/preview-notice.html';
 ?>
 
@@ -168,7 +168,7 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
             </li>
             <li>
                 <span>Formas de pago</span>
-                <button type="button" class="btn btn-secondary btn-sm" disabled>Administrar</button>
+                <a class="btn btn-secondary btn-sm" href="?view=payment-methods">Administrar</a>
             </li>
             <li>
                 <span>Reacciones</span>

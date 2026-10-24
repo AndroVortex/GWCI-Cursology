@@ -5,6 +5,7 @@ declare(strict_types=1);
 // Funciones para imprimir datos en las vistas. No tocan la base de datos ni la sesión.
 
 use App\Models\Enums\UserRole;
+use App\Services\PricingMode;
 
 /** Zona horaria en la que se muestran las fechas (en la BD se guardan en UTC). */
 const DISPLAY_TIME_ZONE = 'America/Monterrey';
@@ -51,6 +52,19 @@ function format_money(?string $amount, string $currency = 'MXN'): string
     $integer = (string) preg_replace('/\B(?=([0-9]{3})+(?![0-9]))/', ',', $parts[2]);
 
     return sprintf('%s$%s.%s %s', $parts[1], $integer, $parts[3], $currency);
+}
+
+/**
+ * Precio de un curso para el catálogo según su forma de cobro: "Gratis", el del curso
+ * completo, o "Por niveles · $X" (la suma de sus niveles; "Gratis" si todos cuestan 0).
+ */
+function course_price_label(?string $fullCoursePrice, string $levelPriceTotal, string $currency = 'MXN'): string
+{
+    return match (PricingMode::fromFullCoursePrice($fullCoursePrice)) {
+        PricingMode::Free => 'Gratis',
+        PricingMode::Bundle => format_money($fullCoursePrice, $currency),
+        PricingMode::Levels => $levelPriceTotal === '0.00' ? 'Gratis' : 'Por niveles · ' . format_money($levelPriceTotal, $currency),
+    };
 }
 
 /** Tamaño legible de un BIGINT UNSIGNED en bytes ("2.4 MB"). */
