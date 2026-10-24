@@ -1,0 +1,193 @@
+<?php
+/**
+ * Reproductor del alumno: índice del curso con su avance y el capítulo actual.
+ *
+ * @var ?\App\Models\Dto\LearningCourse $learningCourse null = no está inscrito
+ * @var ?array $currentChapter
+ * @var \App\Services\LearningService $learningService
+ */
+use App\Services\LearningService;
+use App\Services\PricingMode;
+
+if ($learningCourse === null): ?>
+    <div class="empty-state">
+        <p class="empty-title">No estás inscrito en este curso</p>
+        <p class="empty-text">Inscríbete o compra un nivel desde la página del curso.</p>
+        <a class="btn btn-primary btn-sm" href="?view=catalog">Ir al catálogo</a>
+    </div>
+<?php return; endif;
+
+$course = $learningCourse;
+$chapter = $currentChapter;
+$level = $chapter !== null ? $course->level($chapter['levelId']) : null;
+$next = $chapter !== null ? $course->nextChapter($chapter['id']) : null;
+$learnUrl = static fn (string $chapterId): string => '?view=learn&course=' . rawurlencode($course->id) . '&chapter=' . rawurlencode($chapterId);
+$levelUrl = static fn (array $lockedLevel): string => $lockedLevel['cost'] === '0.00' || $course->pricingMode() === PricingMode::Free
+    ? '?view=course&id=' . rawurlencode($course->id)
+    : '?view=checkout&course=' . rawurlencode($course->id) . '&level=' . rawurlencode($lockedLevel['id']);
+$chapterState = static function (array $item) use ($course): array {
+    return match (true) {
+        !$course->hasAccessTo($item) => ['locked', 'Sin acceso'],
+        $item['completedAt'] !== null => ['done', $item['isExam'] ? 'Aprobado' : 'Terminado'],
+        $item['lastAccessedAt'] !== null => ['progress', 'En curso'],
+        default => ['todo', 'Pendiente'],
+    };
+};
+?>
+<p class="breadcrumb">
+    <a href="?view=dashboard">Mi aprendizaje</a> / <a href="?view=course&amp;id=<?= e($course->id) ?>"><?= e($course->title) ?></a>
+</p>
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
+<?php if ($course->completedAt !== null): ?>
+    <div class="notice notice-success" role="status" data-course-completed>
+        <p>¡Terminaste el curso el <?= e(format_date($course->completedAt)) ?>! El certificado estará disponible en la siguiente entrega.</p>
+    </div>
+<?php else: ?>
+    <div class="notice notice-success" role="status" data-course-completed hidden>
+        <p>¡Terminaste el curso! El certificado estará disponible en la siguiente entrega.</p>
+    </div>
+<?php endif; ?>
+<?php if (!$course->active): ?>
+    <div class="notice notice-warning" role="note">
+        <p>Este curso se dio de baja: ya no se vende, pero conservas el acceso a lo que compraste.</p>
+    </div>
+<?php endif; ?>
+
+<div class="learn">
+    <aside class="panel learn-index" aria-label="Temario del curso">
+        <div class="panel-header learn-index-header">
+            <div>
+                <p class="learn-course-title"><?= e($course->title) ?></p>
+                <p class="text-muted">Por <?= e($course->instructorName) ?></p>
+            </div>
+            <div class="learn-progress">
+                <div class="progress-bar" role="progressbar" aria-label="Avance del curso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $course->progressPercent() ?>"
+                     data-course-progress data-done="<?= $course->completedChapterCount() ?>" data-total="<?= $course->chapterCount() ?>">
+                    <span style="width: <?= $course->progressPercent() ?>%"></span>
+                </div>
+                <p class="form-hint" data-course-progress-label><?= $course->completedChapterCount() ?> de <?= $course->chapterCount() ?> capítulos · <?= $course->progressPercent() ?>%</p>
+            </div>
+        </div>
+        <ol class="learn-levels">
+            <?php foreach ($course->levels as $item): ?>
+                <li class="learn-level">
+                    <div class="learn-level-header">
+                        <p class="learn-level-title">Nivel <?= $item['sortOrder'] ?> · <?= e($item['title']) ?></p>
+                        <?php if ($item['completedAt'] !== null): ?>
+                            <span class="badge badge-success">Terminado</span>
+                        <?php elseif (!$item['hasAccess']): ?>
+                            <a class="btn btn-secondary btn-sm" href="<?= e($levelUrl($item)) ?>">
+                                <?= $item['cost'] === '0.00' || $course->pricingMode() === PricingMode::Free ? 'Obtener gratis' : 'Comprar nivel · ' . e(format_money($item['cost'], $course->currency)) ?>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                    <ol class="learn-chapters">
+                        <?php foreach ($item['chapters'] as $entry): ?>
+                            <?php [$state, $stateLabel] = $chapterState($entry); ?>
+                            <li>
+                                <a class="learn-chapter<?= $chapter !== null && $entry['id'] === $chapter['id'] ? ' is-current' : '' ?>"
+                                   href="<?= e($learnUrl($entry['id'])) ?>" data-chapter-link="<?= e($entry['id']) ?>"
+                                   <?= $chapter !== null && $entry['id'] === $chapter['id'] ? 'aria-current="page"' : '' ?>>
+                                    <span class="learn-state" data-state="<?= $state ?>" data-chapter-state title="<?= e($stateLabel) ?>">
+                                        <span class="visually-hidden"><?= e($stateLabel) ?></span>
+                                    </span>
+                                    <span class="learn-chapter-title"><?= $item['sortOrder'] ?>.<?= $entry['sortOrder'] ?> <?= e($entry['title']) ?></span>
+                                    <span class="content-meta">
+                                        <?php if ($entry['isExam']): ?>
+                                            Examen<?= $entry['bestGrade'] !== null ? ' · ' . e($entry['bestGrade']) : '' ?>
+                                        <?php elseif ($entry['durationSeconds'] !== null): ?>
+                                            <?= e(format_duration($entry['durationSeconds'])) ?>
+                                        <?php endif; ?>
+                                    </span>
+                                </a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ol>
+                </li>
+            <?php endforeach; ?>
+        </ol>
+    </aside>
+
+    <section class="learn-main" aria-live="polite">
+        <?php if ($chapter === null): ?>
+            <div class="empty-state">
+                <p class="empty-title">Este curso todavía no tiene capítulos</p>
+            </div>
+        <?php elseif (!$course->hasAccessTo($chapter)): ?>
+            <div class="panel">
+                <div class="panel-body learn-locked">
+                    <p class="learn-eyebrow">Nivel <?= $level['sortOrder'] ?> · <?= e($level['title']) ?></p>
+                    <h1 class="page-title"><?= e($chapter['title']) ?></h1>
+                    <p class="text-muted">Este capítulo es parte de un nivel que todavía no tienes.</p>
+                    <a class="btn btn-primary" href="<?= e($levelUrl($level)) ?>">
+                        <?= $level['cost'] === '0.00' || $course->pricingMode() === PricingMode::Free ? 'Obtener este nivel gratis' : 'Comprar este nivel · ' . e(format_money($level['cost'], $course->currency)) ?>
+                    </a>
+                </div>
+            </div>
+        <?php elseif ($chapter['isExam']): ?>
+            <?php require __DIR__ . '/exam-attempt.html'; ?>
+        <?php else: ?>
+            <?php
+            $main = $course->mainVideo($chapter['id']);
+            $resources = $course->resources($chapter['id']);
+            $done = $chapter['completedAt'] !== null;
+            ?>
+            <div class="panel learn-player" data-player data-chapter-id="<?= e($chapter['id']) ?>"
+                 data-duration="<?= e((string) ($chapter['durationSeconds'] ?? '')) ?>" data-position="<?= $chapter['positionSeconds'] ?>"
+                 data-completed="<?= $done ? '1' : '0' ?>" data-watched-percent="<?= LearningService::WATCHED_PERCENT ?>">
+                <?php if ($main !== null): ?>
+                    <video class="learn-video" controls preload="metadata" playsinline src="<?= e($learningService->viewUrl($main)) ?>" data-video></video>
+                <?php else: ?>
+                    <p class="notice notice-warning">Este capítulo todavía no tiene video.</p>
+                <?php endif; ?>
+                <div class="panel-body">
+                    <p class="learn-eyebrow">Nivel <?= $level['sortOrder'] ?> · Capítulo <?= $chapter['sortOrder'] ?></p>
+                    <h1 class="page-title"><?= e($chapter['title']) ?></h1>
+                    <div class="form-alert" role="alert" data-player-alert hidden></div>
+                    <div class="learn-actions">
+                        <span class="badge badge-success" data-watched-badge<?= $done ? '' : ' hidden' ?>>Visto</span>
+                        <button type="button" class="btn btn-secondary btn-sm" data-mark-done<?= $done ? ' hidden' : '' ?>>Marcar como visto</button>
+                        <?php if ($next !== null && $course->hasAccessTo($next)): ?>
+                            <a class="btn btn-primary btn-sm" href="<?= e($learnUrl($next['id'])) ?>">Siguiente: <?= e($next['title']) ?></a>
+                        <?php elseif ($next !== null): ?>
+                            <a class="btn btn-primary btn-sm" href="<?= e($learnUrl($next['id'])) ?>">Siguiente nivel</a>
+                        <?php endif; ?>
+                    </div>
+                    <p class="form-hint">Se marca como visto solo al llegar al <?= LearningService::WATCHED_PERCENT ?>% del video. Tu avance se guarda mientras lo ves.</p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Recursos</h2>
+                </div>
+                <div class="panel-body">
+                    <?php if ($resources === []): ?>
+                        <p class="text-muted">Este capítulo no tiene recursos adicionales.</p>
+                    <?php else: ?>
+                        <ul class="content-list learn-resources">
+                            <?php foreach ($resources as $resource): ?>
+                                <?php $resourceUrl = $learningService->viewUrl($resource); ?>
+                                <li class="content-item">
+                                    <span class="badge"><?= e($resource->contentType()->label()) ?></span>
+                                    <?php if ($resourceUrl !== null): ?>
+                                        <a class="content-name" href="<?= e($resourceUrl) ?>" target="_blank" rel="noopener"><?= e($resource->title()) ?></a>
+                                    <?php else: ?>
+                                        <details class="content-name">
+                                            <summary><?= e($resource->title()) ?></summary>
+                                            <p class="content-text"><?= nl2br(e($resource->textContent())) ?></p>
+                                        </details>
+                                    <?php endif; ?>
+                                    <?php if ($resource->sizeBytes() !== null): ?>
+                                        <span class="content-meta"><?= e(format_bytes($resource->sizeBytes())) ?></span>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    </section>
+</div>

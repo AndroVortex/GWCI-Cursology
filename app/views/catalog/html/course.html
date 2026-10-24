@@ -1,0 +1,167 @@
+<?php
+/**
+ * @var ?\App\Models\Dto\PublicCourse $publicCourse null = no existe, es borrador o está dado de baja
+ * @var \App\Models\Dto\CourseAccess $courseAccess lo que el usuario ya tiene del curso
+ * @var bool $isStudent solo los alumnos se inscriben y compran
+ */
+use App\Services\PricingMode;
+?>
+<?php if ($publicCourse === null): ?>
+    <div class="empty-state course-missing">
+        <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        </span>
+        <p class="empty-title">Este curso no está disponible</p>
+        <p class="empty-text">Puede que ya no se ofrezca o que la dirección sea incorrecta.</p>
+        <a class="btn btn-secondary btn-sm" href="?view=catalog">Ir al catálogo</a>
+    </div>
+<?php else: ?>
+    <?php
+    $course = $publicCourse;
+    $mode = $course->pricingMode();
+    $levelCount = count($course->levels);
+    $examCount = $course->examCount();
+    $freeLevelsMissing = array_filter($course->levels, static fn (array $level): bool => $level['cost'] === '0.00' && !$courseAccess->hasLevel($level['id']));
+    $checkoutUrl = static fn (?string $levelId = null): string => '?view=checkout&course=' . rawurlencode($course->id) . ($levelId === null ? '' : '&level=' . rawurlencode($levelId));
+    ?>
+    <p class="breadcrumb"><a href="?view=catalog">Catálogo</a> / <?= e($course->title) ?></p>
+
+    <section class="course-hero">
+        <div class="course-hero-main">
+            <?php if ($course->categories !== []): ?>
+                <div class="course-tags">
+                    <?php foreach ($course->categories as $category): ?>
+                        <a class="badge" href="?view=catalog&amp;categoria=<?= e($category['id']) ?>"><?= e($category['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <h1 class="course-title"><?= e($course->title) ?></h1>
+            <p class="course-description"><?= nl2br(e($course->description)) ?></p>
+            <div class="course-instructor">
+                <img class="account-avatar" src="<?= e($course->instructorAvatar) ?>" alt="">
+                <span>Impartido por <strong><?= e($course->instructorName) ?></strong></span>
+            </div>
+            <p class="course-facts">
+                <?= $levelCount ?> nivel(es) · <?= $course->chapterCount() ?> capítulo(s)<?= $examCount > 0 ? ' · ' . $examCount . ' examen(es)' : '' ?>
+                <?php if ($course->durationSeconds() > 0): ?>
+                    · <?= e(format_duration($course->durationSeconds())) ?> de video
+                <?php endif; ?>
+                · Publicado el <?= e(format_date($course->publishedAt)) ?>
+            </p>
+        </div>
+
+        <aside class="course-buy panel" aria-label="Precio e inscripción">
+            <video class="course-promo" src="<?= e($course->promoVideo) ?>" poster="<?= e($course->coverImage) ?>" controls preload="metadata"></video>
+            <div class="course-buy-body">
+                <?php if ($mode === PricingMode::Free): ?>
+                    <p class="course-price">Gratis</p>
+                    <p class="text-muted">Todo el curso es gratuito, incluidos los niveles que se agreguen después.</p>
+                <?php elseif ($mode === PricingMode::Bundle): ?>
+                    <p class="course-price"><?= e(format_money($course->fullCoursePrice, $course->currency)) ?></p>
+                    <p class="text-muted">Curso completo, incluye los niveles que se agreguen después.</p>
+                    <?php if ($course->cheapestLevelCost() !== null): ?>
+                        <p class="text-muted">También por niveles, desde <?= e($course->cheapestLevelCost() === '0.00' ? 'gratis' : format_money($course->cheapestLevelCost(), $course->currency)) ?>.</p>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <p class="course-price"><?= e(course_price_label(null, $course->levelPriceTotal(), $course->currency)) ?></p>
+                    <p class="text-muted">Compra solo los niveles que quieras; cada uno tiene su precio en el temario.</p>
+                <?php endif; ?>
+                <div class="form-alert" role="alert" data-form-alert hidden></div>
+                <?php if ($courseAccess->hasAnyLevel()): ?>
+                    <a class="btn btn-primary btn-block" href="?view=learn&amp;course=<?= e($course->id) ?>">Ir al curso</a>
+                    <?php if ($mode === PricingMode::Bundle && !$courseAccess->ownsCourse && count($courseAccess->levelIds) < $levelCount && $isStudent): ?>
+                        <a class="btn btn-secondary btn-block" href="<?= e($checkoutUrl()) ?>">Comprar el curso completo</a>
+                    <?php endif; ?>
+                    <?php if ($freeLevelsMissing !== [] && $mode !== PricingMode::Free && $isStudent): ?>
+                        <button type="button" class="btn btn-ghost btn-block" data-enroll-free="<?= e($course->id) ?>">Obtener los niveles gratis</button>
+                    <?php endif; ?>
+                <?php elseif (!$isLoggedIn): ?>
+                    <a class="btn btn-primary btn-block" href="?view=login"><?= $mode === PricingMode::Free ? 'Inicia sesión para inscribirte gratis' : 'Inicia sesión para comprar' ?></a>
+                    <p class="form-hint">¿No tienes cuenta? <a href="?view=login#signup">Regístrate como alumno</a>.</p>
+                <?php elseif (!$isStudent): ?>
+                    <button type="button" class="btn btn-primary btn-block" disabled>Inscribirme</button>
+                    <p class="form-hint">Solo las cuentas de alumno pueden inscribirse y comprar cursos.</p>
+                <?php elseif ($mode === PricingMode::Free): ?>
+                    <button type="button" class="btn btn-primary btn-block" data-enroll-free="<?= e($course->id) ?>">Inscribirme gratis</button>
+                <?php else: ?>
+                    <?php if ($mode === PricingMode::Bundle): ?>
+                        <a class="btn btn-primary btn-block" href="<?= e($checkoutUrl()) ?>">Comprar el curso completo</a>
+                    <?php endif; ?>
+                    <?php if ($freeLevelsMissing !== []): ?>
+                        <button type="button" class="btn btn-<?= $mode === PricingMode::Bundle ? 'secondary' : 'primary' ?> btn-block" data-enroll-free="<?= e($course->id) ?>">Empezar con los niveles gratis</button>
+                    <?php endif; ?>
+                    <p class="form-hint">También puedes comprar un nivel a la vez desde el temario.</p>
+                <?php endif; ?>
+                <p class="form-hint">Pagos de prueba: PayPal Sandbox o tarjeta simulada. No se cobra dinero real.</p>
+            </div>
+        </aside>
+    </section>
+
+    <section class="panel" aria-labelledby="syllabus-title">
+        <div class="panel-header">
+            <div>
+                <h2 class="panel-title" id="syllabus-title">Temario</h2>
+                <p class="panel-description">El video de presentación de cada nivel es público; el resto del contenido es para los alumnos con acceso.</p>
+            </div>
+        </div>
+        <ol class="syllabus">
+            <?php foreach ($course->levels as $level): ?>
+                <li class="syllabus-level">
+                    <details>
+                        <summary>
+                            <span class="syllabus-level-title">Nivel <?= $level['sortOrder'] ?> · <?= e($level['title']) ?></span>
+                            <span class="syllabus-level-meta">
+                                <?= count($level['chapters']) ?> capítulo(s)
+                                <?php if ($level['durationSeconds'] > 0): ?>
+                                    · <?= e(format_duration($level['durationSeconds'])) ?>
+                                <?php endif; ?>
+                                <?php if ($mode !== PricingMode::Free): ?>
+                                    · <?= $level['cost'] === '0.00' ? 'Gratis' : e(format_money($level['cost'], $course->currency)) ?>
+                                <?php endif; ?>
+                            </span>
+                        </summary>
+                        <div class="syllabus-level-body">
+                            <video class="syllabus-video" src="<?= e($level['video']) ?>" controls preload="none"></video>
+                            <p class="text-muted"><?= nl2br(e($level['description'])) ?></p>
+                        </div>
+                    </details>
+                    <div class="syllabus-level-access">
+                        <?php if ($courseAccess->hasLevel($level['id'])): ?>
+                            <span class="badge badge-success">Tienes acceso</span>
+                        <?php elseif ($isStudent && $mode !== PricingMode::Free && $level['cost'] !== '0.00'): ?>
+                            <a class="btn btn-secondary btn-sm" href="<?= e($checkoutUrl($level['id'])) ?>">Comprar este nivel · <?= e(format_money($level['cost'], $course->currency)) ?></a>
+                        <?php endif; ?>
+                    </div>
+                    <ol class="syllabus-chapters">
+                        <?php foreach ($level['chapters'] as $chapter): ?>
+                            <li class="syllabus-chapter">
+                                <span class="badge<?= $chapter['isExam'] ? ' badge-exam' : '' ?>"><?= $chapter['isExam'] ? 'Examen' : 'Video' ?></span>
+                                <span class="syllabus-chapter-title"><?= $level['sortOrder'] ?>.<?= $chapter['sortOrder'] ?> <?= e($chapter['title']) ?></span>
+                                <span class="content-meta">
+                                    <?php if ($chapter['isExam']): ?>
+                                        <?= $chapter['questionCount'] ?> pregunta(s)
+                                    <?php elseif ($chapter['durationSeconds'] !== null): ?>
+                                        <?= e(format_duration($chapter['durationSeconds'])) ?>
+                                    <?php endif; ?>
+                                </span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ol>
+                </li>
+            <?php endforeach; ?>
+        </ol>
+    </section>
+
+    <section class="panel" aria-labelledby="instructor-title">
+        <div class="panel-header">
+            <h2 class="panel-title" id="instructor-title">Sobre el instructor</h2>
+        </div>
+        <div class="panel-body course-instructor-card">
+            <img class="course-instructor-avatar" src="<?= e($course->instructorAvatar) ?>" alt="">
+            <div>
+                <p class="course-instructor-name"><?= e($course->instructorName) ?></p>
+                <p class="text-muted"><?= $course->instructorDescription !== null ? nl2br(e($course->instructorDescription)) : 'Instructor en Cursology.' ?></p>
+            </div>
+        </div>
+    </section>
+<?php endif; ?>

@@ -1,0 +1,192 @@
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Administración</h1>
+        <p class="page-subtitle">Usuarios, catálogos, moderación y reportes de la plataforma.</p>
+    </div>
+</div>
+
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
+<?php
+/** @var list<\App\Models\Dto\LockedAccount> $lockedAccounts */
+$previewMessage = 'Las categorías, las formas de pago y la reactivación de cuentas ya funcionan. Reportes y moderación se conectarán en las siguientes entregas.';
+require BASE_PATH . '/app/views/base/html/preview-notice.html';
+?>
+
+<div class="stat-grid">
+    <div class="stat">
+        <p class="stat-label">Alumnos activos</p>
+        <p class="stat-value">—</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Instructores activos</p>
+        <p class="stat-value">—</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Cursos publicados</p>
+        <p class="stat-value">—</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Cuentas bloqueadas</p>
+        <p class="stat-value"><?= count($lockedAccounts) ?></p>
+    </div>
+</div>
+
+<section class="panel" aria-labelledby="admin-locked-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="admin-locked-title">Cuentas bloqueadas</h2>
+            <p class="panel-description">Se bloquean tras 3 contraseñas incorrectas consecutivas. Al reactivarla, la cuenta vuelve a entrar con su misma contraseña.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Usuario</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Rol</th>
+                    <th scope="col">Bloqueada desde</th>
+                    <th scope="col">Último intento</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($lockedAccounts as $account): ?>
+                    <tr>
+                        <td>
+                            <div class="account-cell">
+                                <img class="account-avatar" src="<?= e($account->avatar) ?>" alt="" loading="lazy">
+                                <span><?= e($account->email) ?></span>
+                            </div>
+                        </td>
+                        <td><?= e($account->fullName()) ?></td>
+                        <td>
+                            <?= e(role_label($account->role)) ?>
+                            <?php if ($account->banned): ?>
+                                <span class="badge badge-danger">Con ban</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e(format_date($account->lockedAt)) ?></td>
+                        <td><?= e(format_date($account->lastAttemptAt)) ?></td>
+                        <td>
+                            <div class="table-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" data-unlock="<?= e($account->id) ?>" data-name="<?= e($account->fullName()) ?>">Reactivar</button>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($lockedAccounts === []): ?>
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <span class="empty-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                </span>
+                                <p class="empty-title">No hay cuentas bloqueadas</p>
+                                <p class="empty-text">Las cuentas que se bloqueen aparecerán aquí con la opción de reactivarlas.</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel" aria-labelledby="admin-reports-title" data-tabs>
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="admin-reports-title">Reportes</h2>
+            <p class="panel-description">Solo cuentas activas y sin ban.</p>
+        </div>
+        <div class="segmented" role="tablist" aria-label="Tipo de reporte">
+            <button type="button" role="tab" id="report-tab-instructors" aria-controls="report-instructors" aria-selected="true">Instructores</button>
+            <button type="button" role="tab" id="report-tab-students" aria-controls="report-students" aria-selected="false" tabindex="-1">Alumnos</button>
+        </div>
+    </div>
+
+    <div class="table-wrap" id="report-instructors" role="tabpanel" aria-labelledby="report-tab-instructors">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Usuario</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Fecha de ingreso</th>
+                    <th scope="col" class="num">Cursos</th>
+                    <th scope="col" class="num">Ganancias</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="5">
+                        <div class="empty-state">
+                            <p class="empty-title">Sin instructores registrados</p>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="table-wrap" id="report-students" role="tabpanel" aria-labelledby="report-tab-students" hidden>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Usuario</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Fecha de ingreso</th>
+                    <th scope="col" class="num">Cursos inscritos</th>
+                    <th scope="col" class="num">% terminados</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="5">
+                        <div class="empty-state">
+                            <p class="empty-title">Sin alumnos registrados</p>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<div class="grid-2">
+    <section class="panel" aria-labelledby="admin-catalogs-title">
+        <div class="panel-header">
+            <div>
+                <h2 class="panel-title" id="admin-catalogs-title">Catálogos</h2>
+                <p class="panel-description">Lo que instructores y alumnos pueden elegir.</p>
+            </div>
+        </div>
+        <ul class="list">
+            <li>
+                <span>Categorías</span>
+                <a class="btn btn-secondary btn-sm" href="?view=categories">Administrar</a>
+            </li>
+            <li>
+                <span>Formas de pago</span>
+                <a class="btn btn-secondary btn-sm" href="?view=payment-methods">Administrar</a>
+            </li>
+            <li>
+                <span>Reacciones</span>
+                <button type="button" class="btn btn-secondary btn-sm" disabled>Administrar</button>
+            </li>
+        </ul>
+    </section>
+
+    <section class="panel" aria-labelledby="admin-moderation-title">
+        <div class="panel-header">
+            <h2 class="panel-title" id="admin-moderation-title">Moderación</h2>
+        </div>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </span>
+            <p class="empty-title">Nada pendiente</p>
+            <p class="empty-text">Desde aquí podrás dar de baja comentarios y opiniones; se mostrarán como “Comentario eliminado”.</p>
+        </div>
+    </section>
+</div>

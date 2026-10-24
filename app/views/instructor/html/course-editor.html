@@ -1,0 +1,360 @@
+<?php
+/** @var \App\Models\Dto\CourseOutline $outline */
+use App\Services\PricingMode;
+
+$course = $outline->course;
+$formCourse = $course;
+$selectedCategoryIds = $outline->categoryIds;
+$chapterTotal = $outline->chapterCount();
+$pricingMode = $outline->pricingMode();
+$pricingLocked = $outline->pricingLocked();
+$pricedLevelCount = count(array_filter($outline->levels, static fn ($level): bool => $level->cost() !== '0.00'));
+$levelPriceTotal = format_money($outline->levelPriceTotal(), $course->currency());
+$checklist = \App\Models\Dto\PublishChecklist::for($outline);
+$isPublished = $course->publishedAt() !== null;
+
+// Tipos de recurso que acepta CourseValidator, con lo que necesita el campo de subida.
+$resourceKinds = [
+    'documento' => ['label' => 'Documento', 'purpose' => 'chapter_document', 'accept' => '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', 'hint' => 'PDF, Word, PowerPoint, Excel o TXT, máximo 10 MB.'],
+    'imagen' => ['label' => 'Imagen', 'purpose' => 'chapter_image', 'accept' => 'image/png,image/jpeg,image/webp,image/gif', 'hint' => 'JPG, PNG, WEBP o GIF, máximo 10 MB.'],
+    'audio' => ['label' => 'Audio', 'purpose' => 'chapter_audio', 'accept' => '.mp3,.wav,.m4a,.ogg,audio/*', 'hint' => 'MP3, WAV, M4A u OGG, máximo 50 MB.'],
+    'archivo' => ['label' => 'Archivo comprimido', 'purpose' => 'chapter_archive', 'accept' => '.zip,.rar,.7z', 'hint' => 'ZIP, RAR o 7Z, máximo 10 MB.'],
+    'enlace' => ['label' => 'Enlace', 'purpose' => null],
+    'texto' => ['label' => 'Texto', 'purpose' => null],
+];
+$typeLabels = ['video' => 'Video', 'document' => 'Documento', 'image' => 'Imagen', 'audio' => 'Audio', 'archive' => 'Archivo', 'link' => 'Enlace', 'text' => 'Texto', 'other' => 'Otro'];
+?>
+<div class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="?view=dashboard">Mis cursos</a> / Editar</p>
+        <h1 class="page-title"><?= e($course->title()) ?></h1>
+        <p class="page-subtitle">
+            <?php if (!$course->active()): ?>
+                <span class="badge badge-warning">Dado de baja</span>
+            <?php elseif ($isPublished): ?>
+                <span class="badge badge-success">Publicado</span>
+            <?php else: ?>
+                <span class="badge">Borrador</span>
+            <?php endif; ?>
+            <?= count($outline->levels) ?> nivel(es) · <?= $chapterTotal ?> capítulo(s) · actualizado el <?= e(format_date($course->updatedAt())) ?>
+        </p>
+    </div>
+    <div class="page-actions">
+        <?php if ($isPublished && $course->active()): ?>
+            <a class="btn btn-ghost" href="?view=course&amp;id=<?= e($course->id()) ?>" target="_blank" rel="noopener">Ver página pública</a>
+        <?php endif; ?>
+        <a class="btn btn-secondary" href="?view=dashboard">Volver al panel</a>
+    </div>
+</div>
+
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
+<?php
+$previewMessage = 'Los exámenes por capítulo llegan en la siguiente entrega; por ahora los capítulos son de video.';
+require BASE_PATH . '/app/views/base/html/preview-notice.html';
+?>
+
+<section class="panel" id="course-publish" aria-labelledby="course-publish-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="course-publish-title">Publicación</h2>
+            <p class="panel-description">
+                <?php if (!$course->active()): ?>
+                    Dado de baja el <?= e(format_date($course->deactivatedAt())) ?>: ya no se ofrece en el catálogo, pero sus alumnos conservan el acceso.
+                <?php elseif ($isPublished): ?>
+                    Publicado el <?= e(format_date($course->publishedAt())) ?>. Puedes seguir editándolo; la lista queda como aviso.
+                <?php elseif ($checklist->ready()): ?>
+                    Todo listo: al publicarlo, los alumnos podrán encontrarlo e inscribirse.
+                <?php else: ?>
+                    Borrador: solo tú lo ves. Te falta <?= $checklist->pendingCount() ?> requisito(s) para publicarlo.
+                <?php endif; ?>
+            </p>
+        </div>
+        <div class="page-actions">
+            <?php if (!$course->active()): ?>
+                <button type="button" class="btn btn-primary" data-course-action="reactivar">Reactivar</button>
+            <?php elseif ($isPublished): ?>
+                <?php if ($outline->studentCount === 0): ?>
+                    <button type="button" class="btn btn-ghost" data-course-action="borrador">Volver a borrador</button>
+                <?php endif; ?>
+                <button type="button" class="btn btn-danger" data-course-action="baja">Dar de baja</button>
+            <?php else: ?>
+                <button type="button" class="btn btn-primary" data-course-action="publicar"<?= $checklist->ready() ? '' : ' disabled' ?>>Publicar curso</button>
+            <?php endif; ?>
+        </div>
+    </div>
+    <ul class="checklist">
+        <?php foreach ($checklist->items as $item): ?>
+            <li class="checklist-item <?= $item['ok'] ? 'is-ok' : 'is-pending' ?>" data-check="<?= e($item['key']) ?>">
+                <span class="checklist-mark" aria-hidden="true"><?= $item['ok'] ? '✓' : '!' ?></span>
+                <span>
+                    <span class="checklist-label"><?= e($item['label']) ?></span>
+                    <span class="visually-hidden"><?= $item['ok'] ? '(listo)' : '(pendiente)' ?></span>
+                    <?php if ($item['detail'] !== null): ?>
+                        <span class="checklist-detail"><?= e($item['detail']) ?></span>
+                    <?php endif; ?>
+                </span>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+
+<section class="panel" id="course-info" aria-labelledby="course-info-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="course-info-title">Información del curso</h2>
+            <p class="panel-description">Portada, video promocional, categorías y precio. Si no eliges archivos nuevos se conservan los actuales.</p>
+        </div>
+    </div>
+    <?php require __DIR__ . '/course-form.html'; ?>
+</section>
+
+<section class="panel" id="course-levels" data-course-id="<?= e($course->id()) ?>" aria-labelledby="course-levels-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="course-levels-title">Niveles y capítulos</h2>
+            <p class="panel-description">
+                <?php if ($pricingMode === PricingMode::Free): ?>
+                    Curso gratis: los niveles no llevan precio.
+                <?php elseif ($pricingMode === PricingMode::Levels): ?>
+                    Cada nivel se vende por separado. Suma de los niveles: <?= e($levelPriceTotal) ?>.
+                <?php else: ?>
+                    Curso completo: <?= e(format_money($course->fullCoursePrice(), $course->currency())) ?>. Cada nivel también se vende por separado (suma: <?= e($levelPriceTotal) ?>).
+                <?php endif; ?>
+                Cada capítulo lleva un video principal y recursos opcionales.
+            </p>
+        </div>
+    </div>
+
+    <?php if ($outline->bundleExceedsLevels()): ?>
+        <div class="notice notice-warning" role="note">
+            <p>El curso completo (<?= e(format_money($course->fullCoursePrice(), $course->currency())) ?>) cuesta más que comprar todos los niveles por separado (<?= e($levelPriceTotal) ?>). Nadie elegiría el paquete: revisa los precios.</p>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($outline->levels === []): ?>
+        <div class="empty-state">
+            <p class="empty-title">Aún no hay niveles</p>
+            <p class="empty-text">Agrega el primero con el formulario de abajo; después podrás crear sus capítulos.</p>
+        </div>
+    <?php endif; ?>
+
+    <?php foreach ($outline->levels as $levelIndex => $level): ?>
+        <?php $chapters = $outline->chapters($level->id()); ?>
+        <article class="level" id="level-<?= e($level->id()) ?>">
+            <header class="level-header">
+                <div>
+                    <p class="level-number">Nivel <?= $level->sortOrder() ?></p>
+                    <h3 class="level-title"><?= e($level->title()) ?></h3>
+                    <p class="level-meta">
+                        <?= $level->cost() === '0.00' ? 'Gratis' : e(format_money($level->cost(), $course->currency())) ?>
+                        · <?= count($chapters) ?> capítulo(s)
+                    </p>
+                </div>
+                <div class="table-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" data-move="level" data-id="<?= e($level->id()) ?>" data-direction="arriba" aria-label="Subir el nivel <?= e($level->title()) ?>"<?= $levelIndex === 0 ? ' disabled' : '' ?>>Subir</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-move="level" data-id="<?= e($level->id()) ?>" data-direction="abajo" aria-label="Bajar el nivel <?= e($level->title()) ?>"<?= $levelIndex === count($outline->levels) - 1 ? ' disabled' : '' ?>>Bajar</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-toggle="level-edit-<?= e($level->id()) ?>">Editar</button>
+                    <button type="button" class="btn btn-danger btn-sm" data-delete="level" data-id="<?= e($level->id()) ?>" data-title="<?= e($level->title()) ?>">Eliminar</button>
+                </div>
+            </header>
+
+            <div class="level-intro">
+                <video class="level-video" src="<?= e($level->onboardingVideo()) ?>" controls preload="metadata"></video>
+                <p class="level-description"><?= nl2br(e($level->description())) ?></p>
+            </div>
+
+            <form class="level-form" id="level-edit-<?= e($level->id()) ?>" data-level-form data-level-id="<?= e($level->id()) ?>" hidden novalidate>
+                <?php
+                $levelFormLevel = $level;
+                require __DIR__ . '/level-fields.html';
+                ?>
+            </form>
+
+            <div class="chapters">
+                <?php foreach ($chapters as $chapterIndex => $chapter): ?>
+                    <?php
+                    $main = $outline->mainVideo($chapter->id());
+                    $resources = $outline->resources($chapter->id());
+                    ?>
+                    <div class="chapter" id="chapter-<?= e($chapter->id()) ?>">
+                        <div class="chapter-header">
+                            <span class="chapter-number"><?= $level->sortOrder() ?>.<?= $chapter->sortOrder() ?></span>
+                            <strong class="chapter-title"><?= e($chapter->title()) ?></strong>
+                            <?php if ($chapter->isTest()): ?>
+                                <span class="badge badge-exam">Examen · aprueba con <?= e($chapter->minimumPassingGrade()) ?></span>
+                                <?php if ($outline->questions($chapter->id()) === []): ?>
+                                    <span class="badge badge-warning">Sin preguntas</span>
+                                <?php endif; ?>
+                            <?php elseif ($main !== null): ?>
+                                <span class="badge badge-success">Con video</span>
+                            <?php else: ?>
+                                <span class="badge badge-warning">Falta el video</span>
+                            <?php endif; ?>
+                            <div class="table-actions">
+                                <button type="button" class="btn btn-ghost btn-sm" data-move="chapter" data-id="<?= e($chapter->id()) ?>" data-direction="arriba" aria-label="Subir el capítulo <?= e($chapter->title()) ?>"<?= $chapterIndex === 0 ? ' disabled' : '' ?>>Subir</button>
+                                <button type="button" class="btn btn-ghost btn-sm" data-move="chapter" data-id="<?= e($chapter->id()) ?>" data-direction="abajo" aria-label="Bajar el capítulo <?= e($chapter->title()) ?>"<?= $chapterIndex === count($chapters) - 1 ? ' disabled' : '' ?>>Bajar</button>
+                                <button type="button" class="btn btn-ghost btn-sm" data-toggle="chapter-rename-<?= e($chapter->id()) ?>">Renombrar</button>
+                                <button type="button" class="btn btn-danger btn-sm" data-delete="chapter" data-id="<?= e($chapter->id()) ?>" data-title="<?= e($chapter->title()) ?>">Eliminar</button>
+                            </div>
+                        </div>
+
+                        <form class="inline-row" id="chapter-rename-<?= e($chapter->id()) ?>" data-chapter-form data-chapter-id="<?= e($chapter->id()) ?>" hidden novalidate>
+                            <div class="form-alert" role="alert" data-form-alert hidden></div>
+                            <div class="form-field">
+                                <label class="visually-hidden" for="chapter-titulo-<?= e($chapter->id()) ?>">Título del capítulo</label>
+                                <input class="form-control" type="text" id="chapter-titulo-<?= e($chapter->id()) ?>" name="titulo" maxlength="200" value="<?= e($chapter->title()) ?>">
+                                <p class="field-error" aria-live="polite"></p>
+                            </div>
+                            <?php if ($chapter->isTest()): ?>
+                                <div class="form-field chapter-grade-field">
+                                    <label class="visually-hidden" for="chapter-minimo-<?= e($chapter->id()) ?>">Calificación mínima para aprobar</label>
+                                    <input class="form-control" type="text" inputmode="decimal" id="chapter-minimo-<?= e($chapter->id()) ?>" name="minimo" value="<?= e($chapter->minimumPassingGrade()) ?>" title="Calificación mínima para aprobar (1 a 100)">
+                                    <p class="field-error" aria-live="polite"></p>
+                                </div>
+                            <?php endif; ?>
+                            <div class="inline-row-actions">
+                                <button type="button" class="btn btn-ghost btn-sm" data-toggle="chapter-rename-<?= e($chapter->id()) ?>">Cancelar</button>
+                                <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                            </div>
+                        </form>
+
+                        <?php if ($chapter->isTest()): ?>
+                            <?php require __DIR__ . '/exam-chapter.html'; ?>
+                        <?php else: ?>
+                        <div class="chapter-body">
+                            <div class="chapter-section">
+                                <p class="chapter-section-title">Video principal</p>
+                                <?php if ($main !== null): ?>
+                                    <div class="content-item">
+                                        <span class="badge">Video</span>
+                                        <a class="content-name" href="<?= e($courseService->viewUrl($main)) ?>" target="_blank" rel="noopener"><?= e($main->title()) ?></a>
+                                        <span class="content-meta"><?= e(format_duration($main->durationSeconds())) ?> · <?= e(format_bytes($main->sizeBytes())) ?></span>
+                                        <button type="button" class="btn btn-ghost btn-sm" data-delete="content" data-id="<?= e($main->id()) ?>" data-title="<?= e($main->title()) ?>" data-anchor="chapter-<?= e($chapter->id()) ?>">Quitar</button>
+                                    </div>
+                                <?php else: ?>
+                                    <?php
+                                    $upload = [
+                                        'purpose' => 'chapter_video', 'name' => 'archivo', 'id' => 'main-video-' . $chapter->id(),
+                                        'accept' => 'video/mp4,video/webm,video/quicktime', 'button' => 'Subir video',
+                                        'hint' => 'MP4, WEBM o MOV, máximo 100 MB. Se guarda al terminar de subir; solo lo verán los alumnos inscritos.',
+                                        'preview' => null,
+                                        'attrs' => 'data-main-video="' . e($chapter->id()) . '"',
+                                    ];
+                                    require BASE_PATH . '/app/views/base/html/upload-field.html';
+                                    ?>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="chapter-section">
+                                <p class="chapter-section-title">Recursos</p>
+                                <?php if ($resources === []): ?>
+                                    <p class="content-empty">Sin recursos.</p>
+                                <?php else: ?>
+                                    <ul class="content-list">
+                                        <?php foreach ($resources as $resource): ?>
+                                            <?php $resourceUrl = $courseService->viewUrl($resource); ?>
+                                            <li class="content-item">
+                                                <span class="badge"><?= e($typeLabels[$resource->contentType()->value]) ?></span>
+                                                <?php if ($resourceUrl !== null): ?>
+                                                    <a class="content-name" href="<?= e($resourceUrl) ?>" target="_blank" rel="noopener"><?= e($resource->title()) ?></a>
+                                                <?php else: ?>
+                                                    <details class="content-name">
+                                                        <summary><?= e($resource->title()) ?></summary>
+                                                        <p class="content-text"><?= nl2br(e($resource->textContent())) ?></p>
+                                                    </details>
+                                                <?php endif; ?>
+                                                <?php if ($resource->sizeBytes() !== null): ?>
+                                                    <span class="content-meta"><?= e(format_bytes($resource->sizeBytes())) ?></span>
+                                                <?php endif; ?>
+                                                <button type="button" class="btn btn-ghost btn-sm" data-delete="content" data-id="<?= e($resource->id()) ?>" data-title="<?= e($resource->title()) ?>" data-anchor="chapter-<?= e($chapter->id()) ?>">Quitar</button>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+
+                                <form class="resource-form" data-resource-form data-chapter-id="<?= e($chapter->id()) ?>" novalidate>
+                                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+                                    <div class="form-row">
+                                        <div class="form-field">
+                                            <label class="form-label" for="resource-tipo-<?= e($chapter->id()) ?>">Tipo</label>
+                                            <select class="form-control" id="resource-tipo-<?= e($chapter->id()) ?>" name="tipo" data-resource-type>
+                                                <?php foreach ($resourceKinds as $kind => $info): ?>
+                                                    <option value="<?= e($kind) ?>"<?php if ($info['purpose'] !== null): ?> data-purpose="<?= e($info['purpose']) ?>" data-accept="<?= e($info['accept']) ?>" data-hint="<?= e($info['hint']) ?>"<?php endif; ?>><?= e($info['label']) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <p class="field-error" aria-live="polite"></p>
+                                        </div>
+                                        <div class="form-field">
+                                            <label class="form-label" for="resource-titulo-<?= e($chapter->id()) ?>">Título <span class="optional" data-title-optional>(opcional: se usa el nombre del archivo)</span></label>
+                                            <input class="form-control" type="text" id="resource-titulo-<?= e($chapter->id()) ?>" name="titulo" maxlength="200">
+                                            <p class="field-error" aria-live="polite"></p>
+                                        </div>
+                                    </div>
+                                    <div class="form-field" data-resource-section="file">
+                                        <?php
+                                        $upload = [
+                                            'purpose' => $resourceKinds['documento']['purpose'], 'name' => 'archivo', 'id' => 'resource-archivo-' . $chapter->id(),
+                                            'accept' => $resourceKinds['documento']['accept'], 'button' => 'Elegir archivo',
+                                            'hint' => $resourceKinds['documento']['hint'], 'preview' => null,
+                                        ];
+                                        require BASE_PATH . '/app/views/base/html/upload-field.html';
+                                        ?>
+                                        <p class="field-error" aria-live="polite"></p>
+                                    </div>
+                                    <div class="form-field" data-resource-section="enlace" hidden>
+                                        <label class="form-label" for="resource-url-<?= e($chapter->id()) ?>">Dirección del enlace</label>
+                                        <input class="form-control" type="url" id="resource-url-<?= e($chapter->id()) ?>" name="url" maxlength="2048" placeholder="https://">
+                                        <p class="field-error" aria-live="polite"></p>
+                                    </div>
+                                    <div class="form-field" data-resource-section="texto" hidden>
+                                        <label class="form-label" for="resource-texto-<?= e($chapter->id()) ?>">Texto</label>
+                                        <textarea class="form-control" id="resource-texto-<?= e($chapter->id()) ?>" name="texto" rows="4" maxlength="20000"></textarea>
+                                        <p class="field-error" aria-live="polite"></p>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-secondary btn-sm">Agregar recurso</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+
+                <form class="chapter-add" data-chapter-add data-level-id="<?= e($level->id()) ?>" novalidate>
+                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+                    <div class="form-field chapter-add-title">
+                        <label class="visually-hidden" for="chapter-new-<?= e($level->id()) ?>">Título del nuevo capítulo</label>
+                        <input class="form-control" type="text" id="chapter-new-<?= e($level->id()) ?>" name="titulo" maxlength="200" placeholder="Título del nuevo capítulo">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field">
+                        <label class="visually-hidden" for="chapter-tipo-<?= e($level->id()) ?>">Tipo de capítulo</label>
+                        <select class="form-control" id="chapter-tipo-<?= e($level->id()) ?>" name="tipo" data-chapter-type>
+                            <option value="video">Video</option>
+                            <option value="examen">Examen</option>
+                        </select>
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field" data-chapter-grade hidden>
+                        <label class="visually-hidden" for="chapter-minimo-new-<?= e($level->id()) ?>">Calificación mínima para aprobar</label>
+                        <input class="form-control" type="text" inputmode="decimal" id="chapter-minimo-new-<?= e($level->id()) ?>" name="minimo" value="70" placeholder="Mínimo para aprobar" title="Calificación mínima para aprobar (1 a 100)">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="inline-row-actions">
+                        <button type="submit" class="btn btn-secondary btn-sm">Agregar capítulo</button>
+                    </div>
+                </form>
+            </div>
+        </article>
+    <?php endforeach; ?>
+
+    <form class="panel-body level-form level-add" id="level-add" data-level-form novalidate>
+        <h3 class="level-add-title">Agregar nivel</h3>
+        <?php
+        $levelFormLevel = null;
+        require __DIR__ . '/level-fields.html';
+        ?>
+    </form>
+</section>

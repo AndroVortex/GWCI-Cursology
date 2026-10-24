@@ -1,0 +1,165 @@
+<section class="auth">
+    <div class="auth-card">
+        <div class="auth-body">
+            <div class="auth-tabs" role="tablist" aria-label="Acceso a Cursology">
+                <button type="button" class="auth-tab" role="tab" id="tab-login" aria-controls="panel-login" aria-selected="true" data-auth-tab="login">Iniciar sesión</button>
+                <button type="button" class="auth-tab" role="tab" id="tab-signup" aria-controls="panel-signup" aria-selected="false" tabindex="-1" data-auth-tab="signup">Crear cuenta</button>
+            </div>
+
+            <!-- ============ Login ============ -->
+            <div id="panel-login" role="tabpanel" aria-labelledby="tab-login" data-auth-panel="login">
+                <h1 class="auth-title">Bienvenido de vuelta</h1>
+                <p class="auth-subtitle">Inicia sesión para continuar aprendiendo.</p>
+
+                <form class="auth-form" id="login-form" method="post" action="api/auth/login" novalidate>
+                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+
+                    <div class="form-field">
+                        <label class="form-label" for="login-email">Email</label>
+                        <input class="form-control" type="email" id="login-email" name="email" autocomplete="email" maxlength="254" placeholder="tu@email.com" aria-describedby="login-email-error">
+                        <p class="field-error" id="login-email-error" aria-live="polite"></p>
+                    </div>
+
+                    <div class="form-field">
+                        <label class="form-label" for="login-password">Contraseña</label>
+                        <div class="input-group">
+                            <input class="form-control" type="password" id="login-password" name="password" autocomplete="current-password" placeholder="Tu contraseña" aria-describedby="login-password-error">
+                            <button type="button" class="input-addon password-toggle" aria-controls="login-password" aria-pressed="false" aria-label="Mostrar contraseña" data-password-toggle>
+                                <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+                            </button>
+                        </div>
+                        <p class="field-error" id="login-password-error" aria-live="polite"></p>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">Iniciar sesión</button>
+                </form>
+
+                <p class="auth-switch">¿No tienes cuenta? <a href="#signup" data-auth-tab="signup">Regístrate</a></p>
+            </div>
+
+            <!-- ============ Sign-up ============ -->
+            <div id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" data-auth-panel="signup" hidden>
+                <h1 class="auth-title">Crea tu cuenta</h1>
+                <p class="auth-subtitle">Es gratis y solo toma un minuto.</p>
+
+                <form class="auth-form" id="signup-form" method="post" action="api/auth/register" enctype="multipart/form-data" novalidate>
+                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+
+                    <fieldset class="form-field role-field" id="signup-rol" aria-describedby="signup-rol-error">
+                        <legend class="form-label">¿Cómo quieres usar Cursology?</legend>
+                        <div class="role-options">
+                            <label class="role-option">
+                                <input class="visually-hidden" type="radio" name="rol" value="student" checked>
+                                <span class="role-option-body">
+                                    <span class="role-option-icon" aria-hidden="true">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>
+                                    </span>
+                                    <span class="role-option-title">Quiero aprender</span>
+                                    <span class="role-option-text">Inscríbete a cursos y avanza a tu ritmo.</span>
+                                </span>
+                            </label>
+                            <label class="role-option">
+                                <input class="visually-hidden" type="radio" name="rol" value="instructor">
+                                <span class="role-option-body">
+                                    <span class="role-option-icon" aria-hidden="true">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>
+                                    </span>
+                                    <span class="role-option-title">Quiero enseñar</span>
+                                    <span class="role-option-text">Crea y publica tus propios cursos.</span>
+                                </span>
+                            </label>
+                        </div>
+                        <p class="field-error" id="signup-rol-error" aria-live="polite"></p>
+                    </fieldset>
+
+                    <div class="form-field">
+                        <span class="form-label">Foto de perfil <span class="optional">(opcional)</span></span>
+                        <div class="avatar-upload">
+                            <div class="avatar-preview" id="signup-photo-preview">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                            </div>
+                            <div class="avatar-upload-body">
+                                <div class="avatar-upload-actions">
+                                    <input class="visually-hidden" type="file" id="signup-photo" name="foto" accept="image/png, image/jpeg, image/webp" aria-describedby="signup-photo-hint signup-photo-error">
+                                    <label class="btn btn-ghost btn-sm" for="signup-photo">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M20 16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/></svg>
+                                        Subir foto
+                                    </label>
+                                    <button type="button" class="btn btn-ghost btn-sm" id="signup-photo-remove" hidden>Quitar</button>
+                                </div>
+                                <p class="form-hint" id="signup-photo-hint">JPG, PNG o WEBP, máximo 5 MB. Si no subes una, usaremos una imagen por defecto.</p>
+                                <p class="field-error" id="signup-photo-error" aria-live="polite"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-field">
+                        <label class="form-label" for="signup-nombre">Nombre</label>
+                        <input class="form-control" type="text" id="signup-nombre" name="nombre" autocomplete="given-name" maxlength="100" placeholder="Tu nombre" aria-describedby="signup-nombre-error">
+                        <p class="field-error" id="signup-nombre-error" aria-live="polite"></p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label class="form-label" for="signup-apellido-paterno">Apellido paterno</label>
+                            <input class="form-control" type="text" id="signup-apellido-paterno" name="apellido_paterno" autocomplete="family-name" maxlength="100" placeholder="Apellido paterno" aria-describedby="signup-apellido-paterno-error">
+                            <p class="field-error" id="signup-apellido-paterno-error" aria-live="polite"></p>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label" for="signup-apellido-materno">Apellido materno <span class="optional">(opcional)</span></label>
+                            <input class="form-control" type="text" id="signup-apellido-materno" name="apellido_materno" maxlength="100" placeholder="Apellido materno" aria-describedby="signup-apellido-materno-error">
+                            <p class="field-error" id="signup-apellido-materno-error" aria-live="polite"></p>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label class="form-label" for="signup-genero">Género</label>
+                            <select class="form-control" id="signup-genero" name="genero" aria-describedby="signup-genero-error">
+                                <option value="" selected disabled>Selecciona una opción</option>
+                                <option value="masculino">Masculino</option>
+                                <option value="femenino">Femenino</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                            <p class="field-error" id="signup-genero-error" aria-live="polite"></p>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label" for="signup-fecha-nacimiento">Fecha de nacimiento</label>
+                            <input class="form-control" type="date" id="signup-fecha-nacimiento" name="fecha_nacimiento" autocomplete="bday" aria-describedby="signup-fecha-nacimiento-error">
+                            <p class="field-error" id="signup-fecha-nacimiento-error" aria-live="polite"></p>
+                        </div>
+                    </div>
+
+                    <div class="form-field">
+                        <label class="form-label" for="signup-email">Email</label>
+                        <input class="form-control" type="email" id="signup-email" name="email" autocomplete="email" maxlength="254" placeholder="tu@email.com" aria-describedby="signup-email-error">
+                        <p class="field-error" id="signup-email-error" aria-live="polite"></p>
+                    </div>
+
+                    <div class="form-field">
+                        <label class="form-label" for="signup-password">Contraseña</label>
+                        <div class="input-group">
+                            <input class="form-control" type="password" id="signup-password" name="password" autocomplete="new-password" placeholder="Crea una contraseña" aria-describedby="signup-password-rules signup-password-error">
+                            <button type="button" class="input-addon password-toggle" aria-controls="signup-password" aria-pressed="false" aria-label="Mostrar contraseña" data-password-toggle>
+                                <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+                            </button>
+                        </div>
+                        <ul class="password-rules" id="signup-password-rules">
+                            <li data-rule="length">Mínimo 8 caracteres</li>
+                            <li data-rule="upper">Al menos 1 letra mayúscula</li>
+                            <li data-rule="number">Al menos 1 número</li>
+                            <li data-rule="special">Al menos 1 carácter especial</li>
+                        </ul>
+                        <p class="field-error" id="signup-password-error" aria-live="polite"></p>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">Crear cuenta</button>
+                </form>
+
+                <p class="auth-switch">¿Ya tienes cuenta? <a href="#login" data-auth-tab="login">Inicia sesión</a></p>
+            </div>
+        </div>
+    </div>
+</section>

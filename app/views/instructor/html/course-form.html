@@ -1,0 +1,121 @@
+<?php
+/*
+ * Datos generales del curso; lo comparten "Nuevo curso" y el editor.
+ * Requiere $formCourse (Course o null si es nuevo), $selectedCategoryIds y $activeCategories.
+ * Opcionales (editor): $pricingLocked (ya tiene alumnos) y $pricedLevelCount (niveles con precio).
+ */
+use App\Services\PricingMode;
+
+$isNewCourse = $formCourse === null;
+$price = $formCourse?->fullCoursePrice();
+$pricingMode = PricingMode::fromFullCoursePrice($price);
+$pricingLocked ??= false;
+$pricedLevelCount ??= 0;
+$pricingHelp = [
+    PricingMode::Free->value => 'Todo el curso es gratuito, incluidos los niveles que agregues después. Los niveles no llevan precio.',
+    PricingMode::Levels->value => 'Cada nivel tiene su precio y el alumno compra los que quiera. Puedes dejar alguno en $0 como muestra.',
+    PricingMode::Bundle->value => 'Un precio por todo el curso, que incluye los niveles que agregues después. Cada nivel también se vende por separado.',
+];
+?>
+<form class="panel-body course-form" id="course-form" data-course-id="<?= e($formCourse?->id()) ?>" novalidate>
+    <div class="form-alert" role="alert" data-form-alert hidden></div>
+
+    <div class="form-field">
+        <label class="form-label" for="course-titulo">Título</label>
+        <input class="form-control" type="text" id="course-titulo" name="titulo" maxlength="200" placeholder="p. ej. PHP desde cero" value="<?= e($formCourse?->title()) ?>">
+        <p class="field-error" aria-live="polite"></p>
+    </div>
+
+    <div class="form-field">
+        <label class="form-label" for="course-descripcion">Descripción</label>
+        <textarea class="form-control" id="course-descripcion" name="descripcion" rows="5" maxlength="5000" placeholder="Qué aprenderán tus alumnos y a quién va dirigido."><?= e($formCourse?->description()) ?></textarea>
+        <p class="field-error" aria-live="polite"></p>
+    </div>
+
+    <div class="form-row">
+        <div class="form-field">
+            <span class="form-label">Portada</span>
+            <?php
+            $upload = [
+                'purpose' => 'course_cover', 'name' => 'portada', 'id' => 'course-portada',
+                'accept' => 'image/png,image/jpeg,image/webp',
+                'button' => $isNewCourse ? 'Elegir imagen' : 'Cambiar portada',
+                'hint' => 'JPG, PNG o WEBP, máximo 5 MB.',
+                'preview' => $isNewCourse ? null : ['type' => 'image', 'src' => $formCourse->coverImage()],
+            ];
+            require BASE_PATH . '/app/views/base/html/upload-field.html';
+            ?>
+            <p class="field-error" aria-live="polite"></p>
+        </div>
+        <div class="form-field">
+            <span class="form-label">Video promocional</span>
+            <?php
+            $upload = [
+                'purpose' => 'course_video', 'name' => 'video', 'id' => 'course-video',
+                'accept' => 'video/mp4,video/webm,video/quicktime',
+                'button' => $isNewCourse ? 'Elegir video' : 'Cambiar video',
+                'hint' => 'MP4, WEBM o MOV, máximo 100 MB.',
+                'preview' => $isNewCourse ? null : ['type' => 'video', 'src' => $formCourse->onboardingVideo()],
+            ];
+            require BASE_PATH . '/app/views/base/html/upload-field.html';
+            ?>
+            <p class="field-error" aria-live="polite"></p>
+        </div>
+    </div>
+
+    <fieldset class="form-field fieldset-reset">
+        <legend class="form-label">Categorías</legend>
+        <?php if ($activeCategories === []): ?>
+            <p class="form-hint">El administrador aún no ha creado categorías; sin al menos una no se puede guardar el curso.</p>
+        <?php else: ?>
+            <div class="check-grid">
+                <?php foreach ($activeCategories as $category): ?>
+                    <label class="check-option">
+                        <input type="checkbox" name="categorias" value="<?= e($category->id()) ?>"<?= in_array($category->id(), $selectedCategoryIds, true) ? ' checked' : '' ?>>
+                        <?= e($category->name()) ?>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+            <p class="form-hint">Elige de 1 a 5.</p>
+        <?php endif; ?>
+        <p class="field-error" aria-live="polite"></p>
+    </fieldset>
+
+    <fieldset class="form-field fieldset-reset" data-pricing data-initial-mode="<?= e($pricingMode->value) ?>" data-priced-levels="<?= (int) $pricedLevelCount ?>">
+        <legend class="form-label">Forma de cobro</legend>
+        <div class="pricing-options">
+            <?php foreach (PricingMode::cases() as $mode): ?>
+                <label class="check-option pricing-option">
+                    <input type="radio" name="precio_modo" value="<?= e($mode->value) ?>"<?= $pricingMode === $mode ? ' checked' : '' ?><?= $pricingLocked && $pricingMode !== $mode ? ' disabled' : '' ?>>
+                    <span>
+                        <strong><?= e($mode->label()) ?></strong>
+                        <span class="pricing-help"><?= e($pricingHelp[$mode->value]) ?></span>
+                    </span>
+                </label>
+            <?php endforeach; ?>
+        </div>
+        <div class="price-amount" data-price-amount<?= $pricingMode === PricingMode::Bundle ? '' : ' hidden' ?>>
+            <label class="form-label" for="course-precio">Precio del curso completo (MXN)</label>
+            <input class="form-control" type="text" inputmode="decimal" id="course-precio" name="precio" placeholder="0.00" value="<?= $pricingMode === PricingMode::Bundle ? e($price) : '' ?>">
+        </div>
+        <?php if ($pricingLocked): ?>
+            <p class="form-hint">El curso ya tiene alumnos: puedes cambiar los importes, pero no la forma de cobro.</p>
+        <?php else: ?>
+            <p class="form-hint">El precio de cada nivel se captura al agregarlo. Mientras el curso no tenga alumnos puedes cambiar la forma de cobro.</p>
+        <?php endif; ?>
+        <p class="field-error" aria-live="polite"></p>
+    </fieldset>
+
+    <div class="form-field">
+        <label class="form-label" for="course-certificador">Nombre en el certificado <span class="optional">(opcional)</span></label>
+        <input class="form-control" type="text" id="course-certificador" name="certificador" maxlength="300" placeholder="Si lo dejas vacío se usa tu nombre completo" value="<?= e($formCourse?->certifierName()) ?>">
+        <p class="field-error" aria-live="polite"></p>
+    </div>
+
+    <div class="form-actions">
+        <?php if ($isNewCourse): ?>
+            <a class="btn btn-ghost" href="?view=dashboard">Cancelar</a>
+        <?php endif; ?>
+        <button type="submit" class="btn btn-primary"><?= $isNewCourse ? 'Crear borrador' : 'Guardar cambios' ?></button>
+    </div>
+</form>

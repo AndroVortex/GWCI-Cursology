@@ -1,0 +1,81 @@
+<?php
+/**
+ * Examen dentro del reproductor (learn.html). El intento lo abre, entrega y muestra exam-attempt.js.
+ *
+ * @var \App\Models\Dto\LearningCourse $course
+ * @var array $chapter
+ * @var array $level
+ * @var ?array $next
+ * @var \Closure(string): string $learnUrl
+ * @var list<\App\Models\Dto\AttemptSummary> $examAttempts
+ */
+$hasOpenAttempt = array_filter($examAttempts, static fn (\App\Models\Dto\AttemptSummary $attempt): bool => $attempt->submittedAt === null) !== [];
+$passed = $chapter['completedAt'] !== null;
+$startLabel = match (true) {
+    $hasOpenAttempt => 'Continuar mi intento',
+    $examAttempts !== [] => 'Intentar de nuevo',
+    default => 'Presentar examen',
+};
+?>
+<div class="panel learn-exam" data-exam data-chapter-id="<?= e($chapter['id']) ?>">
+    <div class="panel-body">
+        <p class="learn-eyebrow">Nivel <?= $level['sortOrder'] ?> · Capítulo <?= $chapter['sortOrder'] ?> · Examen</p>
+        <h1 class="page-title"><?= e($chapter['title']) ?></h1>
+        <ul class="exam-facts">
+            <li><?= $chapter['questionCount'] ?> pregunta(s)</li>
+            <li>Mínimo para aprobar: <strong><?= e($chapter['minimumGrade']) ?></strong></li>
+            <li>Mejor calificación: <strong data-exam-best><?= $chapter['bestGrade'] !== null ? e($chapter['bestGrade']) : '—' ?></strong></li>
+            <li><span class="badge badge-success" data-exam-passed<?= $passed ? '' : ' hidden' ?>>Aprobado</span></li>
+        </ul>
+        <div class="form-alert" role="alert" data-exam-alert hidden></div>
+        <div class="learn-actions" data-exam-actions>
+            <button type="button" class="btn btn-primary" data-exam-start><?= e($startLabel) ?></button>
+            <?php if ($next !== null): ?>
+                <a class="btn btn-secondary" href="<?= e($learnUrl($next['id'])) ?>" data-exam-next<?= $passed ? '' : ' hidden' ?>>Siguiente: <?= e($next['title']) ?></a>
+            <?php endif; ?>
+        </div>
+        <p class="form-hint">Intentos ilimitados. Cada pregunta vale la suma de sus respuestas correctas; si marcas una incorrecta, esa pregunta vale 0.</p>
+    </div>
+    <div data-exam-stage></div>
+</div>
+
+<section class="panel" aria-labelledby="exam-history-title">
+    <div class="panel-header">
+        <h2 class="panel-title" id="exam-history-title">Tus intentos</h2>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Intento</th>
+                    <th scope="col">Fecha</th>
+                    <th scope="col" class="num">Calificación</th>
+                    <th scope="col">Resultado</th>
+                </tr>
+            </thead>
+            <tbody data-exam-history>
+                <?php if ($examAttempts === []): ?>
+                    <tr data-exam-history-empty>
+                        <td colspan="4" class="text-muted">Aún no presentas este examen.</td>
+                    </tr>
+                <?php endif; ?>
+                <?php foreach ($examAttempts as $attempt): ?>
+                    <tr>
+                        <td>#<?= $attempt->number ?></td>
+                        <td><?= e(format_date($attempt->submittedAt ?? $attempt->startedAt)) ?></td>
+                        <td class="num"><?= $attempt->grade !== null ? e($attempt->grade) : '—' ?></td>
+                        <td>
+                            <?php if ($attempt->submittedAt === null): ?>
+                                <span class="badge">Abierto</span>
+                            <?php elseif ($attempt->passed): ?>
+                                <span class="badge badge-success">Aprobado</span>
+                            <?php else: ?>
+                                <span class="badge badge-danger">No aprobado</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</section>

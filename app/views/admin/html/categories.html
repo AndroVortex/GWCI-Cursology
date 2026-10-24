@@ -1,0 +1,116 @@
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Categorías</h1>
+        <p class="page-subtitle">Cada curso necesita al menos una categoría activa. Desactivar una la oculta para cursos nuevos sin perder el historial.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="?view=dashboard">Volver al panel</a>
+    </div>
+</div>
+
+<div class="form-alert page-alert" role="alert" data-page-alert hidden></div>
+
+<section class="panel" aria-labelledby="category-new-title">
+    <div class="panel-header">
+        <h2 class="panel-title" id="category-new-title">Nueva categoría</h2>
+    </div>
+    <form class="panel-body" id="category-create-form" novalidate>
+        <div class="form-alert" role="alert" data-form-alert hidden></div>
+        <div class="inline-form">
+            <div class="form-field">
+                <label class="form-label" for="category-nombre">Nombre</label>
+                <input class="form-control" type="text" id="category-nombre" name="nombre" maxlength="100" placeholder="p. ej. Desarrollo web">
+                <p class="field-error" aria-live="polite"></p>
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="category-descripcion">Descripción <span class="optional">(opcional)</span></label>
+                <input class="form-control" type="text" id="category-descripcion" name="descripcion" maxlength="1000" placeholder="Qué tipo de cursos incluye">
+                <p class="field-error" aria-live="polite"></p>
+            </div>
+            <div class="form-field">
+                <span class="form-label" aria-hidden="true">&nbsp;</span>
+                <button type="submit" class="btn btn-primary">Crear</button>
+            </div>
+        </div>
+    </form>
+</section>
+
+<section class="panel" aria-labelledby="category-list-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="category-list-title">Todas las categorías</h2>
+            <p class="panel-description"><?= count($categories) ?> en total</p>
+        </div>
+    </div>
+    <?php if ($categories === []): ?>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+            </span>
+            <p class="empty-title">Aún no hay categorías</p>
+            <p class="empty-text">Crea la primera para que los instructores puedan clasificar sus cursos.</p>
+        </div>
+    <?php else: ?>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Nombre</th>
+                        <th scope="col">Descripción</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Actualizada</th>
+                        <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($categories as $category): ?>
+                        <tr data-category-row="<?= e($category->id()) ?>">
+                            <td><strong><?= e($category->name()) ?></strong></td>
+                            <td class="text-muted"><?= e($category->description() ?? '—') ?></td>
+                            <td>
+                                <?php if ($category->active()): ?>
+                                    <span class="badge badge-success">Activa</span>
+                                <?php else: ?>
+                                    <span class="badge">Inactiva</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= e(format_date($category->updatedAt())) ?></td>
+                            <td>
+                                <div class="table-actions">
+                                    <button type="button" class="btn btn-ghost btn-sm" data-category-edit="<?= e($category->id()) ?>">Editar</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" data-category-toggle="<?= e($category->id()) ?>" data-active="<?= $category->active() ? '1' : '0' ?>">
+                                        <?= $category->active() ? 'Desactivar' : 'Activar' ?>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr data-category-edit-row="<?= e($category->id()) ?>" hidden>
+                            <td colspan="5" class="table-edit-cell">
+                                <form class="inline-form" data-category-edit-form="<?= e($category->id()) ?>" novalidate>
+                                    <div class="form-field">
+                                        <label class="form-label" for="category-edit-nombre-<?= e($category->id()) ?>">Nombre</label>
+                                        <input class="form-control" type="text" id="category-edit-nombre-<?= e($category->id()) ?>" name="nombre" maxlength="100" value="<?= e($category->name()) ?>">
+                                        <p class="field-error" aria-live="polite"></p>
+                                    </div>
+                                    <div class="form-field">
+                                        <label class="form-label" for="category-edit-descripcion-<?= e($category->id()) ?>">Descripción</label>
+                                        <input class="form-control" type="text" id="category-edit-descripcion-<?= e($category->id()) ?>" name="descripcion" maxlength="1000" value="<?= e($category->description()) ?>">
+                                        <p class="field-error" aria-live="polite"></p>
+                                    </div>
+                                    <div class="form-field">
+                                        <span class="form-label" aria-hidden="true">&nbsp;</span>
+                                        <div class="form-actions">
+                                            <button type="button" class="btn btn-ghost btn-sm" data-category-cancel="<?= e($category->id()) ?>">Cancelar</button>
+                                            <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</section>

@@ -1,0 +1,56 @@
+<?php
+/*
+ * Campos de un nivel (agregar o editar). Requiere $levelFormLevel (CourseLevel o null)
+ * y $course (moneda y forma de cobro: en un curso gratis el nivel no lleva precio).
+ */
+$isNewLevel = $levelFormLevel === null;
+$levelSuffix = $isNewLevel ? 'new' : $levelFormLevel->id();
+$freeCourse = \App\Services\PricingMode::fromFullCoursePrice($course->fullCoursePrice()) === \App\Services\PricingMode::Free;
+?>
+<div class="form-alert" role="alert" data-form-alert hidden></div>
+<div class="form-row">
+    <div class="form-field">
+        <label class="form-label" for="level-titulo-<?= e($levelSuffix) ?>">Título del nivel</label>
+        <input class="form-control" type="text" id="level-titulo-<?= e($levelSuffix) ?>" name="titulo" maxlength="200" placeholder="p. ej. Fundamentos" value="<?= e($levelFormLevel?->title()) ?>">
+        <p class="field-error" aria-live="polite"></p>
+    </div>
+    <?php if ($freeCourse): ?>
+        <div class="form-field">
+            <span class="form-label">Precio del nivel</span>
+            <input type="hidden" name="costo" value="0">
+            <p class="form-hint">Curso gratis: todos los niveles son gratuitos.</p>
+        </div>
+    <?php else: ?>
+        <div class="form-field">
+            <label class="form-label" for="level-costo-<?= e($levelSuffix) ?>">Precio del nivel (<?= e($course->currency()) ?>)</label>
+            <input class="form-control" type="text" inputmode="decimal" id="level-costo-<?= e($levelSuffix) ?>" name="costo" placeholder="0.00" value="<?= e($levelFormLevel?->cost() ?? '0.00') ?>">
+            <p class="form-hint">Lo que cuesta este nivel comprado por separado. 0.00 = nivel de muestra gratis.</p>
+            <p class="field-error" aria-live="polite"></p>
+        </div>
+    <?php endif; ?>
+</div>
+<div class="form-field">
+    <label class="form-label" for="level-descripcion-<?= e($levelSuffix) ?>">Descripción</label>
+    <textarea class="form-control" id="level-descripcion-<?= e($levelSuffix) ?>" name="descripcion" rows="3" maxlength="5000" placeholder="Qué se aprende en este nivel."><?= e($levelFormLevel?->description()) ?></textarea>
+    <p class="field-error" aria-live="polite"></p>
+</div>
+<div class="form-field">
+    <span class="form-label">Video de introducción<?= $isNewLevel ? '' : ' <span class="optional">(solo si lo cambias)</span>' ?></span>
+    <?php
+    $upload = [
+        'purpose' => 'level_video', 'name' => 'video', 'id' => 'level-video-' . $levelSuffix,
+        'accept' => 'video/mp4,video/webm,video/quicktime',
+        'button' => $isNewLevel ? 'Elegir video' : 'Cambiar video',
+        'hint' => 'MP4, WEBM o MOV, máximo 100 MB. Es público: sirve para presentar el nivel.',
+        'preview' => null,
+    ];
+    require BASE_PATH . '/app/views/base/html/upload-field.html';
+    ?>
+    <p class="field-error" aria-live="polite"></p>
+</div>
+<div class="form-actions">
+    <?php if (!$isNewLevel): ?>
+        <button type="button" class="btn btn-ghost btn-sm" data-toggle="level-edit-<?= e($levelSuffix) ?>">Cancelar</button>
+    <?php endif; ?>
+    <button type="submit" class="btn btn-primary btn-sm"><?= $isNewLevel ? 'Agregar nivel' : 'Guardar nivel' ?></button>
+</div>

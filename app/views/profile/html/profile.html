@@ -1,0 +1,173 @@
+<?php
+$fullName = implode(' ', array_filter([$currentUser->name(), $currentUser->fatherLastName(), $currentUser->motherLastName()]));
+$genders = ['masculino' => 'Masculino', 'femenino' => 'Femenino', 'otro' => 'Otro'];
+$hasCustomAvatar = $currentUser->avatar() !== App\Services\AuthService::DEFAULT_AVATAR;
+?>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Mi perfil</h1>
+        <p class="page-subtitle">Tu información personal y la seguridad de tu cuenta.</p>
+    </div>
+</div>
+
+<div class="profile-layout">
+    <aside class="panel profile-card" aria-label="Resumen de la cuenta">
+        <div class="profile-card-body">
+            <img class="profile-avatar" src="<?= e($currentUser->avatar()) ?>" alt="Foto de perfil" width="88" height="88" data-avatar>
+            <h2 class="profile-name" data-profile-name><?= e($fullName) ?></h2>
+            <span class="badge"><?= e(role_label($currentUser->role())) ?></span>
+            <p class="profile-email" data-profile-email><?= e($currentUser->email()) ?></p>
+        </div>
+        <dl class="profile-facts">
+            <div>
+                <dt>Miembro desde</dt>
+                <dd><?= e(format_date($currentUser->createdAt())) ?></dd>
+            </div>
+            <div>
+                <dt>Último acceso</dt>
+                <dd><?= e(format_date($currentUser->lastLoginAt())) ?></dd>
+            </div>
+            <div>
+                <dt>Estado</dt>
+                <dd><span class="badge badge-success">Activa</span></dd>
+            </div>
+        </dl>
+    </aside>
+
+    <div class="stack">
+        <section class="panel" aria-labelledby="profile-info-title">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title" id="profile-info-title">Información personal</h2>
+                    <p class="panel-description">Así te verán instructores y compañeros en los cursos.</p>
+                </div>
+            </div>
+            <div class="panel-body profile-form">
+                <div class="form-alert" role="alert" data-avatar-alert hidden></div>
+                <div class="photo-row">
+                    <img src="<?= e($currentUser->avatar()) ?>" alt="" width="48" height="48" data-avatar>
+                    <div class="photo-row-actions">
+                        <input class="visually-hidden" type="file" id="profile-photo" accept="image/png, image/jpeg, image/webp" data-avatar-input>
+                        <label class="btn btn-secondary btn-sm" for="profile-photo" data-avatar-change>Cambiar foto</label>
+                        <button type="button" class="btn btn-ghost btn-sm" data-avatar-remove<?= $hasCustomAvatar ? '' : ' hidden' ?>>Quitar</button>
+                    </div>
+                    <p class="form-hint" data-avatar-hint>JPG, PNG o WEBP, máximo 5 MB.</p>
+                </div>
+            </div>
+            <form class="panel-body profile-form profile-form-continued" id="profile-info-form" novalidate>
+                <div class="form-alert" role="alert" data-form-alert hidden></div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label class="form-label" for="profile-nombre">Nombre</label>
+                        <input class="form-control" type="text" id="profile-nombre" name="nombre" maxlength="100" autocomplete="given-name" value="<?= e($currentUser->name()) ?>">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="profile-apellido-paterno">Apellido paterno</label>
+                        <input class="form-control" type="text" id="profile-apellido-paterno" name="apellido_paterno" maxlength="100" autocomplete="family-name" value="<?= e($currentUser->fatherLastName()) ?>">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label class="form-label" for="profile-apellido-materno">Apellido materno <span class="optional">(opcional)</span></label>
+                        <input class="form-control" type="text" id="profile-apellido-materno" name="apellido_materno" maxlength="100" value="<?= e($currentUser->motherLastName()) ?>">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="profile-genero">Género</label>
+                        <select class="form-control" id="profile-genero" name="genero">
+                            <?php foreach ($genders as $value => $label): ?>
+                                <option value="<?= e($value) ?>"<?= $currentUser->gender() === $value ? ' selected' : '' ?>><?= e($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label class="form-label" for="profile-fecha-nacimiento">Fecha de nacimiento</label>
+                        <input class="form-control" type="date" id="profile-fecha-nacimiento" name="fecha_nacimiento" value="<?= e($currentUser->birthday()) ?>">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="profile-email">Email</label>
+                        <input class="form-control" type="email" id="profile-email" name="email" maxlength="254" autocomplete="email" value="<?= e($currentUser->email()) ?>" data-original-email="<?= e($currentUser->email()) ?>">
+                        <p class="form-hint">Es el usuario con el que inicias sesión.</p>
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                </div>
+
+                <div class="form-field" data-email-password hidden>
+                    <label class="form-label" for="profile-email-password">Contraseña actual</label>
+                    <input class="form-control" type="password" id="profile-email-password" name="current_password" autocomplete="current-password">
+                    <p class="form-hint">Para cambiar tu email confirma que eres tú.</p>
+                    <p class="field-error" aria-live="polite"></p>
+                </div>
+
+                <div class="form-field">
+                    <label class="form-label" for="profile-descripcion">Acerca de ti <span class="optional">(opcional)</span></label>
+                    <textarea class="form-control" id="profile-descripcion" name="descripcion" rows="4" maxlength="1000" placeholder="Cuéntales a tus compañeros e instructores quién eres."><?= e($currentUser->description()) ?></textarea>
+                    <p class="field-error" aria-live="polite"></p>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary btn-sm">Guardar cambios</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel" aria-labelledby="profile-password-title">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title" id="profile-password-title">Contraseña</h2>
+                    <p class="panel-description">Mínimo 8 caracteres, con una mayúscula, un número y un carácter especial.</p>
+                </div>
+            </div>
+            <form class="panel-body profile-form" id="profile-password-form" novalidate>
+                <div class="form-alert" role="alert" data-form-alert hidden></div>
+
+                <div class="form-field">
+                    <label class="form-label" for="profile-password-actual">Contraseña actual</label>
+                    <input class="form-control" type="password" id="profile-password-actual" name="current_password" autocomplete="current-password">
+                    <p class="field-error" aria-live="polite"></p>
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label class="form-label" for="profile-password-nueva">Nueva contraseña</label>
+                        <input class="form-control" type="password" id="profile-password-nueva" name="new_password" autocomplete="new-password">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="profile-password-confirmar">Confirmar contraseña</label>
+                        <input class="form-control" type="password" id="profile-password-confirmar" name="confirm_password" autocomplete="new-password">
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                </div>
+                <ul class="password-rules" data-password-rules>
+                    <li data-rule="length">Mínimo 8 caracteres</li>
+                    <li data-rule="upper">Al menos 1 letra mayúscula</li>
+                    <li data-rule="number">Al menos 1 número</li>
+                    <li data-rule="special">Al menos 1 carácter especial</li>
+                </ul>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-secondary btn-sm">Actualizar contraseña</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel" aria-labelledby="profile-delete-title">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title" id="profile-delete-title">Dar de baja la cuenta</h2>
+                    <p class="panel-description">Se conservan tus cursos, compras y certificados, pero ya no podrás iniciar sesión. Solo un administrador puede reactivarla. Disponible próximamente.</p>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" disabled>Dar de baja</button>
+            </div>
+        </section>
+    </div>
+</div>

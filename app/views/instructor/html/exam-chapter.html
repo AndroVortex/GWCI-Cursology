@@ -1,0 +1,94 @@
+<?php
+/*
+ * Cuerpo de un capítulo de examen en el editor: preguntas, formulario y "Probar examen".
+ * Requiere $chapter (con isTest()), $outline y $level. Lo maneja instructor/js/exam-editor.js.
+ * Las claves (correctas y pesos) solo se muestran aquí, al instructor dueño.
+ */
+use App\Http\Presenters\CoursePresenter;
+use App\Models\Enums\SelectionMode;
+
+$questions = $outline->questions($chapter->id());
+$examPoints = 0;
+$questionData = [];
+foreach ($questions as $question) {
+    $data = CoursePresenter::question($question, $outline->answers($question->id()));
+    $questionData[$question->id()] = $data;
+    [$integer, $fraction] = explode('.', $data['points']);
+    $examPoints += (int) $integer * 100 + (int) $fraction;
+}
+$examPointsText = intdiv($examPoints, 100) . '.' . str_pad((string) ($examPoints % 100), 2, '0', STR_PAD_LEFT);
+?>
+<div class="exam-body">
+    <p class="exam-summary">
+        <?= count($questions) ?> pregunta(s) · <?= e($examPointsText) ?> puntos · aprueba con <?= e($chapter->minimumPassingGrade()) ?>.
+        <span class="text-muted">Las correctas que marque el alumno suman su peso; si marca una incorrecta, esa pregunta vale 0.</span>
+    </p>
+
+    <?php if ($questions === []): ?>
+        <p class="content-empty">Sin preguntas: agrega la primera. Sin preguntas el curso no se puede publicar.</p>
+    <?php else: ?>
+        <ol class="question-list">
+            <?php foreach ($questions as $questionIndex => $question): ?>
+                <?php $data = $questionData[$question->id()]; ?>
+                <li class="question" id="question-<?= e($question->id()) ?>">
+                    <div class="question-header">
+                        <span class="question-number">Pregunta <?= $question->sortOrder() ?></span>
+                        <span class="badge"><?= $question->selectionMode() === SelectionMode::Single ? 'Opción única' : 'Opción múltiple' ?></span>
+                        <span class="content-meta"><?= e($data['points']) ?> pts</span>
+                        <div class="table-actions">
+                            <button type="button" class="btn btn-ghost btn-sm" data-move="question" data-id="<?= e($question->id()) ?>" data-direction="arriba" aria-label="Subir la pregunta <?= $question->sortOrder() ?>"<?= $questionIndex === 0 ? ' disabled' : '' ?>>Subir</button>
+                            <button type="button" class="btn btn-ghost btn-sm" data-move="question" data-id="<?= e($question->id()) ?>" data-direction="abajo" aria-label="Bajar la pregunta <?= $question->sortOrder() ?>"<?= $questionIndex === count($questions) - 1 ? ' disabled' : '' ?>>Bajar</button>
+                            <button type="button" class="btn btn-ghost btn-sm" data-toggle="question-edit-<?= e($question->id()) ?>">Editar</button>
+                            <button type="button" class="btn btn-danger btn-sm" data-delete="question" data-id="<?= e($question->id()) ?>" data-title="Pregunta <?= $question->sortOrder() ?>" data-anchor="chapter-<?= e($chapter->id()) ?>">Eliminar</button>
+                        </div>
+                    </div>
+                    <p class="question-text"><?= nl2br(e($question->question())) ?></p>
+                    <ul class="answer-list">
+                        <?php foreach ($data['answers'] as $answer): ?>
+                            <li class="answer<?= $answer['correct'] ? ' is-correct' : '' ?>">
+                                <span class="answer-mark" aria-hidden="true"><?= $answer['correct'] ? '✓' : '·' ?></span>
+                                <span class="answer-text"><?= e($answer['text']) ?></span>
+                                <?php if ($answer['correct']): ?>
+                                    <span class="content-meta">Correcta · peso <?= e($answer['weight']) ?></span>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+
+                    <form class="question-form" id="question-edit-<?= e($question->id()) ?>" data-question-form data-chapter-id="<?= e($chapter->id()) ?>" data-question-id="<?= e($question->id()) ?>" data-question="<?= e(json_encode($data, JSON_UNESCAPED_UNICODE)) ?>" hidden novalidate></form>
+                </li>
+            <?php endforeach; ?>
+        </ol>
+    <?php endif; ?>
+
+    <form class="question-form question-add" data-question-form data-chapter-id="<?= e($chapter->id()) ?>" novalidate></form>
+
+    <?php if ($questions !== []): ?>
+        <details class="exam-preview" id="exam-preview-<?= e($chapter->id()) ?>">
+            <summary>Probar examen</summary>
+            <form class="exam-preview-form" data-preview-form data-chapter-id="<?= e($chapter->id()) ?>" novalidate>
+                <p class="form-hint">Responde como lo haría un alumno. Se califica con la misma regla, pero no se guarda nada.</p>
+                <div class="form-alert" role="alert" data-form-alert hidden></div>
+                <?php foreach ($questions as $question): ?>
+                    <?php $single = $question->selectionMode() === SelectionMode::Single; ?>
+                    <fieldset class="preview-question" data-preview-question="<?= e($question->id()) ?>">
+                        <legend><span class="question-number">Pregunta <?= $question->sortOrder() ?>.</span> <?= e($question->question()) ?></legend>
+                        <p class="form-hint"><?= $single ? 'Elige una opción.' : 'Elige todas las que apliquen.' ?></p>
+                        <?php foreach ($outline->answers($question->id()) as $answer): ?>
+                            <label class="check-option">
+                                <input type="<?= $single ? 'radio' : 'checkbox' ?>" name="preview-<?= e($question->id()) ?>" value="<?= e($answer->id()) ?>">
+                                <?= e($answer->answer()) ?>
+                            </label>
+                        <?php endforeach; ?>
+                        <p class="preview-feedback" data-preview-feedback hidden></p>
+                    </fieldset>
+                <?php endforeach; ?>
+                <div class="form-actions">
+                    <button type="reset" class="btn btn-ghost btn-sm">Limpiar</button>
+                    <button type="submit" class="btn btn-secondary btn-sm">Calificar</button>
+                </div>
+                <p class="preview-result" data-preview-result aria-live="polite" hidden></p>
+            </form>
+        </details>
+    <?php endif; ?>
+</div>

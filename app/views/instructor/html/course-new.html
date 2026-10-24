@@ -1,0 +1,18 @@
+<div class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="?view=dashboard">Mis cursos</a> / Nuevo</p>
+        <h1 class="page-title">Nuevo curso</h1>
+        <p class="page-subtitle">Empieza con los datos generales. Después agregarás niveles, capítulos y videos; el curso queda como borrador hasta publicarlo.</p>
+    </div>
+</div>
+
+<section class="panel" aria-labelledby="course-new-title">
+    <div class="panel-header">
+        <h2 class="panel-title" id="course-new-title">Datos generales</h2>
+    </div>
+    <?php
+    $formCourse = null;
+    $selectedCategoryIds = [];
+    require __DIR__ . '/course-form.html';
+    ?>
+</section>

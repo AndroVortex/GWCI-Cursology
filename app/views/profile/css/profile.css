@@ -1,0 +1,122 @@
+.profile-layout {
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.profile-layout .panel {
+    margin-bottom: 0;
+}
+
+.profile-card {
+    position: sticky;
+    top: calc(var(--header-h) + 16px);
+}
+
+.profile-card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 24px 16px 16px;
+    text-align: center;
+}
+
+.profile-avatar {
+    width: 88px;
+    height: 88px;
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.profile-name {
+    margin: 0;
+    font-size: 1.0625rem;
+}
+
+.profile-email {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+}
+
+.profile-facts {
+    margin: 0;
+    border-top: 1px solid var(--border);
+}
+
+.profile-facts div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8125rem;
+}
+
+.profile-facts div:last-child {
+    border-bottom: 0;
+}
+
+.profile-facts dt {
+    color: var(--text-muted);
+}
+
+.profile-facts dd {
+    margin: 0;
+    font-weight: 500;
+}
+
+.profile-form {
+    display: grid;
+    gap: 14px;
+}
+
+.profile-form-continued {
+    padding-top: 0;
+}
+
+.photo-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 14px;
+}
+
+.photo-row img {
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.photo-row-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.photo-row .form-hint {
+    flex-basis: 100%;
+}
+
+@media (min-width: 600px) {
+    .photo-row .form-hint {
+        flex-basis: auto;
+    }
+}
+
+@media (max-width: 899.98px) {
+    .profile-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .profile-card {
+        position: static;
+    }
+}

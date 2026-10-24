@@ -1,0 +1,62 @@
+<?php
+/** @var list<array{provider: \App\Services\PaymentProvider, method: ?\App\Models\Entities\PaymentMethod, active: bool, ready: bool, note: ?string}> $paymentMethods */
+?>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Formas de pago</h1>
+        <p class="page-subtitle">Las que estén activas se ofrecen al comprar un curso o un nivel. Ninguna cobra dinero real: PayPal usa solo su Sandbox de pruebas y la tarjeta es simulada.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="?view=dashboard">Volver al panel</a>
+    </div>
+</div>
+
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
+<section class="panel" aria-labelledby="payment-methods-title">
+    <div class="panel-header">
+        <h2 class="panel-title" id="payment-methods-title">Formas disponibles</h2>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Forma de pago</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Última actualización</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($paymentMethods as $row): ?>
+                    <tr>
+                        <td>
+                            <strong><?= e($row['provider']->label()) ?></strong>
+                            <p class="text-muted"><?= e($row['provider']->description()) ?></p>
+                            <?php if ($row['note'] !== null): ?>
+                                <p class="badge badge-warning"><?= e($row['note']) ?></p>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($row['active'] && $row['ready']): ?>
+                                <span class="badge badge-success">Activa</span>
+                            <?php elseif ($row['active']): ?>
+                                <span class="badge badge-warning">Activa sin configurar</span>
+                            <?php else: ?>
+                                <span class="badge">Inactiva</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e(format_date($row['method']?->updatedAt())) ?></td>
+                        <td>
+                            <div class="table-actions">
+                                <button type="button" class="btn btn-<?= $row['active'] ? 'ghost' : 'primary' ?> btn-sm" data-payment-method="<?= e($row['provider']->value) ?>" data-active="<?= $row['active'] ? '0' : '1' ?>">
+                                    <?= $row['active'] ? 'Desactivar' : 'Activar' ?>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</section>
