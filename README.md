@@ -7,7 +7,31 @@ Propuesta de API: Stripe (https://stripe.com/docs/api)
 
 ## Instalación en una PC nueva
 
-**Requisitos:** [Laragon](https://laragon.org) con PHP 8.3 y MySQL 8.4 (MySQL 8.0.19 o más reciente). Los comandos de abajo se corren en la **terminal de Laragon** (botón *Terminal*), que ya tiene `php` y `mysql` en el PATH, desde la raíz del repositorio.
+**Requisitos:** [Laragon](https://laragon.org) con PHP 8.3 y MySQL 8.4 (MySQL 8.0.19 o más reciente). Los comandos de abajo se corren desde la raíz del repositorio, en la **terminal de Laragon** (botón *Terminal*), que ya tiene `php` y `mysql` en el PATH. Para usarlos en cualquier otra terminal (PowerShell, o la de Cursor o VS Code), agrégalos al PATH.
+
+### Agregar el PHP y el MySQL de Laragon al PATH
+
+**Opción A, desde Laragon:** clic derecho en la ventana de Laragon → **Tools → Path → Add Laragon to Path**. Agrega las versiones de PHP y MySQL que Laragon tiene seleccionadas.
+
+**Opción B, a mano:**
+
+1. Busca las carpetas que contienen `php.exe` y `mysql.exe`; el nombre cambia según la versión instalada. Por ejemplo:
+   - `C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64`
+   - `C:\laragon\bin\mysql\mysql-8.4.3-winx64\bin`
+2. En el menú Inicio, busca **"Editar las variables de entorno de esta cuenta"**.
+3. Selecciona **Path** → **Editar** → **Nuevo**, y pega la primera carpeta. Repite **Nuevo** con la segunda.
+4. Si ya tenías otro PHP en el PATH (XAMPP, por ejemplo), sube las de Laragon con **Subir** hasta arriba: Windows usa el primero que encuentra.
+5. Acepta todas las ventanas.
+
+**Después de cualquiera de las dos opciones,** cierra y vuelve a abrir la terminal. Si usas la de Cursor o VS Code, cierra la aplicación completa: solo toma el PATH nuevo al arrancar. Para comprobarlo:
+
+```powershell
+php -v
+mysql --version
+where.exe php
+```
+
+`php -v` debe decir 8.3. `where.exe php` muestra primero la carpeta de Laragon.
 
 ### 1. Clonar y crear el `.env`
 
