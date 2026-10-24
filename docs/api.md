@@ -30,6 +30,8 @@ Si la app vive en una subcarpeta, las rutas son relativas a ella; el frontend us
 | 405 | `METHOD_NOT_ALLOWED` | El método no aplica a la ruta (incluye header `Allow`). |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | El `Content-Type` no es el que pide el endpoint. |
 | 500 | `INTERNAL_ERROR` | Error inesperado. El detalle va al log del servidor, nunca a la respuesta. |
+| 502 | `PAYMENT_PROVIDER_FAILED` | PayPal (Sandbox) respondió con error o no respondió. El detalle va al log con `[payments]`. |
+| 503 | `PAYMENTS_UNAVAILABLE` | Faltan las credenciales de Sandbox en el `.env`. |
 
 ## Endpoints
 
@@ -103,7 +105,7 @@ Requiere sesión (middleware `RequireAuth`).
 ### Rutas con `{id}`, roles y reglas de negocio
 
 - `{id}` solo acepta enteros positivos de hasta 20 dígitos; cualquier otra cosa es `404 NOT_FOUND`.
-- Las rutas `/api/admin/*` exigen rol admin y las `/api/instructor/*` y `/api/media/*`, rol instructor: `403 FORBIDDEN` si no.
+- Las rutas `/api/admin/*` exigen rol admin; las `/api/instructor/*` y `/api/media/*`, rol instructor; y las `/api/student/*` y `/api/checkout/*`, rol alumno: `403 FORBIDDEN` si no.
 - Las reglas de negocio que señala un SP llegan como `{"error": {"code", "message", "fields"?}}` con su estado (`404` no existe, `409` conflicto, `422` dato inválido). Algunos códigos se atribuyen a un campo del formulario (`fields`).
 - **Recursos de otro instructor:** responden `404` (`COURSE_NOT_FOUND`, `LEVEL_NOT_FOUND`, `CHAPTER_NOT_FOUND`, `CONTENT_NOT_FOUND`), igual que si no existieran, para no revelar qué ids existen.
 
@@ -229,7 +231,7 @@ Un examen es un capítulo de tipo `examen`, con su calificación mínima para ap
 - `404 QUESTION_NOT_FOUND`;
 - `409 CHAPTER_NOT_EXAM` (preguntas o "Probar examen" en un capítulo de video);
 - `422 INVALID_PASSING_GRADE` (en `minimo`);
-- `409 EXAM_HAS_ATTEMPTS` (cambiar o borrar preguntas que ya presentó algún alumno, en la siguiente entrega).
+- `409 EXAM_HAS_ATTEMPTS` (cambiar o borrar preguntas que ya presentó algún alumno).
 
 ### Catálogo público
 
@@ -260,6 +262,79 @@ Sin sesión. Solo muestra cursos **publicados y activos**; un borrador o un curs
 - `?view=course&id=N`: página del curso, o un 404 con su mensaje.
 
 **Otros errores:** `409 LEVEL_NOT_EMPTY` (borrar un nivel con capítulos), `409 HAS_ENROLLMENTS` (borrar un nivel o capítulo al que ya tienen acceso alumnos), `422 CATEGORY_NOT_AVAILABLE` (en `categorias`), `422 VALIDATION_FAILED` (`direccion`, `activo` y los campos del formulario).
+
+### Inscripción y compras (alumno)
+
+Alumno + CSRF. El importe **siempre lo calcula la base** (`sp_purchase_start`); el navegador solo dice qué compra. Pagos de prueba: PayPal usa únicamente la API **Sandbox** de PayPal Developers y la tarjeta es simulada. Configuración y flujo: [payments.md](payments.md).
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `POST /api/student/enrollments` | `{curso}` | `201 {"data": {courseId, levelsGranted}}`: curso gratis completo, o los niveles de $0 de un curso de paga |
+| `POST /api/checkout/card` | `{curso, nivel?, titular, numero, vencimiento: "MM/AA", cvv}` | `201 {"data": {"purchase"}}` completada |
+| `POST /api/checkout/paypal/orders` | `{curso, nivel?}` | `201 {"data": {"purchase", orderId}}`: compra pendiente y orden de PayPal Sandbox para el SDK de JS |
+| `POST /api/checkout/paypal/purchases/{id}/capture` | — | `200` completada, o `202` si PayPal la dejó `PENDING` |
+| `POST /api/checkout/purchases/{id}/cancel` | — | `200` con la compra `cancelled` (el comprador cerró PayPal) |
+
+- **Qué se compra:** sin `nivel`, el curso completo (solo si es de tipo `paquete`; incluye los niveles futuros); con `nivel`, ese nivel (si cuesta más de 0). Los niveles de $0 y los cursos gratis se obtienen con `enrollments`.
+- **`purchase`:** `{id, courseId, levelId, scope: "course"|"level", courseTitle, levelTitle, amount, currency, method, status, createdAt, completedAt}`. Nunca incluye el número de la tarjeta: la transacción simulada solo guarda los últimos 4 dígitos (`SIM-…-4242`).
+- **Tarjeta simulada:** valida el titular, el número (13 a 19 dígitos con Luhn), el vencimiento (vence al terminar el mes) y el CVV (3 o 4 dígitos), y no cobra nada. `4000 0000 0000 0002` siempre se rechaza (`402 CARD_DECLINED`, en `numero`).
+- **PayPal:** la página carga el SDK con el Client ID de Sandbox; `createOrder` llama a `paypal/orders` y `onApprove` a `capture`. El servidor revisa que la captura esté `COMPLETED`, que el importe y la moneda sean los de la compra y que `custom_id` sea la compra; si no, no da acceso.
+
+**Errores:**
+- `403 NOT_STUDENT`; `404 COURSE_NOT_FOUND` (no publicado o dado de baja: ya no se vende, pero quien lo compró conserva su acceso), `404 LEVEL_NOT_FOUND`, `404 PURCHASE_NOT_FOUND`;
+- `409 ALREADY_OWNED`, `409 NOT_FOR_SALE` (curso gratis, nivel de $0 o curso completo que no es `paquete`), `409 NOT_FREE` (sin niveles gratis), `409 PAYMENT_METHOD_UNAVAILABLE` (la forma de pago está inactiva o PayPal no tiene credenciales);
+- `409 PURCHASE_NOT_PENDING`, `409 PAYMENT_MISMATCH` (PayPal cobró otro importe o moneda);
+- `402 CARD_DECLINED`, `402 PAYMENT_DECLINED` (PayPal rechazó la captura);
+- `422 VALIDATION_FAILED` en `curso`, `nivel`, `titular`, `numero`, `vencimiento` o `cvv`.
+
+**Vistas:** `?view=course&id=N` muestra, según lo que ya tiene el usuario, "Inscribirme gratis", "Empezar con los niveles gratis", "Comprar el curso completo", "Comprar este nivel" en cada nivel del temario o "Ir al curso". `?view=checkout&course=N[&level=M]` (solo alumnos) es la página de pago.
+
+### Reproductor y avance (alumno)
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `POST /api/student/chapters/{id}/progress` | `{posicion?: int (segundos), terminado?: bool}` | `200 {"data": {"progress": {chapterId, positionSeconds, completed, levelCompleted, courseCompleted}}}` |
+
+- La posición se recorta a la duración del video guardada en la base.
+- Un capítulo de video queda terminado al llegar al **90%** (`posición × 10 ≥ duración × 9`) o con `terminado: true` ("Marcar como visto"). Regresar el video no lo desmarca.
+- Un nivel termina cuando todos sus capítulos están terminados; el curso, cuando todos sus niveles lo están (el alumno necesita acceso a todos).
+- Errores: `403 NO_LEVEL_ACCESS`, `404 CHAPTER_NOT_FOUND`, `409 EXAM_NOT_MARKABLE` (un examen se termina al aprobarlo), `422` en `posicion` o `terminado`.
+
+**Vista `?view=learn&course=N[&chapter=M]`** (solo alumnos inscritos; sin inscripción responde `403` con su mensaje):
+- índice con los niveles y capítulos y su estado (terminado o aprobado, en curso, pendiente o sin acceso con "Comprar nivel");
+- el video con una URL temporal firmada de Cloudinary (1 hora), solo de los niveles con acceso;
+- los recursos, "Marcar como visto" y "Siguiente".
+- Sin `chapter`, retoma el último capítulo visitado. `learn.js` guarda la posición cada 15 segundos, al pausar, al terminar y al salir de la página.
+
+### Exámenes (alumno)
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `POST /api/student/chapters/{id}/attempts` | — | `201 {"data": {"attempt"}}`: abre un intento o retoma el que está abierto |
+| `POST /api/student/attempts/{id}/submit` | `{respuestas: ["<id de opción>", ...]}` | `200 {"data": {"attempt"}}` calificado |
+| `GET /api/student/chapters/{id}/attempts` | — | `200 {"data": {"attempts": [{id, number, startedAt, submittedAt, minimumGrade, grade, passed}]}}` del más reciente al primero |
+
+- Intentos ilimitados, uno abierto a la vez. Al abrirlo, la base copia las preguntas y opciones (`test_attempt_*`): si el instructor no puede cambiarlas después (`EXAM_HAS_ATTEMPTS`), el intento tampoco cambia.
+- **Abierto:** `attempt = {id, chapterId, number, submitted: false, minimumGrade, maxPoints, questions: [{id, text, mode, maxPoints, answers: [{id, text}]}]}`, **sin** las respuestas correctas ni los pesos.
+- **Entregado:** además `earnedPoints`, `grade`, `passed`, `chapterCompleted`, `levelCompleted`, `courseCompleted` y, por pregunta, `earnedPoints` y `answers[].selected`, `correct` y `weight`.
+- La calificación la calcula el SP con la misma regla que "Probar examen" (ver arriba). Aprobar termina el capítulo; reprobar después no lo desmarca.
+- Errores: `403 NO_LEVEL_ACCESS`, `404 ATTEMPT_NOT_FOUND`, `409 CHAPTER_NOT_EXAM`, `409 ATTEMPT_ALREADY_SUBMITTED`, `422 INVALID_SELECTION` (opciones que no son del intento, repetidas o dos en una pregunta de opción única; en `respuestas`).
+
+### "Mi aprendizaje" (`?view=dashboard` del alumno)
+
+- Cifras: cursos inscritos, en progreso y terminados.
+- "Continuar aprendiendo": hasta 3 cursos sin terminar, con su avance, que llevan al último capítulo visto.
+- **Kardex** (`?view=dashboard&desde=AAAA-MM-DD&hasta=AAAA-MM-DD&categoria=N&estado=en_progreso|terminados|activos`): fecha de inscripción, último acceso, terminado, avance (capítulos terminados / capítulos del curso), último capítulo y niveles con acceso. Los filtros inválidos se ignoran.
+- **Mis compras:** fecha, curso o nivel, forma de pago (o "Gratis"), importe y estado (completada, pendiente, rechazada o cancelada).
+
+### Formas de pago (admin)
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `GET /api/admin/payment-methods` | — | `{"data": {"methods": [{code, name, description, active, ready, note}]}}` |
+| `POST /api/admin/payment-methods` | `{codigo: "paypal" \| "simulated_card", activa: bool}` + CSRF | `200 {"data": {"method": {code, name, active}}}` |
+
+`ready` es `false` para PayPal mientras falten las credenciales de Sandbox: aunque esté activa, no se ofrece. La vista es `?view=payment-methods`. Errores: `403 NOT_ADMIN`, `422` en `codigo` o `activa`.
 
 ### `GET /api/admin/users/locked`
 
@@ -303,7 +378,11 @@ CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 APP_ALLOWED_ORIGINS=
+PAYPAL_SANDBOX_CLIENT_ID=
+PAYPAL_SANDBOX_CLIENT_SECRET=
 ```
+
+Las credenciales de PayPal son **solo de Sandbox** (ver [payments.md](payments.md)); sin ellas, PayPal no se ofrece y la tarjeta simulada sigue funcionando.
 
 Sin las credenciales de Cloudinary, el registro sin foto funciona y el registro con foto responde `503`. Las fotos se suben a la carpeta `cursology/avatars` con una petición firmada desde el servidor; el secret nunca llega al navegador.
 
@@ -316,13 +395,18 @@ Si las subidas responden `502` (`MEDIA_UPLOAD_FAILED`) en la red de la empresa, 
 php tests/verify_model_mapping.php
 php tests/verify_auth_unit.php
 php tests/verify_profile_courses_unit.php
+php tests/verify_learning_unit.php
 
 # Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida)
 php tests/verify_auth_db.php
 php tests/verify_profile_courses_db.php
+php tests/verify_learning_db.php
 
 # Contra Cloudinary real (opcional; sube y borra archivos de prueba)
 php tests/verify_cloudinary_live.php
+
+# Contra PayPal Sandbox real (opcional; crea una orden de prueba de $1.00 MXN sin pagarla)
+php tests/verify_paypal_live.php
 ```
 
 Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`):

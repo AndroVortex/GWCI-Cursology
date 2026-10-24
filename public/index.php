@@ -53,7 +53,23 @@ $views = [
         'title' => 'Curso',
         'file'  => BASE_PATH . '/app/views/catalog/html/course.html',
         'css'   => ['catalog/css/catalog.css'],
-        'js'    => [],
+        'js'    => ['catalog/js/course.js'],
+    ],
+    'learn' => [
+        'title' => 'Mi curso',
+        'file'  => BASE_PATH . '/app/views/student/html/learn.html',
+        'css'   => ['student/css/student.css'],
+        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Student],
+    ],
+    'checkout' => [
+        'title' => 'Pagar',
+        'file'  => BASE_PATH . '/app/views/student/html/checkout.html',
+        'css'   => ['catalog/css/catalog.css', 'student/css/student.css'],
+        'js'    => ['student/js/checkout.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Student],
     ],
     'login' => [
         'title' => 'Iniciar sesión',
@@ -73,6 +89,14 @@ $views = [
         'file'  => BASE_PATH . '/app/views/admin/html/categories.html',
         'css'   => [],
         'js'    => ['admin/js/categories.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
+    'payment-methods' => [
+        'title' => 'Formas de pago',
+        'file'  => BASE_PATH . '/app/views/admin/html/payment-methods.html',
+        'css'   => [],
+        'js'    => ['admin/js/payment-methods.js'],
         'auth'  => true,
         'roles' => [UserRole::Admin],
     ],
@@ -99,6 +123,7 @@ $dashboards = [
     UserRole::Student->value => [
         'title' => 'Mi aprendizaje',
         'file'  => BASE_PATH . '/app/views/student/html/dashboard.html',
+        'css'   => ['student/css/student.css'],
     ],
     UserRole::Instructor->value => [
         'title' => 'Panel del instructor',
@@ -135,14 +160,39 @@ if ($view === 'dashboard') {
     $views['dashboard'] = $dashboards[$currentUser->role()->value] + ['css' => [], 'js' => []];
 }
 
-// Página pública de un curso: si no existe, es borrador o está dado de baja, la vista lo dice (404).
-if ($view === 'course') {
+// Reproductor: el capítulo pedido o el último que vio el alumno. Sin inscripción, la vista lo dice (403).
+if ($view === 'learn') {
     try {
-        $publicCourse = $catalogService->course(is_string($_GET['id'] ?? null) ? $_GET['id'] : '');
-        $views['course']['title'] = $publicCourse->title;
+        $learningCourse = $learningService->course($currentUser, is_string($_GET['course'] ?? null) ? $_GET['course'] : '');
+        $views['learn']['title'] = $learningCourse->title;
+        $currentChapter = (is_string($_GET['chapter'] ?? null) ? $learningCourse->chapter($_GET['chapter']) : null)
+            ?? $learningCourse->resumeChapter();
+        $examAttempts = $currentChapter !== null && $currentChapter['isExam'] && $learningCourse->hasAccessTo($currentChapter)
+            ? $examAttemptService->attempts($currentUser, $currentChapter['id'])
+            : [];
+    } catch (BusinessRuleException) {
+        $learningCourse = null;
+        $currentChapter = null;
+        http_response_code(403);
+    }
+}
+
+// Página pública de un curso y su pago: si no existe, es borrador o está dado de baja, la vista lo dice (404).
+if ($view === 'course' || $view === 'checkout') {
+    $publicCourseId = is_string($_GET[$view === 'course' ? 'id' : 'course'] ?? null) ? $_GET[$view === 'course' ? 'id' : 'course'] : '';
+    try {
+        $publicCourse = $catalogService->course($publicCourseId);
+        $views[$view]['title'] = ($view === 'checkout' ? 'Pagar: ' : '') . $publicCourse->title;
     } catch (BusinessRuleException) {
         $publicCourse = null;
         http_response_code(404);
+    }
+    $courseAccess = $checkoutService->access($currentUser, $publicCourseId);
+    $isStudent = $currentUser !== null && $currentUser->role() === UserRole::Student;
+    if ($view === 'checkout') {
+        $checkoutLevelId = is_string($_GET['level'] ?? null) && $_GET['level'] !== '' ? $_GET['level'] : null;
+        $paymentProviders = $paymentMethodService->available();
+        $paypalClientId = $paypal->clientId();
     }
 }
 
@@ -156,6 +206,10 @@ try {
         $catalogPage = $catalogService->search($_GET);
         $catalogCategories = $categoryService->active();
     }
+    if ($view === 'dashboard' && $currentUser->role() === UserRole::Student) {
+        $studentDashboard = $studentService->dashboard($currentUser, $_GET);
+        $kardexCategories = $categoryService->active();
+    }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Instructor) {
         $instructorCourses = $courseService->listMine($currentUser);
     }
@@ -164,6 +218,9 @@ try {
     }
     if ($view === 'categories') {
         $categories = $categoryService->all();
+    }
+    if ($view === 'payment-methods') {
+        $paymentMethods = $paymentMethodService->overview();
     }
     if ($view === 'course-new' || $view === 'course-editor') {
         $activeCategories = $categoryService->active();

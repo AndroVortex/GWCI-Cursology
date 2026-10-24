@@ -241,3 +241,98 @@ Cuatro result sets, que lee `App\Models\Dto\PublicCourse`:
 4. los capítulos, con `is_test`, `duration_seconds` del video principal y `question_count`.
 
 **Error:** `COURSE_NOT_FOUND` si no existe, es borrador o está dado de baja.
+
+### Formas de pago
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_payment_method_list(p_only_active)` | Filas de `payment_method` (todas o solo las activas) | — |
+| `sp_payment_method_set_active(p_admin_id, p_code, p_name, p_active)` | Activa o desactiva una forma de pago; la crea la primera vez (`INSERT ... AS incoming ON DUPLICATE KEY UPDATE`). Devuelve la fila | `NOT_ADMIN`, `UNKNOWN_PAYMENT_METHOD` |
+
+Solo existen los códigos `paypal` (PayPal Sandbox) y `simulated_card` (tarjeta simulada). Que PayPal además tenga credenciales lo decide PHP (`PaymentMethodService`).
+
+### Inscripción y compras
+
+Una compra (`purchase`) es por el curso completo (`purchase_scope = 'course'`) o por un nivel (`'level'`). El acceso real es `user_course_level`; `user_courses` es la inscripción. **El importe siempre lo pone el SP** (del curso o del nivel), nunca PHP.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_purchase_grant(p_purchase_id)` | **Interno** (dentro de la transacción del que llama): para una compra completada, inscribe al alumno si hace falta y le da acceso al nivel, o a todos los niveles si es por el curso | — |
+| `sp_enrollment_free(p_user_id, p_course_id)` | Curso gratis: compra de $0 por el curso completo. Curso de paga: compras de $0 por cada nivel gratis que le falte. Devuelve `course_id, levels_granted, enrolled` | `NOT_STUDENT`, `COURSE_NOT_FOUND`, `NOT_FREE`, `ALREADY_OWNED` |
+| `sp_purchase_start(p_user_id, p_course_id, p_level_id, p_method_code, p_idempotency_key)` | Abre la compra pendiente con su importe y los nombres congelados (`*_snapshot`). Con una clave que ya usó el alumno, devuelve esa misma compra. `p_level_id` NULL = curso completo | `NOT_STUDENT`, `COURSE_NOT_FOUND`, `LEVEL_NOT_FOUND`, `PAYMENT_METHOD_UNAVAILABLE`, `NOT_FOR_SALE`, `ALREADY_OWNED` |
+| `sp_purchase_attach_provider(p_user_id, p_purchase_id, p_transaction_id)` | Guarda el id de la orden de PayPal en la compra pendiente | `PURCHASE_NOT_FOUND`, `PURCHASE_NOT_PENDING` |
+| `sp_purchase_get(p_user_id, p_purchase_id)` | La compra, solo si es del alumno | `PURCHASE_NOT_FOUND` |
+| `sp_purchase_complete(p_user_id, p_purchase_id, p_transaction_id, p_amount, p_currency)` | Con la compra bloqueada (`FOR UPDATE`): exige que el importe y la moneda cobrados sean los de la compra, la completa y llama a `sp_purchase_grant`. Repetirla con la misma transacción no cambia nada | `PURCHASE_NOT_FOUND`, `PURCHASE_NOT_PENDING`, `PAYMENT_MISMATCH` |
+| `sp_purchase_fail(p_user_id, p_purchase_id, p_status)` | Marca una compra pendiente como `failed` o `cancelled` | `PURCHASE_NOT_FOUND`, `PURCHASE_NOT_PENDING` |
+| `sp_course_access(p_user_id, p_course_id)` | 1) `enrolled, owns_course`; 2) `course_level_id` de cada nivel con acceso (lo lee `CourseAccess`) | — |
+
+- **Qué se vende:** solo cursos activos y publicados. Curso completo solo si `full_course_price > 0`; un nivel solo si el curso no es gratis y el nivel cuesta más de 0. Un curso dado de baja ya no se vende, pero quien lo compró conserva el acceso.
+- **Niveles futuros:** `sp_level_create` da acceso al nivel nuevo a quien tenga una compra completada por el curso completo (incluidas las inscripciones a cursos gratis).
+- **PayPal:** PHP llama a PayPal **sin transacción abierta**: `sp_purchase_start` → orden en Sandbox → `sp_purchase_attach_provider` → el comprador aprueba → captura → `sp_purchase_complete` con el importe que reportó PayPal.
+- **Tarjeta simulada:** `provider = 'simulated_card'` y la transacción `SIM-<12 hex>-<últimos 4>`; nunca se guarda el número completo.
+- `uq_purchase_provider (provider, provider_transaction_id)` impide usar la misma transacción en dos compras.
+
+### Reproductor del alumno
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_learning_course(p_user_id, p_course_id)` | El curso para el reproductor (lo lee `LearningCourse`), aunque se haya dado de baja | `NOT_ENROLLED` |
+| `sp_learning_progress(p_user_id, p_chapter_id, p_position_seconds, p_mark_done)` | Guarda la posición y el último acceso; termina el capítulo al 90% o con `p_mark_done` | `CHAPTER_NOT_FOUND`, `NO_LEVEL_ACCESS`, `EXAM_NOT_MARKABLE` |
+| `sp_learning_recalculate(p_user_id, p_level_id)` | **Interno:** termina el nivel si todos sus capítulos lo están, y el curso si todos sus niveles lo están | — |
+
+**`sp_learning_course`** devuelve cuatro result sets:
+1. el curso con `instructor_name`, la inscripción (`enrolled_at, last_accessed_at, completed_at`) y `owns_course`;
+2. los niveles con `has_access` y su `completed_at`;
+3. los capítulos con `duration_seconds` del video principal, `question_count`, el avance del alumno (`video_position_seconds, last_accessed_at, completed_at`) y `best_grade`;
+4. el contenido (columnas de `course_chapter_content`) **solo de los niveles con acceso**.
+
+**`sp_learning_progress`:**
+- La posición se recorta a la duración del video guardada en la base (no a la que diga el navegador).
+- Visto = `posición × 10 ≥ duración × 9`, la misma regla que `LearningService::isWatched()`.
+- Un examen solo registra la visita.
+- Lo terminado no se desmarca.
+- Devuelve `course_chapter_id, video_position_seconds, completed_at, level_completed_at, course_completed_at`.
+
+**`sp_learning_recalculate`:** para terminar el curso, el alumno necesita acceso a todos los niveles. Si el instructor agrega un nivel después, el curso ya terminado no se desmarca.
+
+### Intentos de examen
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_attempt_start(p_user_id, p_chapter_id)` | Abre un intento (o retoma el abierto) copiando las preguntas y **todas** las opciones a `test_attempt_question` / `test_attempt_answer` | `CHAPTER_NOT_FOUND`, `CHAPTER_NOT_EXAM`, `NO_LEVEL_ACCESS`, `EXAM_WITHOUT_QUESTIONS` |
+| `sp_attempt_submit(p_user_id, p_attempt_id, p_selected)` | Marca las opciones elegidas, califica con la regla A y, si aprueba, termina el capítulo y llama a `sp_learning_recalculate` | `ATTEMPT_NOT_FOUND`, `ATTEMPT_ALREADY_SUBMITTED`, `INVALID_SELECTION` |
+| `sp_attempt_get(p_user_id, p_attempt_id)` | El intento desde sus copias. Lo llaman `start` y `submit` para devolver siempre la misma forma (lo lee `ExamAttempt`) | `ATTEMPT_NOT_FOUND` |
+| `sp_attempt_list(p_user_id, p_chapter_id)` | Los intentos del alumno, del más reciente al primero | `CHAPTER_NOT_FOUND`, `CHAPTER_NOT_EXAM`, `NO_LEVEL_ACCESS` |
+
+- **Claves ocultas:** mientras el intento está abierto, `sp_attempt_get` **no devuelve** `is_correct_snapshot`, `weight_snapshot` ni `earned_points`; después de entregarlo, sí.
+- **Uno abierto a la vez:** `sp_attempt_start` bloquea el acceso del alumno al nivel (`FOR UPDATE`) antes de buscar o crear el intento.
+- **`p_selected`:** arreglo JSON con los ids de las opciones marcadas (puede estar vacío). Se lee con `JSON_TABLE` (`NULL ON ERROR`); un id ajeno o repetido, o dos opciones en una pregunta `single`, es `INVALID_SELECTION` y no se guarda nada.
+- **Calificación (regla A, en SQL):**
+  - por pregunta, `0` si se marcó alguna incorrecta; si no, la suma de `weight_snapshot` de las correctas marcadas;
+  - `grade = ROUND(100 * earned_points / max_points, 2)`, la misma expresión que exige `ck_attempt_result`;
+  - `passed` es la columna generada `grade >= minimum_grade_snapshot`;
+  - `tests/verify_learning_db.php` comprueba que coincide con `ExamGrader`.
+
+### Mi aprendizaje
+
+**`sp_student_courses(p_user_id, p_from, p_to, p_category_id, p_status)`**
+
+El kardex (lo lee `KardexEntry`), del curso visto más recientemente al más antiguo.
+
+| Filtro | Valor |
+|---|---|
+| `p_from` / `p_to` | Fecha de inscripción, días completos |
+| `p_category_id` | Cursos con esa categoría asignada |
+| `p_status` | `in_progress`, `completed` o `active` (cursos que siguen a la venta) |
+
+NULL en cualquier filtro = sin filtrar.
+
+Columnas:
+- `course_id, title, cover_image, active` y `category_names` (separadas por `|`);
+- `enrolled_at, last_accessed_at, completed_at`;
+- `chapter_count, chapters_done, level_count, levels_owned`;
+- `last_chapter_id, last_chapter_title`: el capítulo con el `last_accessed_at` más reciente (`LEFT JOIN LATERAL`).
+
+Error: `INVALID_KARDEX_STATUS`.
+
+**`sp_student_purchases(p_user_id)`:** las columnas de `purchase`, de la más reciente a la más antigua. Incluye las de $0 y las rechazadas o canceladas.

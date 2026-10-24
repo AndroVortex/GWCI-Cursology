@@ -1,31 +1,52 @@
+<?php
+/**
+ * @var array{stats: array{enrolled: int, inProgress: int, completed: int}, continue: list<\App\Models\Dto\KardexEntry>,
+ *     kardex: list<\App\Models\Dto\KardexEntry>, filters: array{desde: string, hasta: string, categoria: string, estado: string},
+ *     purchases: list<\App\Models\Entities\Purchase>} $studentDashboard
+ * @var list<\App\Models\Entities\Category> $kardexCategories
+ */
+use App\Models\Enums\PurchaseStatus;
+
+$stats = $studentDashboard['stats'];
+$filters = $studentDashboard['filters'];
+$filtered = array_filter($filters, static fn (string $value): bool => $value !== '') !== [];
+$learnUrl = static fn (\App\Models\Dto\KardexEntry $entry): string => '?view=learn&course=' . rawurlencode($entry->courseId)
+    . ($entry->lastChapterId !== null ? '&chapter=' . rawurlencode($entry->lastChapterId) : '');
+$statusLabels = [
+    PurchaseStatus::Completed->value => ['Completada', 'badge-success'],
+    PurchaseStatus::Pending->value => ['Pendiente', 'badge-warning'],
+    PurchaseStatus::Failed->value => ['Rechazada', 'badge-danger'],
+    PurchaseStatus::Cancelled->value => ['Cancelada', ''],
+];
+?>
 <div class="page-header">
     <div>
         <h1 class="page-title">Hola, <?= e($currentUser->name()) ?></h1>
         <p class="page-subtitle">Retoma tus cursos y revisa tu avance.</p>
     </div>
     <div class="page-actions">
-        <a class="btn btn-primary" href="?view=home#categorias">Explorar cursos</a>
+        <a class="btn btn-primary" href="?view=catalog">Explorar cursos</a>
     </div>
 </div>
-
-<?php require BASE_PATH . '/app/views/base/html/preview-notice.html'; ?>
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
 
 <div class="stat-grid">
     <div class="stat">
         <p class="stat-label">Cursos inscritos</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $stats['enrolled'] ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">En progreso</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $stats['inProgress'] ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Terminados</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $stats['completed'] ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Certificados</p>
         <p class="stat-value">—</p>
+        <p class="stat-hint">Llegan en la siguiente entrega</p>
     </div>
 </div>
 
@@ -33,14 +54,35 @@
     <div class="panel-header">
         <h2 class="panel-title" id="student-continue-title">Continuar aprendiendo</h2>
     </div>
-    <div class="empty-state">
-        <span class="empty-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-        </span>
-        <p class="empty-title">Aún no tienes cursos en progreso</p>
-        <p class="empty-text">Cuando te inscribas a un curso, aquí verás tu avance y podrás retomarlo donde lo dejaste.</p>
-        <a class="btn btn-secondary btn-sm" href="?view=home#categorias">Explorar cursos</a>
-    </div>
+    <?php if ($studentDashboard['continue'] === []): ?>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+            </span>
+            <p class="empty-title"><?= $stats['enrolled'] > 0 ? '¡Terminaste todos tus cursos!' : 'Aún no tienes cursos en progreso' ?></p>
+            <p class="empty-text"><?= $stats['enrolled'] > 0 ? 'Busca tu siguiente curso en el catálogo.' : 'Cuando te inscribas a un curso, aquí verás tu avance y podrás retomarlo donde lo dejaste.' ?></p>
+            <a class="btn btn-secondary btn-sm" href="?view=catalog">Explorar cursos</a>
+        </div>
+    <?php else: ?>
+        <div class="panel-body course-grid continue-grid">
+            <?php foreach ($studentDashboard['continue'] as $entry): ?>
+                <article class="course-card">
+                    <a class="course-card-link" href="<?= e($learnUrl($entry)) ?>">
+                        <img class="course-card-cover" src="<?= e($entry->coverImage) ?>" alt="" loading="lazy">
+                        <div class="course-card-body">
+                            <p class="course-card-category"><?= e(implode(' · ', $entry->categories)) ?></p>
+                            <h3 class="course-card-title"><?= e($entry->title) ?></h3>
+                            <div class="progress-bar" role="progressbar" aria-label="Avance" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $entry->progressPercent() ?>">
+                                <span style="width: <?= $entry->progressPercent() ?>%"></span>
+                            </div>
+                            <p class="course-card-meta"><?= $entry->progressPercent() ?>% · <?= $entry->chaptersDone ?> de <?= $entry->chapterCount ?> capítulos</p>
+                            <p class="course-card-meta"><?= $entry->lastChapterTitle !== null ? 'Continuar: ' . e($entry->lastChapterTitle) : 'Empezar el curso' ?></p>
+                        </div>
+                    </a>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 </section>
 
 <section class="panel" aria-labelledby="student-kardex-title">
@@ -50,29 +92,41 @@
             <p class="panel-description">Historial de tus cursos con fechas de inscripción, último acceso y avance.</p>
         </div>
     </div>
-    <fieldset class="filters" disabled>
-        <legend class="visually-hidden">Filtros del kardex</legend>
+    <form class="filters" method="get" action="" id="kardex">
+        <input type="hidden" name="view" value="dashboard">
         <div class="form-field">
             <label class="form-label" for="kardex-desde">Inscritos desde</label>
-            <input class="form-control" type="date" id="kardex-desde">
+            <input class="form-control" type="date" id="kardex-desde" name="desde" value="<?= e($filters['desde']) ?>">
         </div>
         <div class="form-field">
             <label class="form-label" for="kardex-hasta">Hasta</label>
-            <input class="form-control" type="date" id="kardex-hasta">
+            <input class="form-control" type="date" id="kardex-hasta" name="hasta" value="<?= e($filters['hasta']) ?>">
         </div>
         <div class="form-field">
             <label class="form-label" for="kardex-categoria">Categoría</label>
-            <select class="form-control" id="kardex-categoria"><option>Todas</option></select>
+            <select class="form-control" id="kardex-categoria" name="categoria">
+                <option value="">Todas</option>
+                <?php foreach ($kardexCategories as $category): ?>
+                    <option value="<?= e($category->id()) ?>"<?= $filters['categoria'] === $category->id() ? ' selected' : '' ?>><?= e($category->name()) ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
         <div class="form-field">
             <label class="form-label" for="kardex-estado">Estado</label>
-            <select class="form-control" id="kardex-estado"><option>Todos</option><option>Terminados</option></select>
+            <select class="form-control" id="kardex-estado" name="estado">
+                <option value="">Todos</option>
+                <option value="en_progreso"<?= $filters['estado'] === 'en_progreso' ? ' selected' : '' ?>>En progreso</option>
+                <option value="terminados"<?= $filters['estado'] === 'terminados' ? ' selected' : '' ?>>Terminados</option>
+                <option value="activos"<?= $filters['estado'] === 'activos' ? ' selected' : '' ?>>Solo cursos activos</option>
+            </select>
         </div>
-        <div class="form-field">
-            <label class="form-label" for="kardex-activos">Cursos</label>
-            <select class="form-control" id="kardex-activos"><option>Todos</option><option>Solo activos</option></select>
+        <div class="filters-actions">
+            <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+            <?php if ($filtered): ?>
+                <a class="btn btn-ghost btn-sm" href="?view=dashboard#kardex">Quitar filtros</a>
+            <?php endif; ?>
         </div>
-    </fieldset>
+    </form>
     <div class="table-wrap">
         <table class="table">
             <thead>
@@ -86,43 +140,102 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="6">
-                        <div class="empty-state">
-                            <p class="empty-title">Sin cursos inscritos</p>
-                            <p class="empty-text">Tu historial aparecerá aquí desde tu primera inscripción.</p>
-                        </div>
-                    </td>
-                </tr>
+                <?php if ($studentDashboard['kardex'] === []): ?>
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <p class="empty-title"><?= $filtered ? 'Ningún curso coincide con los filtros' : 'Sin cursos inscritos' ?></p>
+                                <p class="empty-text"><?= $filtered ? 'Prueba con otras fechas, categoría o estado.' : 'Tu historial aparecerá aquí desde tu primera inscripción.' ?></p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+                <?php foreach ($studentDashboard['kardex'] as $entry): ?>
+                    <tr>
+                        <td>
+                            <a href="<?= e($learnUrl($entry)) ?>"><?= e($entry->title) ?></a>
+                            <?php if ($entry->categories !== []): ?>
+                                <span class="table-sub"><?= e(implode(' · ', $entry->categories)) ?></span>
+                            <?php endif; ?>
+                            <?php if ($entry->lastChapterTitle !== null): ?>
+                                <span class="table-sub">Último capítulo: <?= e($entry->lastChapterTitle) ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e(format_date($entry->enrolledAt)) ?></td>
+                        <td><?= $entry->lastAccessedAt !== null ? e(format_date($entry->lastAccessedAt)) : '—' ?></td>
+                        <td><?= $entry->completedAt !== null ? e(format_date($entry->completedAt)) : '—' ?></td>
+                        <td class="num"><?= $entry->progressPercent() ?>%</td>
+                        <td>
+                            <?php if ($entry->isCompleted()): ?>
+                                <span class="badge badge-success">Terminado</span>
+                            <?php else: ?>
+                                <span class="badge">En progreso</span>
+                            <?php endif; ?>
+                            <?php if (!$entry->active): ?>
+                                <span class="badge badge-warning">Dado de baja</span>
+                            <?php endif; ?>
+                            <?php if ($entry->levelsOwned < $entry->levelCount): ?>
+                                <span class="table-sub"><?= $entry->levelsOwned ?> de <?= $entry->levelCount ?> niveles</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
             </tbody>
         </table>
     </div>
 </section>
 
-<div class="grid-2">
-    <section class="panel" aria-labelledby="student-certificates-title">
-        <div class="panel-header">
-            <h2 class="panel-title" id="student-certificates-title">Certificados</h2>
+<section class="panel" aria-labelledby="student-purchases-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="student-purchases-title">Mis compras</h2>
+            <p class="panel-description">Pagos de prueba (PayPal Sandbox o tarjeta simulada) e inscripciones gratis.</p>
         </div>
-        <div class="empty-state">
-            <span class="empty-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/></svg>
-            </span>
-            <p class="empty-title">Todavía no tienes certificados</p>
-            <p class="empty-text">Al terminar todos los niveles de un curso se genera tu diploma.</p>
-        </div>
-    </section>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Fecha</th>
+                    <th scope="col">Compra</th>
+                    <th scope="col">Forma de pago</th>
+                    <th scope="col" class="num">Importe</th>
+                    <th scope="col">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ($studentDashboard['purchases'] === []): ?>
+                    <tr>
+                        <td colspan="5" class="text-muted">Todavía no tienes compras.</td>
+                    </tr>
+                <?php endif; ?>
+                <?php foreach ($studentDashboard['purchases'] as $purchase): ?>
+                    <?php [$statusLabel, $statusClass] = $statusLabels[$purchase->status()->value]; ?>
+                    <tr>
+                        <td><?= e(format_date($purchase->completedAt() ?? $purchase->createdAt())) ?></td>
+                        <td>
+                            <?= e($purchase->courseTitleSnapshot()) ?>
+                            <span class="table-sub"><?= $purchase->levelTitleSnapshot() !== null ? 'Nivel: ' . e($purchase->levelTitleSnapshot()) : 'Curso completo' ?></span>
+                        </td>
+                        <td><?= $purchase->paymentMethodNameSnapshot() !== null ? e($purchase->paymentMethodNameSnapshot()) : 'Gratis' ?></td>
+                        <td class="num"><?= e(format_money($purchase->amount(), $purchase->currency())) ?></td>
+                        <td><span class="badge <?= $statusClass ?>"><?= $statusLabel ?></span></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</section>
 
-    <section class="panel" aria-labelledby="student-messages-title">
-        <div class="panel-header">
-            <h2 class="panel-title" id="student-messages-title">Mensajes</h2>
-        </div>
-        <div class="empty-state">
-            <span class="empty-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </span>
-            <p class="empty-title">Sin conversaciones</p>
-            <p class="empty-text">Puedes escribirle al instructor desde la página de cualquier curso.</p>
-        </div>
-    </section>
-</div>
+<section class="panel" aria-labelledby="student-messages-title">
+    <div class="panel-header">
+        <h2 class="panel-title" id="student-messages-title">Mensajes</h2>
+    </div>
+    <div class="empty-state">
+        <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <p class="empty-title">Sin conversaciones</p>
+        <p class="empty-text">La mensajería con los instructores llegará en una entrega posterior.</p>
+    </div>
+</section>

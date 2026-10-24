@@ -1,0 +1,403 @@
+/* =========================================================
+   Alumno: pago, reproductor del curso y "Mi aprendizaje"
+   ========================================================= */
+
+/* ---------- Pago ---------- */
+.checkout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.checkout-cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--surface-2);
+    object-fit: cover;
+}
+
+.checkout-summary .page-title {
+    margin-bottom: 6px;
+    font-size: 1.25rem;
+}
+
+.checkout-total {
+    margin: 12px 0;
+    font-size: 1.125rem;
+}
+
+.checkout-methods {
+    display: grid;
+    gap: 16px;
+}
+
+.checkout-method {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.checkout-method-title {
+    margin: 0;
+    font-weight: 600;
+}
+
+/* ---------- Avisos ---------- */
+.notice-success {
+    border-color: transparent;
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.notice-warning {
+    border-color: transparent;
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+/* ---------- Barra de avance ---------- */
+.progress-bar {
+    overflow: hidden;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-3);
+}
+
+.progress-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--success);
+    transition: width var(--transition);
+}
+
+/* ---------- Reproductor ---------- */
+.learn {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.learn-index {
+    position: sticky;
+    top: calc(var(--header-h) + 16px);
+    overflow: auto;
+    max-height: calc(100vh - var(--header-h) - 32px);
+}
+
+.learn-index-header {
+    display: grid;
+    gap: 12px;
+}
+
+.learn-course-title {
+    margin: 0;
+    font-weight: 600;
+}
+
+.learn-index-header .text-muted {
+    margin: 2px 0 0;
+    font-size: 0.8125rem;
+}
+
+.learn-progress .form-hint {
+    margin: 6px 0 0;
+}
+
+.learn-levels,
+.learn-chapters {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.learn-level + .learn-level {
+    border-top: 1px solid var(--border);
+}
+
+.learn-level-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 16px 6px;
+}
+
+.learn-level-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.learn-chapters {
+    padding-bottom: 8px;
+}
+
+.learn-chapter {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    color: var(--text);
+    font-size: 0.875rem;
+    text-decoration: none;
+}
+
+.learn-chapter:hover {
+    background: var(--surface-2);
+}
+
+.learn-chapter.is-current {
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.learn-chapter-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.learn-state {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border-strong);
+    border-radius: 50%;
+}
+
+.learn-state[data-state="progress"] {
+    border-color: var(--accent);
+    background: linear-gradient(90deg, var(--accent) 50%, transparent 50%);
+}
+
+.learn-state[data-state="done"] {
+    border-color: var(--success);
+    background: var(--success);
+}
+
+.learn-state[data-state="locked"] {
+    border-style: dashed;
+    opacity: 0.6;
+}
+
+.learn-main {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+
+.learn-main > .panel {
+    margin: 0;
+}
+
+.learn-player {
+    overflow: hidden;
+}
+
+.learn-video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+}
+
+.learn-eyebrow {
+    margin: 0 0 4px;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+}
+
+.learn-player .page-title,
+.learn-locked .page-title {
+    margin-bottom: 12px;
+    font-size: 1.25rem;
+}
+
+.learn-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.learn-actions .btn-primary {
+    margin-left: auto;
+}
+
+.learn-locked {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
+}
+
+.learn-locked .btn {
+    margin-top: 8px;
+}
+
+/* ---------- Mi aprendizaje ---------- */
+.continue-grid .progress-bar {
+    margin-top: 6px;
+}
+
+.filters-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.table-sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* ---------- Examen del alumno ---------- */
+.exam-facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+    margin: 0 0 12px;
+    padding: 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    list-style: none;
+}
+
+.exam-facts strong {
+    color: var(--text);
+}
+
+.learn-exam [data-exam-stage]:not(:empty) {
+    border-top: 1px solid var(--border);
+}
+
+.exam-form,
+.exam-review {
+    display: grid;
+    gap: 16px;
+}
+
+.exam-question {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.exam-question-text {
+    margin: 0;
+    padding: 0;
+    font-weight: 600;
+    white-space: pre-line;
+}
+
+.exam-question .form-hint {
+    margin: 0;
+}
+
+.exam-question-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.exam-answer {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.exam-answer:hover {
+    background: var(--surface-2);
+}
+
+.exam-answer input {
+    margin-top: 3px;
+}
+
+.exam-answers {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.exam-answer-review {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.exam-answer-review > span:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.exam-answer-review.is-correct {
+    border-color: var(--success);
+    background: var(--success-soft);
+}
+
+.exam-answer-review.is-wrong {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.exam-result {
+    padding: 14px 16px;
+    border-radius: var(--radius);
+}
+
+.exam-result p {
+    margin: 0;
+}
+
+.exam-result.is-passed {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.exam-result.is-failed {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.exam-result-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+@media (max-width: 899.98px) {
+    .checkout,
+    .learn {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .learn-index {
+        position: static;
+        max-height: none;
+    }
+}

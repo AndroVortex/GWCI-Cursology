@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http;
 
 use App\Integrations\MediaUploadException;
+use App\Integrations\PaymentProviderException;
 use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\ValidationException;
 
@@ -73,6 +74,12 @@ final class Router
             return $exception->notConfigured
                 ? JsonResponse::error(503, 'MEDIA_UNAVAILABLE', 'La carga de archivos no está disponible por el momento.')
                 : JsonResponse::error(502, 'MEDIA_UPLOAD_FAILED', 'No se pudo procesar el archivo. Inténtalo de nuevo.');
+        } catch (PaymentProviderException $exception) {
+            error_log('[payments] ' . $exception->getMessage());
+
+            return $exception->notConfigured
+                ? JsonResponse::error(503, 'PAYMENTS_UNAVAILABLE', 'El pago con PayPal no está disponible por el momento.')
+                : JsonResponse::error(502, 'PAYMENT_PROVIDER_FAILED', 'PayPal no respondió como esperábamos. Inténtalo de nuevo.');
         }
     }
 

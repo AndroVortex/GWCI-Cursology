@@ -475,50 +475,6 @@
     background: var(--danger-soft);
     color: var(--danger);
 }
-
-/* ---------- Contenido ---------- */
-.content-list {
-    display: grid;
-    gap: 6px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.content-item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 10px;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 0.875rem;
-}
-
-.content-name {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-.content-name summary {
-    cursor: pointer;
-}
-
-.content-text {
-    margin: 6px 0 0;
-    color: var(--text-muted);
-}
-
-.content-meta,
-.content-empty {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.8125rem;
-    font-variant-numeric: tabular-nums;
-}
-
 .resource-form {
     display: grid;
     gap: 10px;

@@ -61,6 +61,35 @@ SOURCE app/database/procedures/course/sp_question_delete.sql;
 SOURCE app/database/procedures/course/sp_question_move.sql;
 SOURCE app/database/procedures/course/sp_exam_get_for_owner.sql;
 
+-- Formas de pago
+SOURCE app/database/procedures/payment/sp_payment_method_list.sql;
+SOURCE app/database/procedures/payment/sp_payment_method_set_active.sql;
+
+-- Inscripción y compras (sp_purchase_grant va primero: lo llaman los demás)
+SOURCE app/database/procedures/purchase/sp_purchase_grant.sql;
+SOURCE app/database/procedures/purchase/sp_enrollment_free.sql;
+SOURCE app/database/procedures/purchase/sp_purchase_start.sql;
+SOURCE app/database/procedures/purchase/sp_purchase_attach_provider.sql;
+SOURCE app/database/procedures/purchase/sp_purchase_get.sql;
+SOURCE app/database/procedures/purchase/sp_purchase_complete.sql;
+SOURCE app/database/procedures/purchase/sp_purchase_fail.sql;
+SOURCE app/database/procedures/purchase/sp_course_access.sql;
+
+-- Reproductor del alumno (sp_learning_recalculate va primero: lo llaman los demás)
+SOURCE app/database/procedures/learning/sp_learning_recalculate.sql;
+SOURCE app/database/procedures/learning/sp_learning_course.sql;
+SOURCE app/database/procedures/learning/sp_learning_progress.sql;
+
+-- Intentos de examen (sp_attempt_get va primero: lo llaman start y submit)
+SOURCE app/database/procedures/exam/sp_attempt_get.sql;
+SOURCE app/database/procedures/exam/sp_attempt_start.sql;
+SOURCE app/database/procedures/exam/sp_attempt_submit.sql;
+SOURCE app/database/procedures/exam/sp_attempt_list.sql;
+
+-- Mi aprendizaje (kardex y compras)
+SOURCE app/database/procedures/student/sp_student_courses.sql;
+SOURCE app/database/procedures/student/sp_student_purchases.sql;
+
 -- Catálogo público
 SOURCE app/database/procedures/catalog/sp_catalog_search.sql;
 SOURCE app/database/procedures/catalog/sp_catalog_course.sql;

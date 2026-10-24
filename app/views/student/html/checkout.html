@@ -1,0 +1,128 @@
+<?php
+/**
+ * Pago de un curso completo o de un nivel. Solo dinero de prueba: PayPal Sandbox y tarjeta simulada.
+ *
+ * @var ?\App\Models\Dto\PublicCourse $publicCourse
+ * @var \App\Models\Dto\CourseAccess $courseAccess
+ * @var ?string $checkoutLevelId
+ * @var list<\App\Services\PaymentProvider> $paymentProviders
+ * @var string $paypalClientId
+ */
+use App\Services\PaymentProvider;
+use App\Services\PricingMode;
+
+$problem = null;
+$level = null;
+$amount = null;
+if ($publicCourse === null) {
+    $problem = 'Este curso no está disponible.';
+} else {
+    $mode = $publicCourse->pricingMode();
+    foreach ($publicCourse->levels as $candidate) {
+        if ($candidate['id'] === $checkoutLevelId) {
+            $level = $candidate;
+        }
+    }
+    $problem = match (true) {
+        $checkoutLevelId !== null && $level === null => 'Ese nivel no existe en este curso.',
+        $level !== null && $courseAccess->hasLevel($level['id']), $level === null && $courseAccess->ownsCourse => 'already-owned',
+        $level !== null && ($mode === PricingMode::Free || $level['cost'] === '0.00') => 'Este nivel es gratis: inscríbete desde la página del curso.',
+        $level === null && $mode !== PricingMode::Bundle => 'Este curso se compra por niveles: elige uno en el temario.',
+        $paymentProviders === [] => 'Por ahora no hay formas de pago disponibles. Inténtalo más tarde.',
+        default => null,
+    };
+    $amount = $level !== null ? $level['cost'] : $publicCourse->fullCoursePrice;
+}
+?>
+<p class="breadcrumb">
+    <a href="?view=catalog">Catálogo</a>
+    <?php if ($publicCourse !== null): ?>
+        / <a href="?view=course&amp;id=<?= e($publicCourse->id) ?>"><?= e($publicCourse->title) ?></a>
+    <?php endif; ?>
+    / Pagar
+</p>
+
+<?php if ($problem === 'already-owned'): ?>
+    <div class="empty-state">
+        <p class="empty-title">Ya tienes acceso</p>
+        <p class="empty-text">No necesitas pagarlo otra vez.</p>
+        <a class="btn btn-primary btn-sm" href="?view=learn&amp;course=<?= e($publicCourse->id) ?>">Ir al curso</a>
+    </div>
+<?php elseif ($problem !== null): ?>
+    <div class="empty-state">
+        <p class="empty-title"><?= e($problem) ?></p>
+        <?php if ($publicCourse !== null): ?>
+            <a class="btn btn-secondary btn-sm" href="?view=course&amp;id=<?= e($publicCourse->id) ?>">Volver al curso</a>
+        <?php else: ?>
+            <a class="btn btn-secondary btn-sm" href="?view=catalog">Ir al catálogo</a>
+        <?php endif; ?>
+    </div>
+<?php else: ?>
+    <div class="checkout" data-checkout data-course-id="<?= e($publicCourse->id) ?>" data-level-id="<?= e($level['id'] ?? '') ?>">
+        <section class="panel checkout-summary" aria-labelledby="checkout-summary-title">
+            <img class="checkout-cover" src="<?= e($publicCourse->coverImage) ?>" alt="">
+            <div class="panel-body">
+                <h1 class="page-title" id="checkout-summary-title"><?= e($publicCourse->title) ?></h1>
+                <p class="text-muted">
+                    <?php if ($level !== null): ?>
+                        Nivel <?= $level['sortOrder'] ?>: <?= e($level['title']) ?> · <?= count($level['chapters']) ?> capítulo(s)
+                    <?php else: ?>
+                        Curso completo · <?= count($publicCourse->levels) ?> nivel(es), incluye los que se agreguen después
+                    <?php endif; ?>
+                </p>
+                <p class="checkout-total">Total: <strong><?= e(format_money($amount, $publicCourse->currency)) ?></strong></p>
+                <p class="notice" role="note">Entorno de pruebas: PayPal usa su Sandbox de Developers y la tarjeta es simulada. No se cobra dinero real.</p>
+            </div>
+        </section>
+
+        <section class="panel checkout-pay" aria-labelledby="checkout-pay-title">
+            <div class="panel-header">
+                <h2 class="panel-title" id="checkout-pay-title">Forma de pago</h2>
+            </div>
+            <div class="panel-body checkout-methods">
+                <div class="form-alert" role="alert" data-checkout-alert hidden></div>
+
+                <?php if (in_array(PaymentProvider::PayPal, $paymentProviders, true)): ?>
+                    <div class="checkout-method" data-paypal data-client-id="<?= e($paypalClientId) ?>" data-currency="<?= e($publicCourse->currency) ?>">
+                        <p class="checkout-method-title">PayPal (Sandbox)</p>
+                        <p class="form-hint">Entra con tu cuenta de comprador de prueba de PayPal Developers.</p>
+                        <div data-paypal-buttons><p class="text-muted">Cargando PayPal…</p></div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (in_array(PaymentProvider::SimulatedCard, $paymentProviders, true)): ?>
+                    <form class="checkout-method card-form" data-card-form novalidate>
+                        <p class="checkout-method-title">Tarjeta simulada</p>
+                        <p class="form-hint">Usa 4242 4242 4242 4242 (se aprueba) o 4000 0000 0000 0002 (se rechaza), con cualquier vencimiento futuro y CVV.</p>
+                        <div class="form-alert" role="alert" data-form-alert hidden></div>
+                        <div class="form-field">
+                            <label class="form-label" for="card-titular">Nombre en la tarjeta</label>
+                            <input class="form-control" type="text" id="card-titular" name="titular" maxlength="100" autocomplete="off">
+                            <p class="field-error" aria-live="polite"></p>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label" for="card-numero">Número</label>
+                            <input class="form-control" type="text" id="card-numero" name="numero" inputmode="numeric" maxlength="23" placeholder="4242 4242 4242 4242" autocomplete="off">
+                            <p class="field-error" aria-live="polite"></p>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-field">
+                                <label class="form-label" for="card-vencimiento">Vencimiento</label>
+                                <input class="form-control" type="text" id="card-vencimiento" name="vencimiento" inputmode="numeric" maxlength="5" placeholder="MM/AA" autocomplete="off">
+                                <p class="field-error" aria-live="polite"></p>
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label" for="card-cvv">CVV</label>
+                                <input class="form-control" type="password" id="card-cvv" name="cvv" inputmode="numeric" maxlength="4" autocomplete="off">
+                                <p class="field-error" aria-live="polite"></p>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Pagar <?= e(format_money($amount, $publicCourse->currency)) ?></button>
+                        </div>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </section>
+    </div>
+<?php endif; ?>

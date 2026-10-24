@@ -158,6 +158,20 @@
     background: #000;
 }
 
+.syllabus-level-access {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 16px 8px;
+}
+
+.syllabus-level-access:empty {
+    display: none;
+}
+
+.course-buy .form-alert {
+    margin: 0;
+}
+
 .syllabus-chapters {
     display: grid;
     gap: 2px;

@@ -15,4 +15,18 @@ enum ContentType: string
     case Link = 'link';
     case Text = 'text';
     case Other = 'other';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Video => 'Video',
+            self::Document => 'Documento',
+            self::Image => 'Imagen',
+            self::Audio => 'Audio',
+            self::Archive => 'Archivo',
+            self::Link => 'Enlace',
+            self::Text => 'Texto',
+            self::Other => 'Otro',
+        };
+    }
 }

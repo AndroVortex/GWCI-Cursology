@@ -1,5 +1,9 @@
 <?php
-/** @var ?\App\Models\Dto\PublicCourse $publicCourse null = no existe, es borrador o está dado de baja */
+/**
+ * @var ?\App\Models\Dto\PublicCourse $publicCourse null = no existe, es borrador o está dado de baja
+ * @var \App\Models\Dto\CourseAccess $courseAccess lo que el usuario ya tiene del curso
+ * @var bool $isStudent solo los alumnos se inscriben y compran
+ */
 use App\Services\PricingMode;
 ?>
 <?php if ($publicCourse === null): ?>
@@ -17,6 +21,8 @@ use App\Services\PricingMode;
     $mode = $course->pricingMode();
     $levelCount = count($course->levels);
     $examCount = $course->examCount();
+    $freeLevelsMissing = array_filter($course->levels, static fn (array $level): bool => $level['cost'] === '0.00' && !$courseAccess->hasLevel($level['id']));
+    $checkoutUrl = static fn (?string $levelId = null): string => '?view=checkout&course=' . rawurlencode($course->id) . ($levelId === null ? '' : '&level=' . rawurlencode($levelId));
     ?>
     <p class="breadcrumb"><a href="?view=catalog">Catálogo</a> / <?= e($course->title) ?></p>
 
@@ -60,8 +66,33 @@ use App\Services\PricingMode;
                     <p class="course-price"><?= e(course_price_label(null, $course->levelPriceTotal(), $course->currency)) ?></p>
                     <p class="text-muted">Compra solo los niveles que quieras; cada uno tiene su precio en el temario.</p>
                 <?php endif; ?>
-                <button type="button" class="btn btn-primary btn-block" disabled>Inscribirme</button>
-                <p class="form-hint">La inscripción y los pagos estarán disponibles en la siguiente entrega.</p>
+                <div class="form-alert" role="alert" data-form-alert hidden></div>
+                <?php if ($courseAccess->hasAnyLevel()): ?>
+                    <a class="btn btn-primary btn-block" href="?view=learn&amp;course=<?= e($course->id) ?>">Ir al curso</a>
+                    <?php if ($mode === PricingMode::Bundle && !$courseAccess->ownsCourse && count($courseAccess->levelIds) < $levelCount && $isStudent): ?>
+                        <a class="btn btn-secondary btn-block" href="<?= e($checkoutUrl()) ?>">Comprar el curso completo</a>
+                    <?php endif; ?>
+                    <?php if ($freeLevelsMissing !== [] && $mode !== PricingMode::Free && $isStudent): ?>
+                        <button type="button" class="btn btn-ghost btn-block" data-enroll-free="<?= e($course->id) ?>">Obtener los niveles gratis</button>
+                    <?php endif; ?>
+                <?php elseif (!$isLoggedIn): ?>
+                    <a class="btn btn-primary btn-block" href="?view=login"><?= $mode === PricingMode::Free ? 'Inicia sesión para inscribirte gratis' : 'Inicia sesión para comprar' ?></a>
+                    <p class="form-hint">¿No tienes cuenta? <a href="?view=login#signup">Regístrate como alumno</a>.</p>
+                <?php elseif (!$isStudent): ?>
+                    <button type="button" class="btn btn-primary btn-block" disabled>Inscribirme</button>
+                    <p class="form-hint">Solo las cuentas de alumno pueden inscribirse y comprar cursos.</p>
+                <?php elseif ($mode === PricingMode::Free): ?>
+                    <button type="button" class="btn btn-primary btn-block" data-enroll-free="<?= e($course->id) ?>">Inscribirme gratis</button>
+                <?php else: ?>
+                    <?php if ($mode === PricingMode::Bundle): ?>
+                        <a class="btn btn-primary btn-block" href="<?= e($checkoutUrl()) ?>">Comprar el curso completo</a>
+                    <?php endif; ?>
+                    <?php if ($freeLevelsMissing !== []): ?>
+                        <button type="button" class="btn btn-<?= $mode === PricingMode::Bundle ? 'secondary' : 'primary' ?> btn-block" data-enroll-free="<?= e($course->id) ?>">Empezar con los niveles gratis</button>
+                    <?php endif; ?>
+                    <p class="form-hint">También puedes comprar un nivel a la vez desde el temario.</p>
+                <?php endif; ?>
+                <p class="form-hint">Pagos de prueba: PayPal Sandbox o tarjeta simulada. No se cobra dinero real.</p>
             </div>
         </aside>
     </section>
@@ -70,7 +101,7 @@ use App\Services\PricingMode;
         <div class="panel-header">
             <div>
                 <h2 class="panel-title" id="syllabus-title">Temario</h2>
-                <p class="panel-description">El video de presentación de cada nivel es público; el resto del contenido es para los alumnos inscritos.</p>
+                <p class="panel-description">El video de presentación de cada nivel es público; el resto del contenido es para los alumnos con acceso.</p>
             </div>
         </div>
         <ol class="syllabus">
@@ -94,6 +125,13 @@ use App\Services\PricingMode;
                             <p class="text-muted"><?= nl2br(e($level['description'])) ?></p>
                         </div>
                     </details>
+                    <div class="syllabus-level-access">
+                        <?php if ($courseAccess->hasLevel($level['id'])): ?>
+                            <span class="badge badge-success">Tienes acceso</span>
+                        <?php elseif ($isStudent && $mode !== PricingMode::Free && $level['cost'] !== '0.00'): ?>
+                            <a class="btn btn-secondary btn-sm" href="<?= e($checkoutUrl($level['id'])) ?>">Comprar este nivel · <?= e(format_money($level['cost'], $course->currency)) ?></a>
+                        <?php endif; ?>
+                    </div>
                     <ol class="syllabus-chapters">
                         <?php foreach ($level['chapters'] as $chapter): ?>
                             <li class="syllabus-chapter">
