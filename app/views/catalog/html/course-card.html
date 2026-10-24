@@ -11,6 +11,7 @@
             <h3 class="course-card-title"><?= e($card->title) ?></h3>
             <p class="course-card-instructor"><?= e($card->instructorName) ?></p>
             <p class="course-card-meta"><?= $card->levelCount ?> nivel(es) · <?= $card->chapterCount ?> capítulo(s)</p>
+            <p class="course-card-rating<?= $card->ratingCount === 0 ? ' is-empty' : '' ?>"><?= e(format_rating($card->ratingAvg, $card->ratingCount)) ?></p>
             <p class="course-card-price"><?= e(course_price_label($card->fullCoursePrice, $card->levelPriceTotal, $card->currency)) ?></p>
         </div>
     </a>

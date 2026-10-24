@@ -26,10 +26,10 @@ Cursology **no cobra dinero real**. Hay dos formas de pago:
 6. Comprueba la conexión:
 
    ```powershell
-   php tests/verify_paypal_live.php
+   php tests/verify_paypal_sandbox.php
    ```
 
-   Debe terminar en `RESULTADO: OK`: obtiene el token, crea una orden de $1.00 MXN y la lee en estado `CREATED`. La orden no se paga y PayPal la descarta sola.
+   Debe terminar en `RESULTADO: OK`: obtiene el token, crea una orden de $1.00 MXN y lee su estado. El estado es `PAYER_ACTION_REQUIRED` (o `CREATED`): la orden espera a que el comprador la apruebe. La orden no se paga y PayPal la descarta sola.
 
 ## 2. Cuentas de prueba
 

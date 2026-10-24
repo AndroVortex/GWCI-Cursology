@@ -51,6 +51,33 @@ final class CloudinaryClient
     }
 
     /**
+     * Sube desde el servidor un archivo generado (p. ej. el PDF de un certificado) con un
+     * public_id fijo: un reintento reemplaza el mismo archivo. Devuelve el public_id final.
+     *
+     * @param 'image'|'video'|'raw' $resourceType
+     * @param 'upload'|'private'|'authenticated' $type
+     * @throws MediaUploadException
+     */
+    public function uploadFile(string $filePath, string $mimeType, string $resourceType, string $type, string $folder, string $publicId): string
+    {
+        $params = [
+            'folder' => $folder,
+            'overwrite' => 'true',
+            'public_id' => $publicId,
+            'timestamp' => (string) time(),
+            'type' => $type,
+        ];
+        $response = $this->post($resourceType . '/upload', $params, ['file' => new CURLFile($filePath, $mimeType)]);
+
+        $uploadedId = $response['public_id'] ?? null;
+        if (!is_string($uploadedId) || $uploadedId === '') {
+            throw MediaUploadException::failed('la respuesta de la carga no trae public_id.');
+        }
+
+        return $uploadedId;
+    }
+
+    /**
      * Campos firmados para que el NAVEGADOR suba el archivo directo a Cloudinary
      * (los videos no pasan por PHP). Se deben enviar tal cual, más el archivo.
      *

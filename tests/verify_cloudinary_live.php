@@ -8,14 +8,18 @@ declare(strict_types=1);
  *   php tests/verify_cloudinary_live.php
  *
  * Hace lo mismo que el navegador: pide un ticket, sube el archivo directo a Cloudinary
- * y el servidor lo verifica con la Admin API. También prueba la subida desde el servidor
- * (la del avatar). Usa una imagen diminuta y un documento de texto en
- * cursology/courses/u999999999/ y los borra al terminar. No toca la base de datos.
+ * y el servidor lo verifica con la Admin API. También prueba las subidas desde el servidor
+ * (la del avatar y el PDF de un certificado). Usa una imagen diminuta, un documento de texto
+ * y un PDF en cursology/courses/u999999999/ y cursology/certificates/u999999999/, y los borra
+ * al terminar. No toca la base de datos.
  */
 
 use App\Integrations\CloudinaryClient;
 use App\Integrations\MediaUploadException;
 use App\Models\Entities\AppUser;
+use App\Models\Entities\Certificate;
+use App\Services\CertificateRenderer;
+use App\Services\CloudinaryCertificateStore;
 use App\Services\Exceptions\ValidationException;
 use App\Services\MediaService;
 use App\Services\VerifiedMedia;
@@ -173,6 +177,28 @@ try {
     check($video->durationSeconds !== null && $video->durationSeconds > 0, "confirm() lee la duración real ({$video->durationSeconds} s)");
 
     // -----------------------------------------------------------
+    Report::section('Certificado en PDF (desde el servidor)');
+    $certificateStore = new CloudinaryCertificateStore($cloudinary, $media);
+    $code = vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex(random_bytes(16)), 4));
+    $certificatePdf = (new CertificateRenderer())->render(Certificate::fromRow([
+        'id' => '1', 'user_id' => $user->id(), 'course_id' => '1', 'issued_by' => '1', 'verification_code' => $code,
+        'student_name_snapshot' => 'Prueba Cloudinary Núñez', 'course_title_snapshot' => 'Curso de prueba',
+        'certifier_name_snapshot' => 'Cursology', 'completed_at_snapshot' => $timestamp, 'template_snapshot' => 'cursology-v1',
+        'status' => 'pending', 'document_uri' => null, 'created_at' => $timestamp, 'issued_at' => null,
+    ]), 'http://localhost:8000/?view=verify&code=' . $code);
+    $certificatePublicId = 'cursology/certificates/u' . $user->id() . '/' . $code . '.pdf';
+    $certificateReference = $certificateStore->save($user->id(), $code, $certificatePdf);
+    check($certificateReference === 'cloudinary:authenticated/raw/' . $certificatePublicId, 'uploadFile() sube el PDF como raw authenticated con el código como nombre');
+    check($certificateStore->save($user->id(), $code, $certificatePdf) === $certificateReference, 'subirlo otra vez reemplaza el mismo archivo (overwrite)');
+    $unsignedPdf = 'https://res.cloudinary.com/' . rawurlencode($ENV['CLOUDINARY_CLOUD_NAME']) . '/raw/authenticated/' . $certificatePublicId;
+    check(fetchUrl($unsignedPdf)['status'] !== 200, 'sin firma el PDF no se descarga');
+    $pdfDownload = fetchUrl($certificateStore->downloadUrl($certificateReference));
+    check($pdfDownload['status'] === 200 && $pdfDownload['body'] === $certificatePdf, 'la URL temporal descarga exactamente el PDF generado');
+    $cloudinary->destroy($certificatePublicId, 'raw', 'authenticated');
+    $certificatePublicId = null;
+    check(!exists($cloudinary, new VerifiedMedia('cursology/certificates/u' . $user->id() . '/' . $code . '.pdf', 'raw', 'authenticated', 'pdf', 1, null, 'c.pdf', 'application/pdf', '')), 'y se borra al terminar');
+
+    // -----------------------------------------------------------
     Report::section('Formato no permitido');
     // En raw Cloudinary no filtra formatos: lo hace confirm() y borra el archivo.
     $response = browserUpload($media->ticket($user, 'chapter_archive'), new CURLFile($txt, 'text/plain', 'no-es-zip.txt'));
@@ -195,6 +221,12 @@ try {
 
 // exit() no ejecuta los finally: se limpia antes de salir.
 array_map($media->discard(...), $uploaded);
+if (($certificatePublicId ?? null) !== null) {
+    try {
+        $cloudinary->destroy($certificatePublicId, 'raw', 'authenticated');
+    } catch (MediaUploadException) {
+    }
+}
 array_map('unlink', $tempFiles);
 
 if ($failure !== null) {

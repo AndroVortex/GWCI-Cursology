@@ -405,8 +405,8 @@ php tests/verify_learning_db.php
 # Contra Cloudinary real (opcional; sube y borra archivos de prueba)
 php tests/verify_cloudinary_live.php
 
-# Contra PayPal Sandbox real (opcional; crea una orden de prueba de $1.00 MXN sin pagarla)
-php tests/verify_paypal_live.php
+# Contra PayPal Sandbox por red (opcional; crea una orden de prueba de $1.00 MXN sin pagarla)
+php tests/verify_paypal_sandbox.php
 ```
 
 Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`):

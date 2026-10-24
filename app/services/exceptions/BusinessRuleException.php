@@ -69,6 +69,11 @@ final class BusinessRuleException extends RuntimeException
         'ATTEMPT_NOT_FOUND' => [404, 'El intento no existe.', null],
         'ATTEMPT_ALREADY_SUBMITTED' => [409, 'Este intento ya se entregó. Abre uno nuevo para volver a intentarlo.', null],
         'INVALID_KARDEX_STATUS' => [422, 'Estado del kardex desconocido.', 'estado'],
+        'COURSE_NOT_COMPLETED' => [409, 'Esto se habilita cuando terminas el curso.', null],
+        'CERTIFICATE_NOT_FOUND' => [404, 'No encontramos ningún certificado con ese código.', null],
+        'INVALID_RATE' => [422, 'Elige de 1 a 5 estrellas.', 'calificacion'],
+        'OPINION_HIDDEN' => [409, 'Tu opinión fue ocultada y ya no se puede cambiar; sí puedes cambiar tus estrellas.', 'opinion'],
+        'OPINION_NOT_FOUND' => [404, 'La opinión no existe.', null],
         'INVALID_SELECTION' => [422, 'Hay respuestas que no son de este examen o más de una en una pregunta de opción única.', 'respuestas'],
     ];
 

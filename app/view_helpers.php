@@ -67,6 +67,20 @@ function course_price_label(?string $fullCoursePrice, string $levelPriceTotal, s
     };
 }
 
+/** Calificación de un curso para las tarjetas: "4.5 ★ (12)" o "Sin calificaciones". */
+function format_rating(?string $average, int $count): string
+{
+    return $average === null || $count === 0 ? 'Sin calificaciones' : sprintf('%s ★ (%d)', $average, $count);
+}
+
+/** Estrellas llenas y vacías de una calificación de 0 a 5 ("★★★★☆"). */
+function star_string(int $stars): string
+{
+    $stars = max(0, min(5, $stars));
+
+    return str_repeat('★', $stars) . str_repeat('☆', 5 - $stars);
+}
+
 /** Tamaño legible de un BIGINT UNSIGNED en bytes ("2.4 MB"). */
 function format_bytes(?string $bytes): string
 {

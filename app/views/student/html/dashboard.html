@@ -2,12 +2,21 @@
 /**
  * @var array{stats: array{enrolled: int, inProgress: int, completed: int}, continue: list<\App\Models\Dto\KardexEntry>,
  *     kardex: list<\App\Models\Dto\KardexEntry>, filters: array{desde: string, hasta: string, categoria: string, estado: string},
- *     purchases: list<\App\Models\Entities\Purchase>} $studentDashboard
+ *     purchases: list<\App\Models\Entities\Purchase>, completed: list<\App\Models\Dto\KardexEntry>} $studentDashboard
  * @var list<\App\Models\Entities\Category> $kardexCategories
+ * @var list<\App\Models\Entities\Certificate> $studentCertificates
+ * @var \App\Services\CertificateService $certificateService
  */
+use App\Models\Enums\CertificateStatus;
 use App\Models\Enums\PurchaseStatus;
 
 $stats = $studentDashboard['stats'];
+$issuedCertificates = array_values(array_filter($studentCertificates, static fn ($c): bool => $c->status() === CertificateStatus::Issued));
+$certifiedCourseIds = array_map(static fn ($c): string => $c->courseId(), $issuedCertificates);
+$pendingCertificates = array_values(array_filter(
+    $studentDashboard['completed'],
+    static fn (\App\Models\Dto\KardexEntry $entry): bool => !in_array($entry->courseId, $certifiedCourseIds, true),
+));
 $filters = $studentDashboard['filters'];
 $filtered = array_filter($filters, static fn (string $value): bool => $value !== '') !== [];
 $learnUrl = static fn (\App\Models\Dto\KardexEntry $entry): string => '?view=learn&course=' . rawurlencode($entry->courseId)
@@ -45,8 +54,7 @@ $statusLabels = [
     </div>
     <div class="stat">
         <p class="stat-label">Certificados</p>
-        <p class="stat-value">—</p>
-        <p class="stat-hint">Llegan en la siguiente entrega</p>
+        <p class="stat-value"><?= count($issuedCertificates) ?></p>
     </div>
 </div>
 
@@ -183,6 +191,50 @@ $statusLabels = [
             </tbody>
         </table>
     </div>
+</section>
+
+<section class="panel" aria-labelledby="student-certificates-title" id="certificados">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="student-certificates-title">Certificados</h2>
+            <p class="panel-description">Uno por cada curso que terminas. Cualquiera puede verificarlo con su código.</p>
+        </div>
+    </div>
+    <?php if ($issuedCertificates === [] && $pendingCertificates === []): ?>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/></svg>
+            </span>
+            <p class="empty-title">Todavía no tienes certificados</p>
+            <p class="empty-text">Al terminar todos los niveles de un curso puedes obtener tu certificado en PDF.</p>
+        </div>
+    <?php else: ?>
+        <ul class="list certificate-list">
+            <?php foreach ($issuedCertificates as $certificate): ?>
+                <li>
+                    <div>
+                        <p class="certificate-title"><?= e($certificate->courseTitleSnapshot()) ?></p>
+                        <p class="table-sub">Terminado el <?= e(format_date($certificate->completedAtSnapshot())) ?> · Código <?= e($certificate->verificationCode()) ?></p>
+                    </div>
+                    <div class="certificate-actions">
+                        <a class="btn btn-ghost btn-sm" href="?view=verify&amp;code=<?= e($certificate->verificationCode()) ?>">Verificar</a>
+                        <a class="btn btn-secondary btn-sm" href="<?= e($certificateService->downloadUrl($certificate)) ?>">Descargar</a>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+            <?php foreach ($pendingCertificates as $entry): ?>
+                <li>
+                    <div>
+                        <p class="certificate-title"><?= e($entry->title) ?></p>
+                        <p class="table-sub">Terminado el <?= e(format_date($entry->completedAt)) ?> · Aún no lo obtienes</p>
+                    </div>
+                    <div class="certificate-actions">
+                        <button type="button" class="btn btn-primary btn-sm" data-certificate="<?= e($entry->courseId) ?>">Obtener certificado</button>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
 </section>
 
 <section class="panel" aria-labelledby="student-purchases-title">

@@ -39,15 +39,13 @@ $chapterState = static function (array $item) use ($course): array {
 </p>
 <div class="form-alert page-alert" role="status" data-page-alert hidden></div>
 
-<?php if ($course->completedAt !== null): ?>
-    <div class="notice notice-success" role="status" data-course-completed>
-        <p>¡Terminaste el curso el <?= e(format_date($course->completedAt)) ?>! El certificado estará disponible en la siguiente entrega.</p>
+<div class="notice notice-success learn-completed" role="status" data-course-completed<?= $course->completedAt === null ? ' hidden' : '' ?>>
+    <p>¡Terminaste el curso<?= $course->completedAt !== null ? ' el ' . e(format_date($course->completedAt)) : '' ?>! Ya puedes obtener tu certificado y calificar el curso.</p>
+    <div class="learn-completed-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-certificate="<?= e($course->id) ?>">Obtener certificado</button>
+        <a class="btn btn-secondary btn-sm" href="?view=course&amp;id=<?= e($course->id) ?>#opiniones">Califica el curso</a>
     </div>
-<?php else: ?>
-    <div class="notice notice-success" role="status" data-course-completed hidden>
-        <p>¡Terminaste el curso! El certificado estará disponible en la siguiente entrega.</p>
-    </div>
-<?php endif; ?>
+</div>
 <?php if (!$course->active): ?>
     <div class="notice notice-warning" role="note">
         <p>Este curso se dio de baja: ya no se vende, pero conservas el acceso a lo que compraste.</p>

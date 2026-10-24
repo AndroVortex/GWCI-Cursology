@@ -37,11 +37,12 @@
     /* ---------- Formularios: errores por campo, alertas y estado de envío ---------- */
 
     // form.elements[name] es un RadioNodeList para radios o casillas con el mismo nombre;
-    // en ese caso el error se muestra en el fieldset que los agrupa.
+    // en ese caso el error se muestra en el fieldset que los agrupa. Un grupo que puede
+    // quedar sin controles (p. ej. sin categorías) se marca con data-field="name".
     function fieldAnchor(form, name) {
         const field = form.elements[name];
         if (!field) {
-            return null;
+            return form.querySelector('[data-field="' + name + '"]');
         }
         const isGroup = !field.tagName && typeof field.length === 'number';
         return isGroup ? (field[0] ? field[0].closest('fieldset') : null) : field;

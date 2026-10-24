@@ -46,17 +46,17 @@
     font-weight: 600;
 }
 
-/* ---------- Avisos ---------- */
-.notice-success {
-    border-color: transparent;
-    background: var(--success-soft);
-    color: var(--success);
+/* ---------- Curso terminado ---------- */
+.learn-completed {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
 }
 
-.notice-warning {
-    border-color: transparent;
-    background: var(--warning-soft);
-    color: var(--warning);
+.learn-completed-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 /* ---------- Barra de avance ---------- */
@@ -251,6 +251,17 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    gap: 6px;
+}
+
+.certificate-title {
+    margin: 0;
+    font-weight: 600;
+}
+
+.certificate-actions {
+    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
 }
 
