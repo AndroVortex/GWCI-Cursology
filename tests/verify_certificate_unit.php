@@ -89,6 +89,21 @@ $issueSql = (string) file_get_contents(dirname(__DIR__) . '/app/database/procedu
 check(str_contains($issueSql, "'" . CertificateRenderer::TEMPLATE . "'"), 'el SP congela el mismo nombre de plantilla');
 
 // -----------------------------------------------------------
+Report::section('Descarga del PDF');
+check(CertificateService::fileName($certificate) === 'Certificado - PHP desde cero.pdf', 'se descarga como "Certificado - <curso>.pdf"');
+$odd = Certificate::fromRow(['course_title_snapshot' => 'C#: ¿qué es "async"? <1/2>'] + [
+    'id' => '1', 'user_id' => '2', 'course_id' => '3', 'issued_by' => '4', 'verification_code' => '3f9c2a1e-7b4d-4c8e-9a51-2d6f0b8e1c47',
+    'student_name_snapshot' => 'X', 'certifier_name_snapshot' => 'Y', 'completed_at_snapshot' => '2026-10-24 03:15:00.000000',
+    'template_snapshot' => 'cursology-v1', 'status' => 'issued', 'document_uri' => 'x', 'created_at' => '2026-10-24 03:15:00.000000',
+    'issued_at' => '2026-10-24 03:15:00.000000',
+]);
+check(CertificateService::fileName($odd) === 'Certificado - C# ¿qué es async 1 2.pdf', 'sin los caracteres que Windows no acepta (\\ / : * ? " < > |)');
+$file = App\Http\JsonResponse::file('%PDF-1.4 x', 'application/pdf', 'Certificado - Programación.pdf')->withHeader('Vary', 'Origin');
+check($file->body() === '%PDF-1.4 x' && $file->status === 200 && $file->header('Content-Type') === 'application/pdf', 'la respuesta es el PDF tal cual, con su tipo (y conserva los headers que se agregan después)');
+check($file->header('Content-Disposition') === "attachment; filename=\"Certificado - Programaci_n.pdf\"; filename*=UTF-8''Certificado%20-%20Programaci%C3%B3n.pdf", 'Content-Disposition con el nombre .pdf (ASCII y UTF-8)');
+check($file->header('Content-Length') === '10', 'Content-Length del archivo');
+
+// -----------------------------------------------------------
 Report::section('Código de verificación');
 check(CertificateService::isCode('3f9c2a1e-7b4d-4c8e-9a51-2d6f0b8e1c47'), 'UUID en minúsculas');
 check(!CertificateService::isCode('3F9C2A1E-7B4D-4C8E-9A51-2D6F0B8E1C47') && !CertificateService::isCode('abc') && !CertificateService::isCode("3f9c2a1e-7b4d-4c8e-9a51-2d6f0b8e1c47\n"), 'mayúsculas (se normalizan antes), basura o salto de línea no');

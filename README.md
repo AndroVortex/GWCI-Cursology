@@ -43,6 +43,8 @@ copy .env.example .env
 
 Llena el `.env` con las credenciales de Cloudinary y de PayPal Sandbox. El `.env` está en `.gitignore`: **no lo subas**, y comparte las credenciales por un medio privado.
 
+`APP_URL` es opcional: es la dirección pública de la app (por ejemplo, `http://localhost:8000`) que se imprime en los certificados. Si la dejas vacía, se usa la dirección con la que se abrió la página. Ver [docs/certificates.md](docs/certificates.md).
+
 ### 2. Crear la base y las tablas (una sola vez)
 
 Abre el cliente de MySQL **desde la raíz del repositorio**: las rutas de `SOURCE` son relativas a esa carpeta. En Laragon, root no tiene contraseña; cuando pida `Enter password:`, presiona Enter.
@@ -63,7 +65,7 @@ SOURCE app/database/procedures/install.sql;
 SHOW PROCEDURE STATUS WHERE Db = 'cursology';
 ```
 
-Deben aparecer 57 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
+Deben aparecer 65 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
 
 ### 4. Crear el primer administrador
 
@@ -94,6 +96,7 @@ Guías:
 
 - [docs/payments.md](docs/payments.md): PayPal Sandbox y la tarjeta simulada.
 - [docs/media.md](docs/media.md): Cloudinary.
+- [docs/certificates.md](docs/certificates.md): certificados en PDF y su verificación.
 
 ## Actualizar los procedimientos almacenados
 

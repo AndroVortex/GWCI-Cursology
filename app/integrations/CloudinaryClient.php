@@ -53,6 +53,8 @@ final class CloudinaryClient
     /**
      * Sube desde el servidor un archivo generado (p. ej. el PDF de un certificado) con un
      * public_id fijo: un reintento reemplaza el mismo archivo. Devuelve el public_id final.
+     * El archivo se envía con el nombre del public_id: en raw, Cloudinary toma la extensión
+     * del nombre del archivo (sin él usaría la del temporal, p. ej. ".tmp").
      *
      * @param 'image'|'video'|'raw' $resourceType
      * @param 'upload'|'private'|'authenticated' $type
@@ -67,7 +69,7 @@ final class CloudinaryClient
             'timestamp' => (string) time(),
             'type' => $type,
         ];
-        $response = $this->post($resourceType . '/upload', $params, ['file' => new CURLFile($filePath, $mimeType)]);
+        $response = $this->post($resourceType . '/upload', $params, ['file' => new CURLFile($filePath, $mimeType, basename($publicId))]);
 
         $uploadedId = $response['public_id'] ?? null;
         if (!is_string($uploadedId) || $uploadedId === '') {
@@ -149,6 +151,38 @@ final class CloudinaryClient
         $query = $params + ['api_key' => $this->apiKey, 'signature' => $this->sign($params)];
 
         return self::API_BASE . rawurlencode($this->cloudName) . '/' . $resourceType . '/download?' . http_build_query($query);
+    }
+
+    /**
+     * Descarga en el servidor un recurso protegido con su URL firmada (p. ej. para entregarlo
+     * al usuario con su nombre y tipo). Devuelve el contenido del archivo.
+     *
+     * @throws MediaUploadException
+     */
+    public function fetchPrivate(string $resourceType, string $type, string $publicId): string
+    {
+        $this->assertConfigured();
+
+        $curl = curl_init($this->privateDownloadUrl($resourceType, $type, $publicId, null, time() + 300));
+        curl_setopt_array($curl, self::tlsOptions() + [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => $this->timeoutSeconds,
+        ]);
+        $body = curl_exec($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $curlError = curl_error($curl);
+        curl_close($curl);
+
+        if (!is_string($body)) {
+            throw MediaUploadException::failed('no hubo respuesta (' . $curlError . ').' . Tls::hint($curlError));
+        }
+        if ($status !== 200) {
+            throw MediaUploadException::failed(sprintf('la descarga respondió HTTP %d.', $status));
+        }
+
+        return $body;
     }
 
     /**

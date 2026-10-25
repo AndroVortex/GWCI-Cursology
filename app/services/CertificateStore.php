@@ -17,6 +17,10 @@ interface CertificateStore
      */
     public function save(string $userId, string $verificationCode, string $pdf): string;
 
-    /** URL temporal para descargar el PDF. Llamar solo después de comprobar que es del alumno. */
-    public function downloadUrl(string $reference): string;
+    /**
+     * El PDF guardado. Llamar solo después de comprobar que el certificado es del alumno.
+     *
+     * @throws MediaUploadException
+     */
+    public function read(string $reference): string;
 }

@@ -32,6 +32,16 @@ final class CertificateController
         ]]);
     }
 
+    /** GET /api/student/certificates/{id}/download: el PDF del alumno, como "Certificado - <curso>.pdf". */
+    public function download(Request $request): JsonResponse
+    {
+        /** @var AppUser $student */
+        $student = $request->attribute('user');
+        ['fileName' => $fileName, 'pdf' => $pdf] = $this->certificates->download($student, (string) $request->attribute('id'));
+
+        return JsonResponse::file($pdf, 'application/pdf', $fileName);
+    }
+
     /** GET /api/certificates/verify?code=: público; solo los datos congelados. */
     public function verify(Request $request): JsonResponse
     {

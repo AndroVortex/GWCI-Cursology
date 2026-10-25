@@ -71,9 +71,15 @@ final class FakeCertificateStore implements CertificateStore
         return 'cloudinary:authenticated/raw/cursology/certificates/u' . $userId . '/' . $verificationCode . '.pdf';
     }
 
-    public function downloadUrl(string $reference): string
+    public function read(string $reference): string
     {
-        return 'https://descarga.test/' . rawurlencode($reference);
+        foreach ($this->saved as $file) {
+            if (str_ends_with($reference, '/' . $file['code'] . '.pdf')) {
+                return $file['pdf'];
+            }
+        }
+
+        throw MediaUploadException::failed('no existe en el almacén falso.');
     }
 }
 
@@ -182,7 +188,11 @@ try {
     check(str_contains($savedPdf, 'http://localhost:8000/?view=verify&code=' . $issued->verificationCode()), 'y la dirección de verificación con APP_URL');
     $again = $certificates->issue($s1, $course->id());
     check($again->id() === $issued->id() && $again->issuedAt() == $issued->issuedAt() && count($store->saved) === 1, 'pedirlo otra vez devuelve el mismo sin generar otro PDF');
-    check($certificates->downloadUrl($again) === 'https://descarga.test/' . rawurlencode((string) $issued->documentUri()) && $certificates->downloadUrl($pending[0]) === null, 'URL de descarga solo para el emitido');
+    check($certificates->downloadUrl($again) === 'api/student/certificates/' . $issued->id() . '/download' && $certificates->downloadUrl($pending[0]) === null, 'la descarga es una ruta de la app, solo para el emitido');
+    $download = $certificates->download($s1, $issued->id());
+    check($download['fileName'] === "Certificado - Certificado $mark.pdf" && $download['pdf'] === $savedPdf, 'la descarga entrega el PDF guardado como "Certificado - <curso>.pdf"');
+    check(ruleCode(static fn () => $certificates->download($s2, $issued->id())) === 'CERTIFICATE_NOT_FOUND', 'otro alumno no descarga el certificado ajeno -> CERTIFICATE_NOT_FOUND');
+    check(ruleCode(static fn () => $certificates->download($s1, '999999999999')) === 'CERTIFICATE_NOT_FOUND', 'un certificado que no existe -> CERTIFICATE_NOT_FOUND');
 
     $checkout->enrollFree($s1, ['curso' => $course2->id()]);
     $finish($s1, $chapter2->id());

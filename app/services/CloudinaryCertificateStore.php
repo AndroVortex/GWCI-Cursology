@@ -9,16 +9,15 @@ use App\Integrations\MediaUploadException;
 
 /**
  * Los PDF de los certificados en Cloudinary, como archivos raw "authenticated" en
- * cursology/certificates/u<alumno>/<código>.pdf: solo se descargan con una URL firmada.
+ * cursology/certificates/u<alumno>/<código>.pdf: solo se descargan con una URL firmada, y la
+ * app los entrega al alumno con su nombre (CertificateService::download()).
  */
 final class CloudinaryCertificateStore implements CertificateStore
 {
     private const FOLDER = 'cursology/certificates';
 
-    public function __construct(
-        private readonly CloudinaryClient $cloudinary,
-        private readonly MediaService $media,
-    ) {
+    public function __construct(private readonly CloudinaryClient $cloudinary)
+    {
     }
 
     public function save(string $userId, string $verificationCode, string $pdf): string
@@ -37,8 +36,11 @@ final class CloudinaryCertificateStore implements CertificateStore
         return MediaService::REFERENCE_PREFIX . 'authenticated/raw/' . $publicId;
     }
 
-    public function downloadUrl(string $reference): string
+    public function read(string $reference): string
     {
-        return $this->media->viewUrl($reference, null);
+        $asset = MediaService::parseReference($reference)
+            ?? throw MediaUploadException::failed('la referencia del certificado no es válida.');
+
+        return $this->cloudinary->fetchPrivate($asset['resource_type'], $asset['type'], $asset['public_id']);
     }
 }

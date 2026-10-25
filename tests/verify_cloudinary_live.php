@@ -178,7 +178,7 @@ try {
 
     // -----------------------------------------------------------
     Report::section('Certificado en PDF (desde el servidor)');
-    $certificateStore = new CloudinaryCertificateStore($cloudinary, $media);
+    $certificateStore = new CloudinaryCertificateStore($cloudinary);
     $code = vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex(random_bytes(16)), 4));
     $certificatePdf = (new CertificateRenderer())->render(Certificate::fromRow([
         'id' => '1', 'user_id' => $user->id(), 'course_id' => '1', 'issued_by' => '1', 'verification_code' => $code,
@@ -186,17 +186,17 @@ try {
         'certifier_name_snapshot' => 'Cursology', 'completed_at_snapshot' => $timestamp, 'template_snapshot' => 'cursology-v1',
         'status' => 'pending', 'document_uri' => null, 'created_at' => $timestamp, 'issued_at' => null,
     ]), 'http://localhost:8000/?view=verify&code=' . $code);
-    $certificatePublicId = 'cursology/certificates/u' . $user->id() . '/' . $code . '.pdf';
     $certificateReference = $certificateStore->save($user->id(), $code, $certificatePdf);
-    check($certificateReference === 'cloudinary:authenticated/raw/' . $certificatePublicId, 'uploadFile() sube el PDF como raw authenticated con el código como nombre');
+    $certificatePublicId = MediaService::parseReference($certificateReference)['public_id'] ?? null;
+    check($certificateReference === 'cloudinary:authenticated/raw/cursology/certificates/u' . $user->id() . '/' . $code . '.pdf', "uploadFile() sube el PDF como raw authenticated con el nombre <código>.pdf ($certificateReference)");
     check($certificateStore->save($user->id(), $code, $certificatePdf) === $certificateReference, 'subirlo otra vez reemplaza el mismo archivo (overwrite)');
     $unsignedPdf = 'https://res.cloudinary.com/' . rawurlencode($ENV['CLOUDINARY_CLOUD_NAME']) . '/raw/authenticated/' . $certificatePublicId;
     check(fetchUrl($unsignedPdf)['status'] !== 200, 'sin firma el PDF no se descarga');
-    $pdfDownload = fetchUrl($certificateStore->downloadUrl($certificateReference));
-    check($pdfDownload['status'] === 200 && $pdfDownload['body'] === $certificatePdf, 'la URL temporal descarga exactamente el PDF generado');
-    $cloudinary->destroy($certificatePublicId, 'raw', 'authenticated');
+    check($certificateStore->read($certificateReference) === $certificatePdf, 'read() lo descarga en el servidor tal cual se generó');
+    $cloudinary->destroy((string) $certificatePublicId, 'raw', 'authenticated');
+    $deleted = new VerifiedMedia((string) $certificatePublicId, 'raw', 'authenticated', 'pdf', 1, null, 'c.pdf', 'application/pdf', '');
     $certificatePublicId = null;
-    check(!exists($cloudinary, new VerifiedMedia('cursology/certificates/u' . $user->id() . '/' . $code . '.pdf', 'raw', 'authenticated', 'pdf', 1, null, 'c.pdf', 'application/pdf', '')), 'y se borra al terminar');
+    check(!exists($cloudinary, $deleted), 'y se borra al terminar');
 
     // -----------------------------------------------------------
     Report::section('Formato no permitido');

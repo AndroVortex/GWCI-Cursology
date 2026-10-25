@@ -95,7 +95,7 @@ if ($appUrl === '' && is_string($requestHost) && preg_match('/^[A-Za-z0-9.-]+(:[
 $certificateService = new CertificateService(
     new CertificateRepository($procedures),
     new CertificateRenderer(),
-    new CloudinaryCertificateStore($cloudinary, $mediaService),
+    new CloudinaryCertificateStore($cloudinary),
     $appUrl,
 );
 
@@ -150,6 +150,7 @@ $router->add('PUT', '/api/student/courses/{id}/review', $reviewController->save(
 $router->add('POST', '/api/opinions/{id}/hide', $reviewController->hide(...), [$requireAuth, new RequireRole(UserRole::Instructor, UserRole::Admin), $csrf]);
 $router->add('GET', '/api/certificates/verify', $certificateController->verify(...));
 $router->add('POST', '/api/student/courses/{id}/certificate', $certificateController->issue(...), [...$studentOnly, $csrf]);
+$router->add('GET', '/api/student/certificates/{id}/download', $certificateController->download(...), $studentOnly);
 $router->add('GET', '/api/admin/categories', $categoryController->listAll(...), $adminOnly);
 $router->add('POST', '/api/admin/categories', $categoryController->create(...), [...$adminOnly, $csrf]);
 $router->add('PATCH', '/api/admin/categories/{id}', $categoryController->update(...), [...$adminOnly, $csrf]);
