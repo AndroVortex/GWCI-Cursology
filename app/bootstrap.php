@@ -9,12 +9,14 @@ use App\Controllers\AccountController;
 use App\Controllers\AuthController;
 use App\Controllers\CatalogController;
 use App\Controllers\CategoryController;
+use App\Controllers\CertificateController;
 use App\Controllers\CheckoutController;
 use App\Controllers\ExamAttemptController;
 use App\Controllers\LearningController;
 use App\Controllers\CourseController;
 use App\Controllers\MediaController;
 use App\Controllers\PaymentMethodController;
+use App\Controllers\ReviewController;
 use App\Controllers\UserController;
 use App\Database\Connection;
 use App\Database\StoredProcedures;
@@ -30,18 +32,23 @@ use App\Integrations\PayPalClient;
 use App\Models\Enums\UserRole;
 use App\Repositories\CatalogRepository;
 use App\Repositories\CategoryRepository;
+use App\Repositories\CertificateRepository;
 use App\Repositories\CourseRepository;
 use App\Repositories\PaymentMethodRepository;
 use App\Repositories\ExamAttemptRepository;
 use App\Repositories\LearningRepository;
 use App\Repositories\PurchaseRepository;
+use App\Repositories\ReviewRepository;
 use App\Repositories\StudentRepository;
 use App\Repositories\UserRepository;
 use App\Services\AccountAdminService;
 use App\Services\AuthService;
 use App\Services\CatalogService;
 use App\Services\CategoryService;
+use App\Services\CertificateRenderer;
+use App\Services\CertificateService;
 use App\Services\CheckoutService;
+use App\Services\CloudinaryCertificateStore;
 use App\Services\ExamAttemptService;
 use App\Services\LearningService;
 use App\Services\StudentService;
@@ -52,6 +59,7 @@ use App\Services\PaymentMethodService;
 use App\Services\ProfileService;
 use App\Services\ProfileValidator;
 use App\Services\RegistrationValidator;
+use App\Services\ReviewService;
 
 require_once __DIR__ . '/view_helpers.php';
 
@@ -77,6 +85,19 @@ $catalogService = new CatalogService(new CatalogRepository($procedures));
 $paypal = new PayPalClient($ENV['PAYPAL_SANDBOX_CLIENT_ID'] ?? '', $ENV['PAYPAL_SANDBOX_CLIENT_SECRET'] ?? '');
 $paymentMethodService = new PaymentMethodService(new PaymentMethodRepository($procedures), $paypal);
 $checkoutService = new CheckoutService(new PurchaseRepository($procedures), $paymentMethodService, $paypal);
+// Dirección pública que se imprime en los certificados; sin APP_URL, la de esta petición.
+$appUrl = rtrim(trim($ENV['APP_URL'] ?? ''), '/');
+$requestHost = $_SERVER['HTTP_HOST'] ?? '';
+if ($appUrl === '' && is_string($requestHost) && preg_match('/^[A-Za-z0-9.-]+(:[0-9]{1,5})?$/D', $requestHost) === 1) {
+    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $appUrl = ($https ? 'https' : 'http') . '://' . $requestHost . rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/'))), '/');
+}
+$certificateService = new CertificateService(
+    new CertificateRepository($procedures),
+    new CertificateRenderer(),
+    new CloudinaryCertificateStore($cloudinary),
+    $appUrl,
+);
 
 // ---------------------------------------------------------------
 // API: rutas y middleware (sesión -> rol -> CSRF -> controlador)
@@ -95,6 +116,9 @@ $learningController = new LearningController($learningService);
 $examAttemptService = new ExamAttemptService(new ExamAttemptRepository($procedures));
 $examAttemptController = new ExamAttemptController($examAttemptService);
 $studentService = new StudentService(new StudentRepository($procedures));
+$certificateController = new CertificateController($certificateService);
+$reviewService = new ReviewService(new ReviewRepository($procedures));
+$reviewController = new ReviewController($reviewService);
 
 $csrf = new RequireCsrf($session);
 $requireAuth = new RequireAuth($session, $auth);
@@ -121,6 +145,12 @@ $router->add('POST', '/api/admin/users/{id}/unlock', $accountController->unlock(
 $router->add('GET', '/api/categories', $categoryController->listActive(...));
 $router->add('GET', '/api/catalog/courses', $catalogController->search(...));
 $router->add('GET', '/api/catalog/courses/{id}', $catalogController->show(...));
+$router->add('GET', '/api/catalog/courses/{id}/reviews', $reviewController->list(...));
+$router->add('PUT', '/api/student/courses/{id}/review', $reviewController->save(...), [...$studentOnly, $csrf]);
+$router->add('POST', '/api/opinions/{id}/hide', $reviewController->hide(...), [$requireAuth, new RequireRole(UserRole::Instructor, UserRole::Admin), $csrf]);
+$router->add('GET', '/api/certificates/verify', $certificateController->verify(...));
+$router->add('POST', '/api/student/courses/{id}/certificate', $certificateController->issue(...), [...$studentOnly, $csrf]);
+$router->add('GET', '/api/student/certificates/{id}/download', $certificateController->download(...), $studentOnly);
 $router->add('GET', '/api/admin/categories', $categoryController->listAll(...), $adminOnly);
 $router->add('POST', '/api/admin/categories', $categoryController->create(...), [...$adminOnly, $csrf]);
 $router->add('PATCH', '/api/admin/categories/{id}', $categoryController->update(...), [...$adminOnly, $csrf]);

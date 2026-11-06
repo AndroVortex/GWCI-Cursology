@@ -247,7 +247,7 @@ Sin sesión. Solo muestra cursos **publicados y activos**; un borrador o un curs
 ```json
 {"data": {"courses": [{"id": "4", "title": "...", "coverImage": "https://...", "instructor": "Ana López",
   "categories": ["Desarrollo web"], "pricingMode": "niveles", "fullCoursePrice": null, "levelPriceTotal": "199.00",
-  "currency": "MXN", "levels": 1, "chapters": 2, "publishedAt": "..."}], "total": 1, "page": 1, "pages": 1,
+  "currency": "MXN", "levels": 1, "chapters": 2, "ratingAvg": "4.5", "ratingCount": 12, "publishedAt": "..."}], "total": 1, "page": 1, "pages": 1,
   "filters": {"q": "php", "categoria": null, "orden": "recientes", "pagina": 1}}}
 ```
 
@@ -255,6 +255,8 @@ Sin sesión. Solo muestra cursos **publicados y activos**; un borrador o un curs
 - El curso con su instructor (nombre, avatar y descripción) y sus categorías.
 - Sus niveles, cada uno con su precio, su video de presentación (público), su duración y sus capítulos (`{title, sortOrder, isExam, durationSeconds, questionCount}`).
 - Nunca trae las URIs del contenido ni las preguntas de los exámenes.
+
+`ratingAvg` (texto con 1 decimal, `null` sin calificaciones) y `ratingCount` vienen en las tarjetas y en el detalle. No cuentan las estrellas de quien tiene su opinión oculta.
 
 **Vistas:**
 - `?view=home`: categorías y cursos recientes.
@@ -336,6 +338,57 @@ Alumno + CSRF. El importe **siempre lo calcula la base** (`sp_purchase_start`); 
 
 `ready` es `false` para PayPal mientras falten las credenciales de Sandbox: aunque esté activa, no se ofrece. La vista es `?view=payment-methods`. Errores: `403 NOT_ADMIN`, `422` en `codigo` o `activa`.
 
+### Certificados
+
+Uno por alumno y curso terminado. Se emite la primera vez que el alumno lo pide: la base congela los datos, el servidor genera el PDF (PHP puro) y lo guarda en Cloudinary como archivo protegido. Diseño, datos congelados y `APP_URL`: [certificates.md](certificates.md).
+
+| Endpoint | Acceso | Respuesta |
+|---|---|---|
+| `POST /api/student/courses/{id}/certificate` | Alumno + CSRF | `200 {"data": {"certificate": {id, courseId, code, studentName, courseTitle, certifierName, completedAt, issuedAt, downloadUrl, verifyUrl}}}`. Pedirlo otra vez devuelve el mismo |
+| `GET /api/student/certificates/{id}/download` | Alumno, dueño | El PDF con `Content-Type: application/pdf` y `Content-Disposition: attachment; filename="Certificado - <curso>.pdf"` |
+| `GET /api/certificates/verify?code=` | Público | `200 {"data": {"certificate": {code, studentName, courseTitle, certifierName, completedAt, issuedAt}}}` |
+
+- `downloadUrl` es la ruta de descarga de la app; no caduca y solo funciona con la sesión del alumno.
+- El código se acepta en mayúsculas o con espacios alrededor. Solo se verifican los certificados emitidos.
+- Errores:
+  - `403 NOT_ENROLLED`;
+  - `409 COURSE_NOT_COMPLETED`;
+  - `404 CERTIFICATE_NOT_FOUND` (código que no existe, certificado pendiente o de otro alumno);
+  - `502 MEDIA_UPLOAD_FAILED` o `503 MEDIA_UNAVAILABLE` si Cloudinary falla. El certificado queda pendiente y el siguiente intento lo vuelve a generar con los mismos datos.
+
+**Vistas:**
+- **Reproductor:** con el curso terminado, "Obtener certificado".
+- **"Mi aprendizaje":** el panel "Certificados", con "Descargar" y "Verificar", y la cifra real.
+- **`?view=verify&code=`:** página pública. Al abrirla con un código ya muestra el resultado; el botón "Verificar" sirve para revisar otro código.
+
+### Calificaciones y opiniones
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/catalog/courses/{id}/reviews?pagina=` | Público | — | `{"data": {summary: {ratingAvg, ratingCount, stars: {"5": n, ..., "1": n}}, reviews: [{id, opinion, rate, author, avatar, commentedAt, edited}], total, page, pages}}`, 10 por página |
+| `PUT /api/student/courses/{id}/review` | Alumno + CSRF | `{calificacion: 1..5, opinion?: string}` | `200 {"data": {"review": {canReview, rate, opinion, hidden, hiddenReason}}}` |
+| `POST /api/opinions/{id}/hide` | Instructor o admin + CSRF | `{motivo}` (de 3 a 500 caracteres) | `200 {"data": {"opinion": {id, active: false, reason}}}` |
+
+- **Quién califica:** solo quien terminó el curso, y puede editar. La opinión (hasta 2000 caracteres) es opcional; enviarla vacía o no enviarla la quita.
+- **Quién oculta:** solo el instructor del curso o un admin. Para cualquier otro, `404 OPINION_NOT_FOUND`. Ocultarla otra vez no cambia el motivo.
+- **Opinión oculta:**
+  - deja de listarse y sus estrellas dejan de contar en el promedio;
+  - su autor ve el motivo y ya no puede cambiar el texto (`409 OPINION_HIDDEN`), pero sí sus estrellas enviando el mismo texto.
+- **Errores:**
+  - `403 NOT_ENROLLED`;
+  - `409 COURSE_NOT_COMPLETED`;
+  - `422 VALIDATION_FAILED` en `calificacion`, `opinion` o `motivo`;
+  - `422 INVALID_RATE` (lo rechaza el SP);
+  - `404 COURSE_NOT_FOUND` (lista de un curso no publicado o dado de baja).
+
+**Vistas:**
+- **Página del curso, sección "Opiniones":**
+  - el promedio y las barras por estrella;
+  - el formulario "Tu calificación" para quien terminó;
+  - las opiniones, con "Ver más";
+  - "Ocultar" para el instructor del curso o el admin.
+- **Tarjetas del catálogo:** "4.5 ★ (12)" o "Sin calificaciones".
+
 ### `GET /api/admin/users/locked`
 
 Cuentas bloqueadas por 3 contraseñas incorrectas consecutivas, de la más reciente a la más antigua. Requiere sesión de **admin** (`RequireAuth` + `RequireRole`).
@@ -380,7 +433,10 @@ CLOUDINARY_API_SECRET=
 APP_ALLOWED_ORIGINS=
 PAYPAL_SANDBOX_CLIENT_ID=
 PAYPAL_SANDBOX_CLIENT_SECRET=
+APP_URL=
 ```
+
+`APP_URL` (opcional) es la dirección pública que se imprime en el enlace de verificación de los certificados; vacía, se usa la dirección con la que se abrió la página.
 
 Las credenciales de PayPal son **solo de Sandbox** (ver [payments.md](payments.md)); sin ellas, PayPal no se ofrece y la tarjeta simulada sigue funcionando.
 
@@ -396,17 +452,19 @@ php tests/verify_model_mapping.php
 php tests/verify_auth_unit.php
 php tests/verify_profile_courses_unit.php
 php tests/verify_learning_unit.php
+php tests/verify_certificate_unit.php
 
 # Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida)
 php tests/verify_auth_db.php
 php tests/verify_profile_courses_db.php
 php tests/verify_learning_db.php
+php tests/verify_certificate_db.php
 
-# Contra Cloudinary real (opcional; sube y borra archivos de prueba)
+# Contra Cloudinary real (opcional; sube y borra archivos de prueba, incluido un PDF de certificado)
 php tests/verify_cloudinary_live.php
 
-# Contra PayPal Sandbox real (opcional; crea una orden de prueba de $1.00 MXN sin pagarla)
-php tests/verify_paypal_live.php
+# Contra PayPal Sandbox por red (opcional; crea una orden de prueba de $1.00 MXN sin pagarla)
+php tests/verify_paypal_sandbox.php
 ```
 
 Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`):

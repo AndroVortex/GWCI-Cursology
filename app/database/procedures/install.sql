@@ -86,6 +86,18 @@ SOURCE app/database/procedures/exam/sp_attempt_start.sql;
 SOURCE app/database/procedures/exam/sp_attempt_submit.sql;
 SOURCE app/database/procedures/exam/sp_attempt_list.sql;
 
+-- Certificados
+SOURCE app/database/procedures/certificate/sp_certificate_issue.sql;
+SOURCE app/database/procedures/certificate/sp_certificate_mark_issued.sql;
+SOURCE app/database/procedures/certificate/sp_certificate_list_by_student.sql;
+SOURCE app/database/procedures/certificate/sp_certificate_verify.sql;
+
+-- Calificaciones y opiniones (sp_review_mine va primero: lo llama sp_review_save)
+SOURCE app/database/procedures/review/sp_review_mine.sql;
+SOURCE app/database/procedures/review/sp_review_save.sql;
+SOURCE app/database/procedures/review/sp_review_list.sql;
+SOURCE app/database/procedures/review/sp_review_hide.sql;
+
 -- Mi aprendizaje (kardex y compras)
 SOURCE app/database/procedures/student/sp_student_courses.sql;
 SOURCE app/database/procedures/student/sp_student_purchases.sql;

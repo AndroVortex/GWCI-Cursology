@@ -629,6 +629,18 @@ strong {
     margin: 0;
 }
 
+.notice-success {
+    border-color: transparent;
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.notice-warning {
+    border-color: transparent;
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
 .stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -980,6 +992,18 @@ strong {
     margin: 0;
     font-size: 0.9375rem;
     line-height: 1.35;
+}
+
+.course-card-rating {
+    margin: 0;
+    color: var(--warning);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.course-card-rating.is-empty {
+    color: var(--text-muted);
+    font-weight: 400;
 }
 
 .course-card-price {

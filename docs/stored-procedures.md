@@ -230,7 +230,8 @@ Solo cursos con `active = 1` y `published_at` con fecha. No exponen las URIs del
 - `p_query`: busca con `LIKE` en el título y en el nombre completo del instructor. PHP ya escapó `%`, `_` y `\`. La colación de la base no distingue mayúsculas ni acentos. NULL o vacío = todos.
 - `p_category_id`: solo los que tienen esa categoría activa. NULL = todas.
 - `p_sort`: `recientes` (publicación más nueva), `titulo` o `precio` (`full_course_price` o, si es NULL, la suma de los niveles).
-- **Resultados:** 1) las tarjetas de la página (`id, title, cover_image, full_course_price, currency, published_at, instructor_name, category_names` separadas por `|`, `level_count, chapter_count, level_price_total`), que lee `App\Models\Dto\CatalogCourse`; 2) `total`.
+- **Resultados:** 1) las tarjetas de la página (`id, title, cover_image, full_course_price, currency, published_at, instructor_name, category_names` separadas por `|`, `level_count, chapter_count, level_price_total, rating_avg, rating_count`), que lee `App\Models\Dto\CatalogCourse`; 2) `total`.
+- `rating_avg` es `DECIMAL(3,1)` (NULL sin calificaciones). Ni él ni `rating_count` cuentan las estrellas de quien tiene su opinión oculta. `sp_catalog_course` devuelve las mismas dos columnas en su primer resultado.
 
 **`sp_catalog_course(p_course_id)`**
 
@@ -336,3 +337,57 @@ Columnas:
 Error: `INVALID_KARDEX_STATUS`.
 
 **`sp_student_purchases(p_user_id)`:** las columnas de `purchase`, de la más reciente a la más antigua. Incluye las de $0 y las rechazadas o canceladas.
+
+### Certificados
+
+Todos devuelven filas de `certificate`, que lee la entidad `Certificate`.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_certificate_issue(p_user_id, p_course_id)` | Devuelve el certificado del alumno o, si no existe, lo crea `pending` con los datos congelados | `NOT_ENROLLED`, `COURSE_NOT_COMPLETED` |
+| `sp_certificate_mark_issued(p_user_id, p_certificate_id, p_document_uri)` | Con la fila bloqueada (`FOR UPDATE`), la pasa a `issued` con `issued_at` y la referencia del PDF. Si ya estaba emitido no cambia nada | `CERTIFICATE_NOT_FOUND` |
+| `sp_certificate_list_by_student(p_user_id)` | Los del alumno (emitidos y pendientes), del curso terminado más reciente al más antiguo | — |
+| `sp_certificate_verify(p_code)` | Verificación pública: solo los `issued` | `CERTIFICATE_NOT_FOUND` |
+
+**Datos congelados** (`sp_certificate_issue`):
+- el nombre completo del alumno;
+- el título del curso;
+- el certificador: `course.certifier_name` o, si está vacío, el nombre del instructor;
+- `completed_at_snapshot` = `user_courses.completed_at`;
+- `template_snapshot = 'cursology-v1'` (la misma constante que `CertificateRenderer::TEMPLATE`);
+- `issued_by` = el instructor del curso;
+- `verification_code = UUID()`.
+
+Cambiar después el nombre del alumno, el título o el certificador no altera el certificado.
+
+**Peticiones a la vez:** `uq_certificate_enrollment (user_id, course_id)` y `INSERT ... ON DUPLICATE KEY UPDATE certificate.id = certificate.id` hacen que dos peticiones al mismo tiempo no dupliquen nada. No se usa `INSERT IGNORE`, para no esconder errores de los CHECK.
+
+**El PDF lo genera PHP sin transacción abierta:**
+1. `sp_certificate_issue`;
+2. generar el PDF;
+3. subirlo a Cloudinary como `raw` `authenticated` en `cursology/certificates/u<alumno>/<código>.pdf`;
+4. `sp_certificate_mark_issued`.
+
+Si la subida falla, queda `pending` y el siguiente intento lo vuelve a generar con los mismos datos.
+
+**`p_code`** es `CHAR(36) CHARACTER SET ascii`. PHP lo pasa en minúsculas y solo si tiene formato UUID.
+
+### Calificaciones y opiniones
+
+`course_rate` (una calificación de 1 a 5 por alumno y curso) y `course_opinion` (una opinión de texto por alumno y curso, que se puede ocultar).
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_review_mine(p_user_id, p_course_id)` | 1) `enrolled, completed`; 2) su `course_rate`; 3) su `course_opinion` (aunque esté oculta, con el motivo). Lo lee `MyReview` | — |
+| `sp_review_save(p_user_id, p_course_id, p_rate, p_opinion)` | Guarda las estrellas (upsert con `AS incoming`) y crea, cambia o quita la opinión (`p_opinion` NULL o vacía la quita). Devuelve lo mismo que `sp_review_mine` | `NOT_ENROLLED`, `COURSE_NOT_COMPLETED`, `INVALID_RATE`, `OPINION_HIDDEN` |
+| `sp_review_list(p_course_id, p_limit, p_offset)` | 1) `rating_avg, rating_count, stars_1 ... stars_5`; 2) opiniones visibles con `rate`, `author_name` y `author_avatar`, de la más reciente a la primera; 3) `total` | `COURSE_NOT_FOUND` (no publicado o dado de baja) |
+| `sp_review_hide(p_actor_id, p_opinion_id, p_reason)` | Oculta la opinión (`active = 0`, `deactivated_by`, `deactivated_at`, `reason`). Ocultarla otra vez no cambia nada | `OPINION_NOT_FOUND` |
+
+- **Solo con el curso terminado** (`user_courses.completed_at`): no basta con estar inscrito.
+- **Opinión oculta:** ya no cambia de texto. `OPINION_HIDDEN` si llega otro distinto (comparación con `<=>`); con el mismo texto sí se guardan las estrellas.
+- **Moderación:** solo el instructor del curso (`course.created_by`) o un usuario con `role = 'admin'`. Para cualquier otro la opinión "no existe" (`OPINION_NOT_FOUND`), igual que si el id fuera inventado.
+- **Promedio:** cuenta las calificaciones de quien no tiene opinión o la tiene visible:
+
+  ```sql
+  LEFT JOIN course_opinion o ... WHERE o.id IS NULL OR o.active = 1
+  ```

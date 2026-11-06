@@ -53,13 +53,19 @@ $views = [
         'title' => 'Curso',
         'file'  => BASE_PATH . '/app/views/catalog/html/course.html',
         'css'   => ['catalog/css/catalog.css'],
-        'js'    => ['catalog/js/course.js'],
+        'js'    => ['catalog/js/course.js', 'catalog/js/reviews.js'],
+    ],
+    'verify' => [
+        'title' => 'Verificar certificado',
+        'file'  => BASE_PATH . '/app/views/catalog/html/verify.html',
+        'css'   => ['catalog/css/catalog.css'],
+        'js'    => [],
     ],
     'learn' => [
         'title' => 'Mi curso',
         'file'  => BASE_PATH . '/app/views/student/html/learn.html',
         'css'   => ['student/css/student.css'],
-        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js'],
+        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js', 'student/js/certificate.js'],
         'auth'  => true,
         'roles' => [UserRole::Student],
     ],
@@ -124,6 +130,7 @@ $dashboards = [
         'title' => 'Mi aprendizaje',
         'file'  => BASE_PATH . '/app/views/student/html/dashboard.html',
         'css'   => ['student/css/student.css'],
+        'js'    => ['student/js/certificate.js'],
     ],
     UserRole::Instructor->value => [
         'title' => 'Panel del instructor',
@@ -160,6 +167,19 @@ if ($view === 'dashboard') {
     $views['dashboard'] = $dashboards[$currentUser->role()->value] + ['css' => [], 'js' => []];
 }
 
+// Verificación pública de un certificado por su código (sin sesión).
+if ($view === 'verify') {
+    $verifyCode = is_string($_GET['code'] ?? null) ? trim($_GET['code']) : '';
+    $verifiedCertificate = null;
+    if ($verifyCode !== '') {
+        try {
+            $verifiedCertificate = $certificateService->verify($verifyCode);
+        } catch (BusinessRuleException) {
+            http_response_code(404);
+        }
+    }
+}
+
 // Reproductor: el capítulo pedido o el último que vio el alumno. Sin inscripción, la vista lo dice (403).
 if ($view === 'learn') {
     try {
@@ -189,6 +209,12 @@ if ($view === 'course' || $view === 'checkout') {
     }
     $courseAccess = $checkoutService->access($currentUser, $publicCourseId);
     $isStudent = $currentUser !== null && $currentUser->role() === UserRole::Student;
+    if ($view === 'course' && $publicCourse !== null) {
+        $reviewPage = $reviewService->list($publicCourse->id);
+        $myReview = $reviewService->mine($currentUser, $publicCourse->id);
+        $canModerate = $currentUser !== null
+            && ($currentUser->role() === UserRole::Admin || $currentUser->id() === $publicCourse->instructorId);
+    }
     if ($view === 'checkout') {
         $checkoutLevelId = is_string($_GET['level'] ?? null) && $_GET['level'] !== '' ? $_GET['level'] : null;
         $paymentProviders = $paymentMethodService->available();
@@ -209,6 +235,7 @@ try {
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Student) {
         $studentDashboard = $studentService->dashboard($currentUser, $_GET);
         $kardexCategories = $categoryService->active();
+        $studentCertificates = $certificateService->forStudent($currentUser);
     }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Instructor) {
         $instructorCourses = $courseService->listMine($currentUser);

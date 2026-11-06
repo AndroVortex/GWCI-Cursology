@@ -9,6 +9,7 @@ namespace App\Http;
  *   éxito: {"data": ...}
  *   error: {"error": {"code": "...", "message": "...", "fields": {...}}}
  *   204:   sin cuerpo
+ *   archivo (file()): el contenido tal cual, para descargarlo con su nombre
  */
 final class JsonResponse
 {
@@ -19,7 +20,20 @@ final class JsonResponse
         public readonly int $status,
         public readonly mixed $payload,
         private readonly array $headers = [],
+        private readonly ?string $file = null,
     ) {
+    }
+
+    /** Un archivo para descargar ("attachment") con su tipo y su nombre. */
+    public static function file(string $contents, string $contentType, string $fileName): self
+    {
+        $asciiName = (string) preg_replace('/[^A-Za-z0-9 ._()-]/u', '_', $fileName);
+
+        return new self(200, null, [
+            'Content-Type' => $contentType,
+            'Content-Disposition' => sprintf("attachment; filename=\"%s\"; filename*=UTF-8''%s", $asciiName, rawurlencode($fileName)),
+            'Content-Length' => (string) strlen($contents),
+        ], $contents);
     }
 
     public static function data(mixed $data, int $status = 200): self
@@ -47,7 +61,7 @@ final class JsonResponse
 
     public function withHeader(string $name, string $value): self
     {
-        return new self($this->status, $this->payload, [...$this->headers, $name => $value]);
+        return new self($this->status, $this->payload, [...$this->headers, $name => $value], $this->file);
     }
 
     public function header(string $name): ?string
@@ -63,6 +77,9 @@ final class JsonResponse
 
     public function body(): string
     {
+        if ($this->file !== null) {
+            return $this->file;
+        }
         if ($this->payload === null) {
             return '';
         }

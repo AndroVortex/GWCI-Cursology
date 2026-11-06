@@ -1,0 +1,57 @@
+<?php
+/**
+ * Verificación pública de un certificado. Muestra solo los datos congelados al emitirlo.
+ *
+ * @var string $verifyCode lo que se escribió ('' = todavía nada)
+ * @var ?\App\Models\Entities\Certificate $verifiedCertificate
+ */
+?>
+<div class="verify">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Verificar un certificado</h1>
+            <p class="page-subtitle">Escribe el código impreso en el certificado para comprobar que es auténtico.</p>
+        </div>
+    </div>
+
+    <form class="panel panel-body verify-form" method="get" action="">
+        <input type="hidden" name="view" value="verify">
+        <div class="form-field">
+            <label class="form-label" for="verify-code">Código de verificación</label>
+            <input class="form-control" type="text" id="verify-code" name="code" maxlength="36" spellcheck="false" autocomplete="off"
+                   placeholder="3f9c2a1e-7b4d-4c8e-9a51-2d6f0b8e1c47" value="<?= e($verifyCode) ?>">
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Verificar</button>
+        </div>
+    </form>
+
+    <?php if ($verifiedCertificate !== null): ?>
+        <section class="panel verify-result is-valid" aria-labelledby="verify-result-title">
+            <div class="panel-body">
+                <p class="verify-status" id="verify-result-title">Certificado válido</p>
+                <dl class="verify-data">
+                    <dt>Otorgado a</dt>
+                    <dd><?= e($verifiedCertificate->studentNameSnapshot()) ?></dd>
+                    <dt>Curso</dt>
+                    <dd><?= e($verifiedCertificate->courseTitleSnapshot()) ?></dd>
+                    <dt>Certifica</dt>
+                    <dd><?= e($verifiedCertificate->certifierNameSnapshot()) ?></dd>
+                    <dt>Terminó el curso</dt>
+                    <dd><?= e(format_date($verifiedCertificate->completedAtSnapshot())) ?></dd>
+                    <dt>Emitido</dt>
+                    <dd><?= e(format_date($verifiedCertificate->issuedAt())) ?></dd>
+                    <dt>Código</dt>
+                    <dd><code><?= e($verifiedCertificate->verificationCode()) ?></code></dd>
+                </dl>
+            </div>
+        </section>
+    <?php elseif ($verifyCode !== ''): ?>
+        <section class="panel verify-result is-invalid" role="alert">
+            <div class="panel-body">
+                <p class="verify-status">No encontramos ningún certificado con ese código</p>
+                <p class="text-muted">Revisa que lo hayas escrito completo, con sus guiones.</p>
+            </div>
+        </section>
+    <?php endif; ?>
+</div>

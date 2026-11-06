@@ -9,7 +9,7 @@ declare(strict_types=1);
  *   php tests/verify_learning_db.php
  *
  * PayPal se reemplaza por un envío falso (no hay red): así se prueba todo el flujo de la orden y
- * la captura contra la base. La prueba real con Sandbox está en tests/verify_paypal_live.php.
+ * la captura contra la base. La prueba por red con Sandbox está en tests/verify_paypal_sandbox.php.
  * Cada corrida deja en la base cuentas de prueba (prueba+<marca>...@cursology.test), dos
  * categorías y tres cursos "Aprendizaje <marca>" (dados de baja y desactivadas al terminar), y
  * deja las formas de pago inactivas.
