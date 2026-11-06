@@ -122,6 +122,14 @@ $views = [
         'auth'  => true,
         'roles' => [UserRole::Instructor],
     ],
+    'course-sales' => [
+        'title' => 'Ventas del curso',
+        'file'  => BASE_PATH . '/app/views/instructor/html/course-sales.html',
+        'css'   => [],
+        'js'    => [],
+        'auth'  => true,
+        'roles' => [UserRole::Instructor],
+    ],
 ];
 
 // Cada rol tiene su propio panel en ?view=dashboard.
@@ -239,9 +247,16 @@ try {
     }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Instructor) {
         $instructorCourses = $courseService->listMine($currentUser);
+        $instructorDashboard = $reportService->instructorDashboard($currentUser, $_GET);
+        $salesCategories = $categoryService->active();
     }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Admin) {
         $lockedAccounts = $accountService->lockedAccounts($currentUser);
+        $adminDashboard = $reportService->adminDashboard($currentUser);
+    }
+    if ($view === 'course-sales') {
+        $courseSales = $reportService->courseStudents($currentUser, is_string($_GET['id'] ?? null) ? $_GET['id'] : '');
+        $views['course-sales']['title'] = 'Ventas: ' . $courseSales->title;
     }
     if ($view === 'categories') {
         $categories = $categoryService->all();

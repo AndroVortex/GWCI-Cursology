@@ -719,6 +719,76 @@ strong {
     background: var(--bg);
 }
 
+/* ---------- Barra de avance (reproductor, Mi aprendizaje y reportes) ---------- */
+.progress-bar {
+    overflow: hidden;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-3);
+}
+
+.progress-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--success);
+    transition: width var(--transition);
+}
+
+.progress-cell {
+    display: grid;
+    grid-template-columns: minmax(60px, 120px) auto;
+    align-items: center;
+    justify-content: end;
+    gap: 8px;
+}
+
+/* ---------- Reportes: totales por forma de pago y opiniones recientes ---------- */
+.sales-totals {
+    gap: 8px 20px;
+    font-size: 0.875rem;
+}
+
+.recent-review {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.recent-review-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin: 0;
+}
+
+.recent-review-stars {
+    color: #f59e0b;
+    letter-spacing: 1px;
+}
+
+.recent-review-text {
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+/* ---------- Tablas: texto secundario y acciones de los filtros ---------- */
+.table-sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.filters-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
 .grid-2 {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

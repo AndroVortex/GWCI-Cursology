@@ -11,8 +11,8 @@ declare(strict_types=1);
  * PayPal se reemplaza por un envío falso (no hay red): así se prueba todo el flujo de la orden y
  * la captura contra la base. La prueba por red con Sandbox está en tests/verify_paypal_sandbox.php.
  * Cada corrida deja en la base cuentas de prueba (prueba+<marca>...@cursology.test), dos
- * categorías y tres cursos "Aprendizaje <marca>" (dados de baja y desactivadas al terminar), y
- * deja las formas de pago inactivas.
+ * categorías y tres cursos "Aprendizaje <marca>" (dados de baja y desactivadas al terminar). Las
+ * formas de pago vuelven a quedar como estaban.
  */
 
 use App\Database\Connection;
@@ -134,6 +134,7 @@ try {
     $s2 = $auth->register($account('student', 'alumno2'), null);
     $s3 = $auth->register($account('student', 'alumno3'), null);
     $admin = $users->findForLogin('admin@cursology.local') ?? throw new RuntimeException('Falta la cuenta admin@cursology.local.');
+    restorePaymentMethodsAtExit($methods, $admin);
     printf('Cuentas de prueba de esta corrida: prueba+%s-{instructor,alumno1,alumno2,alumno3}@cursology.test%s%s', $mark, PHP_EOL, PHP_EOL);
 
     // ---------- Cursos publicados para la prueba ----------
@@ -430,14 +431,11 @@ try {
     check($learning->progress($s2, $a2Video->id(), ['posicion' => 30])->positionSeconds === 30, 'y sigue guardando su avance');
     check($kardex(['estado' => 'activos']) === [$courseB->id()], 'el kardex puede filtrar solo los cursos activos');
 
-    // Limpieza: cursos dados de baja, categorías y formas de pago inactivas.
+    // Limpieza: cursos dados de baja y categorías inactivas (las formas de pago se restauran al salir).
     $courseService->setActive($instructor, $courseB->id(), ['activo' => false]);
     $courseService->setActive($instructor, $courseC->id(), ['activo' => false]);
     $categories->update($admin, $catA->id(), ['activa' => false]);
     $categories->update($admin, $catB->id(), ['activa' => false]);
-    $methods->setActive($admin, ['codigo' => 'paypal', 'activa' => false]);
-    $methods->setActive($admin, ['codigo' => 'simulated_card', 'activa' => false]);
-    check($methods->available() === [], 'al terminar, las formas de pago quedan inactivas');
 } catch (Throwable $exception) {
     fwrite(STDERR, sprintf('Error inesperado: %s: %s (%s:%d)%s', $exception::class, $exception->getMessage(), $exception->getFile(), $exception->getLine(), PHP_EOL));
     if ($exception->getPrevious() !== null) {

@@ -389,6 +389,41 @@ Uno por alumno y curso terminado. Se emite la primera vez que el alumno lo pide:
   - "Ocultar" para el instructor del curso o el admin.
 - **Tarjetas del catálogo:** "4.5 ★ (12)" o "Sin calificaciones".
 
+### Reportes
+
+Solo lectura. Los importes son la suma de las compras completadas (sin comisión, en MXN); las inscripciones de $0 no suman. Las calificaciones no cuentan las estrellas de quien tiene su opinión oculta.
+
+| Endpoint | Acceso | Respuesta |
+|---|---|---|
+| `GET /api/instructor/sales?desde=&hasta=&categoria=&estado=` | Instructor | `{overview: {revenueTotal, studentTotal, ratingAvg, ratingCount}, courses: [...], byMethod: [{method, purchases, total}], revenueTotal, filters, recentReviews: [...]}` |
+| `GET /api/instructor/courses/{id}/students` | Instructor, dueño del curso | `{course: {id, title, active, chapters, students, avgProgress, revenue, currency, enrollments: [{userId, name, email, enrolledAt, completedAt, progress, paid, paymentMethods}]}}` |
+| `GET /api/admin/reports` | Admin | `{overview: {activeStudents, activeInstructors, publishedCourses}, instructors: [{id, email, name, joinedAt, publishedCourses, earnings}], students: [{id, email, name, joinedAt, enrolledCourses, completedCourses, completedPercent}]}` |
+
+**Ventas del instructor:**
+- Solo cursos que alguna vez se publicaron.
+- Cada curso: `{id, title, active, createdAt, students, avgProgress, revenue, currency, ratingAvg, ratingCount}`.
+- Filtros:
+  - `desde`/`hasta`: fecha de creación del curso (`AAAA-MM-DD`, días completos);
+  - `categoria`: id;
+  - `estado=activos`: sin los cursos dados de baja.
+
+  Los filtros inválidos se ignoran, y las fechas al revés se acomodan.
+- **Avance** (`avgProgress`, `progress`): capítulos terminados / capítulos del curso × 100, con 1 decimal. El del curso es el promedio entre sus alumnos.
+- **`recentReviews`:** las últimas 5 opiniones de sus cursos, incluidas las ocultas (`hidden`, `reason`).
+- **`paymentMethods`** vacío significa que el alumno entró gratis.
+
+**Reportes del admin:** solo cuentas activas y sin ban. `publishedCourses` cuenta los cursos activos y publicados; `completedPercent` es terminados / inscritos × 100.
+
+**Errores:** `403 NOT_INSTRUCTOR`, `403 NOT_ADMIN`, `404 COURSE_NOT_FOUND` (curso que no existe o es de otro instructor). La API responde `403 FORBIDDEN` si el rol no corresponde.
+
+**Vistas:**
+- **`?view=dashboard`** del instructor:
+  - las cifras de ingresos y calificación promedio;
+  - "Ventas", con filtros, el total por forma de pago y "Ver detalle";
+  - "Opiniones recientes".
+- **`?view=course-sales&id=N`** (solo el instructor del curso; si no, redirige a su panel): los alumnos del curso con su inscripción, avance, si terminó, lo que pagaron y la forma de pago.
+- **`?view=dashboard`** del admin: las cifras de la plataforma y las pestañas "Instructores" y "Alumnos".
+
 ### `GET /api/admin/users/locked`
 
 Cuentas bloqueadas por 3 contraseñas incorrectas consecutivas, de la más reciente a la más antigua. Requiere sesión de **admin** (`RequireAuth` + `RequireRole`).
@@ -453,12 +488,15 @@ php tests/verify_auth_unit.php
 php tests/verify_profile_courses_unit.php
 php tests/verify_learning_unit.php
 php tests/verify_certificate_unit.php
+php tests/verify_reports_unit.php
 
-# Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida)
+# Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida
+# y dejan las formas de pago como estaban)
 php tests/verify_auth_db.php
 php tests/verify_profile_courses_db.php
 php tests/verify_learning_db.php
 php tests/verify_certificate_db.php
+php tests/verify_reports_db.php
 
 # Contra Cloudinary real (opcional; sube y borra archivos de prueba, incluido un PDF de certificado)
 php tests/verify_cloudinary_live.php

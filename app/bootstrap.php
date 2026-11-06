@@ -16,6 +16,7 @@ use App\Controllers\LearningController;
 use App\Controllers\CourseController;
 use App\Controllers\MediaController;
 use App\Controllers\PaymentMethodController;
+use App\Controllers\ReportController;
 use App\Controllers\ReviewController;
 use App\Controllers\UserController;
 use App\Database\Connection;
@@ -38,6 +39,7 @@ use App\Repositories\PaymentMethodRepository;
 use App\Repositories\ExamAttemptRepository;
 use App\Repositories\LearningRepository;
 use App\Repositories\PurchaseRepository;
+use App\Repositories\ReportRepository;
 use App\Repositories\ReviewRepository;
 use App\Repositories\StudentRepository;
 use App\Repositories\UserRepository;
@@ -59,6 +61,7 @@ use App\Services\PaymentMethodService;
 use App\Services\ProfileService;
 use App\Services\ProfileValidator;
 use App\Services\RegistrationValidator;
+use App\Services\ReportService;
 use App\Services\ReviewService;
 
 require_once __DIR__ . '/view_helpers.php';
@@ -119,6 +122,8 @@ $studentService = new StudentService(new StudentRepository($procedures));
 $certificateController = new CertificateController($certificateService);
 $reviewService = new ReviewService(new ReviewRepository($procedures));
 $reviewController = new ReviewController($reviewService);
+$reportService = new ReportService(new ReportRepository($procedures));
+$reportController = new ReportController($reportService);
 
 $csrf = new RequireCsrf($session);
 $requireAuth = new RequireAuth($session, $auth);
@@ -164,11 +169,14 @@ $router->add('POST', '/api/checkout/paypal/purchases/{id}/capture', $checkoutCon
 $router->add('POST', '/api/checkout/purchases/{id}/cancel', $checkoutController->cancel(...), [...$studentOnly, $csrf]);
 $router->add('POST', '/api/checkout/card', $checkoutController->payWithCard(...), [...$studentOnly, $csrf]);
 $router->add('GET', '/api/admin/payment-methods', $paymentMethodController->list(...), $adminOnly);
+$router->add('GET', '/api/admin/reports', $reportController->admin(...), $adminOnly);
 $router->add('POST', '/api/admin/payment-methods', $paymentMethodController->setActive(...), [...$adminOnly, $csrf]);
 
 $router->add('POST', '/api/media/upload-ticket', $mediaController->ticket(...), [...$instructorOnly, $csrf]);
 
 $router->add('GET', '/api/instructor/courses', $courseController->listMine(...), $instructorOnly);
+$router->add('GET', '/api/instructor/sales', $reportController->sales(...), $instructorOnly);
+$router->add('GET', '/api/instructor/courses/{id}/students', $reportController->courseStudents(...), $instructorOnly);
 $router->add('POST', '/api/instructor/courses', $courseController->create(...), [...$instructorOnly, $csrf]);
 $router->add('GET', '/api/instructor/courses/{id}', $courseController->show(...), $instructorOnly);
 $router->add('PATCH', '/api/instructor/courses/{id}', $courseController->update(...), [...$instructorOnly, $csrf]);

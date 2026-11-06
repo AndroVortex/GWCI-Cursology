@@ -76,6 +76,23 @@ function check(bool $ok, string $label): void
 }
 
 /**
+ * Guarda qué formas de pago están activas y lo restaura al salir del script (también si la
+ * prueba falla o termina con exit), para no cambiar lo que el admin configuró.
+ */
+function restorePaymentMethodsAtExit(App\Services\PaymentMethodService $methods, App\Models\Entities\AppUser $admin): void
+{
+    $initial = [];
+    foreach ($methods->overview() as $row) {
+        $initial[$row['provider']->value] = $row['active'];
+    }
+    register_shutdown_function(static function () use ($methods, $admin, $initial): void {
+        foreach ($initial as $code => $active) {
+            $methods->setActive($admin, ['codigo' => $code, 'activa' => $active]);
+        }
+    });
+}
+
+/**
  * Ejecuta $callback y devuelve la excepción lanzada si es de la clase esperada.
  *
  * @template T of Throwable

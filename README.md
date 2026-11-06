@@ -65,7 +65,7 @@ SOURCE app/database/procedures/install.sql;
 SHOW PROCEDURE STATUS WHERE Db = 'cursology';
 ```
 
-Deben aparecer 65 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
+Deben aparecer 72 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
 
 ### 4. Crear el primer administrador
 

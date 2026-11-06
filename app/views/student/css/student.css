@@ -59,22 +59,6 @@
     gap: 8px;
 }
 
-/* ---------- Barra de avance ---------- */
-.progress-bar {
-    overflow: hidden;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--surface-3);
-}
-
-.progress-bar span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--success);
-    transition: width var(--transition);
-}
-
 /* ---------- Reproductor ---------- */
 .learn {
     display: grid;
@@ -247,13 +231,6 @@
     margin-top: 6px;
 }
 
-.filters-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-}
-
 .certificate-title {
     margin: 0;
     font-weight: 600;
@@ -263,13 +240,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-}
-
-.table-sub {
-    display: block;
-    margin-top: 2px;
-    color: var(--text-muted);
-    font-size: 0.75rem;
 }
 
 /* ---------- Examen del alumno ---------- */

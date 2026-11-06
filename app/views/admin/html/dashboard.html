@@ -8,23 +8,27 @@
 <div class="form-alert page-alert" role="status" data-page-alert hidden></div>
 
 <?php
-/** @var list<\App\Models\Dto\LockedAccount> $lockedAccounts */
-$previewMessage = 'Las categorías, las formas de pago y la reactivación de cuentas ya funcionan. Reportes y moderación se conectarán en las siguientes entregas.';
-require BASE_PATH . '/app/views/base/html/preview-notice.html';
+/**
+ * @var list<\App\Models\Dto\LockedAccount> $lockedAccounts
+ * @var array{overview: \App\Models\Dto\AdminOverview, instructors: list<\App\Models\Dto\InstructorReportRow>,
+ *     students: list<\App\Models\Dto\StudentReportRow>} $adminDashboard
+ */
+$adminOverview = $adminDashboard['overview'];
 ?>
 
 <div class="stat-grid">
     <div class="stat">
         <p class="stat-label">Alumnos activos</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $adminOverview->activeStudents ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Instructores activos</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $adminOverview->activeInstructors ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Cursos publicados</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $adminOverview->publishedCourses ?></p>
+        <p class="stat-hint">Activos en el catálogo</p>
     </div>
     <div class="stat">
         <p class="stat-label">Cuentas bloqueadas</p>
@@ -113,18 +117,34 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                     <th scope="col">Usuario</th>
                     <th scope="col">Nombre</th>
                     <th scope="col">Fecha de ingreso</th>
-                    <th scope="col" class="num">Cursos</th>
+                    <th scope="col" class="num">Cursos publicados</th>
                     <th scope="col" class="num">Ganancias</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="5">
-                        <div class="empty-state">
-                            <p class="empty-title">Sin instructores registrados</p>
-                        </div>
-                    </td>
-                </tr>
+                <?php foreach ($adminDashboard['instructors'] as $row): ?>
+                    <tr>
+                        <td>
+                            <div class="account-cell">
+                                <img class="account-avatar" src="<?= e($row->avatar) ?>" alt="" loading="lazy">
+                                <span><?= e($row->email) ?></span>
+                            </div>
+                        </td>
+                        <td><?= e($row->fullName) ?></td>
+                        <td><?= e(format_date($row->createdAt)) ?></td>
+                        <td class="num"><?= $row->publishedCourses ?></td>
+                        <td class="num"><?= e(format_money($row->earnings)) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($adminDashboard['instructors'] === []): ?>
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <p class="empty-title">Sin instructores activos</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
@@ -141,13 +161,32 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="5">
-                        <div class="empty-state">
-                            <p class="empty-title">Sin alumnos registrados</p>
-                        </div>
-                    </td>
-                </tr>
+                <?php foreach ($adminDashboard['students'] as $row): ?>
+                    <tr>
+                        <td>
+                            <div class="account-cell">
+                                <img class="account-avatar" src="<?= e($row->avatar) ?>" alt="" loading="lazy">
+                                <span><?= e($row->email) ?></span>
+                            </div>
+                        </td>
+                        <td><?= e($row->fullName) ?></td>
+                        <td><?= e(format_date($row->createdAt)) ?></td>
+                        <td class="num"><?= $row->enrolledCourses ?></td>
+                        <td class="num">
+                            <?= e($row->completedPercent) ?>%
+                            <span class="table-sub"><?= $row->completedCourses ?> de <?= $row->enrolledCourses ?></span>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($adminDashboard['students'] === []): ?>
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <p class="empty-title">Sin alumnos activos</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>

@@ -391,3 +391,41 @@ Si la subida falla, queda `pending` y el siguiente intento lo vuelve a generar c
   ```sql
   LEFT JOIN course_opinion o ... WHERE o.id IS NULL OR o.active = 1
   ```
+
+### Reportes
+
+Solo lectura, para los paneles del instructor y del admin (los lee `ReportRepository`).
+
+**Reglas comunes:**
+- Los importes son la suma de `purchase.amount` con `status = 'completed'`. Las inscripciones de $0 no cambian la suma; en el total por forma de pago se excluyen.
+- Las calificaciones usan la misma regla que el catálogo: no cuentan las de quien tiene la opinión oculta.
+
+| SP | Qué devuelve | Errores |
+|---|---|---|
+| `sp_instructor_overview(p_instructor_id)` | `revenue_total, student_total` (inscripciones), `rating_avg, rating_count` de todos sus cursos | `NOT_INSTRUCTOR` |
+| `sp_instructor_sales(p_instructor_id, p_from, p_to, p_category_id, p_only_active)` | 1) por curso: `id, title, cover_image, active, created_at, currency, student_count, avg_progress, revenue, rating_avg, rating_count`; 2) por forma de pago: `method_name, purchases, total`; 3) `revenue_total` | `NOT_INSTRUCTOR` |
+| `sp_instructor_course_students(p_instructor_id, p_course_id)` | 1) el curso con `chapter_count, student_count, avg_progress, revenue`; 2) sus alumnos: `user_id, full_name, email, avatar, enrolled_at, completed_at, progress, paid, payment_methods` | `COURSE_NOT_FOUND` (no existe o es de otro instructor) |
+| `sp_instructor_recent_reviews(p_instructor_id, p_limit)` | Las últimas opiniones de sus cursos, también las ocultas (`active`, `reason`), con `course_title`, `rate` y el autor | `NOT_INSTRUCTOR` |
+| `sp_admin_overview(p_admin_id)` | `active_students, active_instructors` (activos y sin ban) y `published_courses` (activos y publicados) | `NOT_ADMIN` |
+| `sp_admin_report_instructors(p_admin_id)` | Instructores activos y sin ban: `id, email, full_name, avatar, created_at, published_courses, earnings` | `NOT_ADMIN` |
+| `sp_admin_report_students(p_admin_id)` | Alumnos activos y sin ban: `id, email, full_name, avatar, created_at, enrolled_courses, completed_courses, completed_percent` | `NOT_ADMIN` |
+
+**`sp_instructor_sales`:**
+- Solo los cursos con `published_at` (los borradores no tienen alumnos).
+- Filtros (NULL = sin filtrar):
+  - `p_from`/`p_to`: `course.created_at`, por días completos;
+  - `p_category_id`: categoría asignada y activa;
+  - `p_only_active = 1`: sin los dados de baja.
+
+  Se repiten en las tres consultas en lugar de usar una tabla temporal, que pide un permiso extra (`CREATE TEMPORARY TABLES`).
+
+**Avance:**
+- Por alumno: `capítulos terminados / capítulos del curso * 100` (`LEAST(100, ...)`, 1 decimal).
+- `avg_progress` es su promedio entre los inscritos. Un curso sin alumnos o sin capítulos da `0.0`.
+
+**`payment_methods`:** las formas de pago de las compras de más de $0, separadas por `|` (`GROUP_CONCAT DISTINCT`). NULL si todo fue gratis.
+
+**Orden:**
+- reportes del admin: de la cuenta más reciente a la más antigua;
+- detalle de alumnos: del inscrito más reciente al primero;
+- ventas: del curso creado más reciente al más antiguo.

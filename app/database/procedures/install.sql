@@ -98,6 +98,15 @@ SOURCE app/database/procedures/review/sp_review_save.sql;
 SOURCE app/database/procedures/review/sp_review_list.sql;
 SOURCE app/database/procedures/review/sp_review_hide.sql;
 
+-- Reportes (paneles del instructor y del admin)
+SOURCE app/database/procedures/report/sp_instructor_overview.sql;
+SOURCE app/database/procedures/report/sp_instructor_sales.sql;
+SOURCE app/database/procedures/report/sp_instructor_course_students.sql;
+SOURCE app/database/procedures/report/sp_instructor_recent_reviews.sql;
+SOURCE app/database/procedures/report/sp_admin_overview.sql;
+SOURCE app/database/procedures/report/sp_admin_report_instructors.sql;
+SOURCE app/database/procedures/report/sp_admin_report_students.sql;
+
 -- Mi aprendizaje (kardex y compras)
 SOURCE app/database/procedures/student/sp_student_courses.sql;
 SOURCE app/database/procedures/student/sp_student_purchases.sql;
