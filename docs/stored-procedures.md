@@ -429,3 +429,27 @@ Solo lectura, para los paneles del instructor y del admin (los lee `ReportReposi
 - reportes del admin: de la cuenta más reciente a la más antigua;
 - detalle de alumnos: del inscrito más reciente al primero;
 - ventas: del curso creado más reciente al más antiguo.
+
+### Mensajes
+
+`chat` (una conversación por curso entre el instructor dueño y un alumno inscrito) y `message` (mensajes de texto, que pueden responder a otro de la misma conversación). Los lee `ChatRepository`. Requieren la migración `2026_11_chat_read.sql` en bases creadas antes (ver el README, sección "Migraciones").
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_chat_start(p_user_id, p_course_id, p_student_id)` | Busca o crea la conversación. El alumno pasa `p_student_id` NULL; el instructor dueño pasa el alumno. Devuelve la fila de `chat` y `created` (1 si se creó, 0 si ya existía) | `COURSE_NOT_FOUND`, `NOT_ENROLLED`, `STUDENT_NOT_ENROLLED` (el alumno que eligió el instructor), `NOT_ALLOWED` (ni el alumno ni el dueño del curso) |
+| `sp_chat_list(p_user_id)` | Sus conversaciones (como alumno o como instructor): `id, course_id, course_title, course_cover, course_active, viewer_role, other_id, other_name, other_avatar, last_message_id, last_message_content, last_message_at, last_message_mine, unread_count, created_at, last_activity_at`, de la de actividad más reciente a la más antigua | — |
+| `sp_chat_open(p_user_id, p_chat_id, p_after_id, p_limit)` | Marca la conversación leída para quien la abre. 1) la conversación con el curso y los dos participantes; 2) los mensajes posteriores a `p_after_id` (NULL = los últimos `p_limit`), del más antiguo al más nuevo: `id, sent_by, sender_name, sender_avatar, content, sent_at, reply_to, reply_sender_name, reply_content`; 3) `unread_total` de todas sus conversaciones | `CHAT_NOT_FOUND` (no existe o no participa) |
+| `sp_message_send(p_user_id, p_chat_id, p_content, p_reply_to)` | Guarda el mensaje y marca la conversación leída para quien envía. Devuelve el mensaje con las columnas de los de `sp_chat_open` | `CHAT_NOT_FOUND`, `MESSAGE_NOT_FOUND` (`p_reply_to` no es un mensaje activo de esta conversación), `INVALID_MESSAGE` (vacío o de más de 2000 caracteres) |
+| `sp_chat_unread_total(p_user_id)` | `unread_total` de todas sus conversaciones, para el menú | — |
+
+- **No leído:** un mensaje activo que envió el otro participante después de la última lectura de quien consulta:
+
+  ```sql
+  m.sent_by <> p_user_id
+  AND m.sent_at > COALESCE(<student_last_read_at o instructor_last_read_at>, '1000-01-01')
+  ```
+
+  `sp_chat_open` solo reescribe la última lectura si hay algo nuevo del otro, para que el sondeo de cada 10 segundos no actualice la fila en cada consulta.
+- **Curso dado de baja:** la conversación sigue disponible; `course_active` lo indica.
+- **Mensajes dados de baja** (`message.active = 0`, la moderación de la fase 3): no se listan ni cuentan como no leídos; una respuesta a uno de ellos trae `reply_content` NULL.
+- **`p_after_id` es un id, no una fecha:** el sondeo pide "lo posterior al último que se ve", así que ningún mensaje se pierde aunque dos lleguen en el mismo instante.
