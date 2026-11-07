@@ -1,0 +1,35 @@
+<?php
+/**
+ * Lista de conversaciones: en la vista de mensajes y en los paneles del alumno y del instructor.
+ *
+ * @var list<\App\Models\Dto\ChatSummary> $chatItems
+ * @var ?string $activeChatId la conversación abierta, si hay
+ */
+$activeChatId ??= null;
+?>
+<ul class="chat-list">
+    <?php foreach ($chatItems as $chat): ?>
+        <?php $isActive = $chat->id === $activeChatId; ?>
+        <li>
+            <a class="chat-item<?= $isActive ? ' is-active' : '' ?><?= $chat->unreadCount > 0 ? ' has-unread' : '' ?>"
+               href="<?= e(\App\Http\Presenters\ChatPresenter::url($chat->id)) ?>"<?= $isActive ? ' aria-current="page"' : '' ?>
+               data-chat-item="<?= e($chat->id) ?>">
+                <img class="account-avatar chat-item-avatar" src="<?= e($chat->otherAvatar) ?>" alt="" loading="lazy">
+                <span class="chat-item-body">
+                    <span class="chat-item-head">
+                        <strong class="chat-item-name"><?= e($chat->otherName) ?></strong>
+                        <time class="chat-item-date" datetime="<?= e($chat->lastActivityAt->format(DATE_ATOM)) ?>" data-chat-date><?= e(format_date_time($chat->lastActivityAt)) ?></time>
+                    </span>
+                    <span class="chat-item-course"><?= e($chat->courseTitle) ?><?= $chat->courseActive ? '' : ' · Dado de baja' ?></span>
+                    <span class="chat-item-excerpt" data-chat-excerpt><?= $chat->lastMessageId === null ? 'Sin mensajes todavía' : e($chat->excerpt()) ?></span>
+                </span>
+                <?php if ($chat->unreadCount > 0): ?>
+                    <span class="unread-badge" data-chat-unread>
+                        <span aria-hidden="true"><?= $chat->unreadCount > 99 ? '99+' : $chat->unreadCount ?></span>
+                        <span class="visually-hidden"><?= $chat->unreadCount ?> sin leer</span>
+                    </span>
+                <?php endif; ?>
+            </a>
+        </li>
+    <?php endforeach; ?>
+</ul>

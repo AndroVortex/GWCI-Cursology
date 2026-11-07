@@ -163,6 +163,9 @@ use App\Services\PricingMode;
             <div>
                 <p class="course-instructor-name"><?= e($course->instructorName) ?></p>
                 <p class="text-muted"><?= $course->instructorDescription !== null ? nl2br(e($course->instructorDescription)) : 'Instructor en Cursology.' ?></p>
+                <?php if ($isStudent && $courseAccess->enrolled): ?>
+                    <button type="button" class="btn btn-secondary btn-sm course-instructor-chat" data-start-chat="<?= e($course->id) ?>">Escribirle al instructor</button>
+                <?php endif; ?>
             </div>
         </div>
     </section>

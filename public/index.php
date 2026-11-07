@@ -53,7 +53,7 @@ $views = [
         'title' => 'Curso',
         'file'  => BASE_PATH . '/app/views/catalog/html/course.html',
         'css'   => ['catalog/css/catalog.css'],
-        'js'    => ['catalog/js/course.js', 'catalog/js/reviews.js'],
+        'js'    => ['catalog/js/course.js', 'catalog/js/reviews.js', 'messages/js/start-chat.js'],
     ],
     'verify' => [
         'title' => 'Verificar certificado',
@@ -65,7 +65,7 @@ $views = [
         'title' => 'Mi curso',
         'file'  => BASE_PATH . '/app/views/student/html/learn.html',
         'css'   => ['student/css/student.css'],
-        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js', 'student/js/certificate.js'],
+        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js', 'student/js/certificate.js', 'messages/js/start-chat.js'],
         'auth'  => true,
         'roles' => [UserRole::Student],
     ],
@@ -126,9 +126,17 @@ $views = [
         'title' => 'Ventas del curso',
         'file'  => BASE_PATH . '/app/views/instructor/html/course-sales.html',
         'css'   => [],
-        'js'    => [],
+        'js'    => ['messages/js/start-chat.js'],
         'auth'  => true,
         'roles' => [UserRole::Instructor],
+    ],
+    'messages' => [
+        'title' => 'Mensajes',
+        'file'  => BASE_PATH . '/app/views/messages/html/messages.html',
+        'css'   => ['messages/css/messages.css'],
+        'js'    => ['messages/js/messages.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Student, UserRole::Instructor],
     ],
 ];
 
@@ -258,6 +266,23 @@ try {
         $courseSales = $reportService->courseStudents($currentUser, is_string($_GET['id'] ?? null) ? $_GET['id'] : '');
         $views['course-sales']['title'] = 'Ventas: ' . $courseSales->title;
     }
+    if ($view === 'dashboard' && in_array($currentUser->role(), [UserRole::Student, UserRole::Instructor], true)) {
+        $recentChats = array_slice($chatService->list($currentUser), 0, 3);
+    }
+    if ($view === 'messages') {
+        // Abrir la conversación la marca leída: va antes de la lista y del contador del menú.
+        $chatThread = null;
+        $requestedChat = is_string($_GET['chat'] ?? null) ? $_GET['chat'] : '';
+        if ($requestedChat !== '') {
+            try {
+                $chatThread = $chatService->open($currentUser, $requestedChat);
+                $views['messages']['title'] = 'Mensajes: ' . $chatThread->otherName();
+            } catch (BusinessRuleException) {
+                http_response_code(404);
+            }
+        }
+        $chatList = $chatService->list($currentUser);
+    }
     if ($view === 'categories') {
         $categories = $categoryService->all();
     }
@@ -273,6 +298,14 @@ try {
 } catch (BusinessRuleException) {
     header('Location: ?view=dashboard');
     exit;
+}
+
+// Contador de mensajes no leídos del menú (0 para visitantes y administradores).
+try {
+    $unreadMessages = $chatService->unreadTotal($currentUser);
+} catch (Throwable $exception) {
+    error_log('[view] no se pudo contar los mensajes no leídos: ' . $exception);
+    $unreadMessages = 0;
 }
 
 $page = $views[$view];

@@ -444,6 +444,10 @@
     font-weight: 600;
 }
 
+.course-instructor-chat {
+    margin-top: 12px;
+}
+
 .course-missing {
     margin-top: 40px;
 }

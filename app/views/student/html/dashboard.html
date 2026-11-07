@@ -281,13 +281,23 @@ $statusLabels = [
 
 <section class="panel" aria-labelledby="student-messages-title">
     <div class="panel-header">
-        <h2 class="panel-title" id="student-messages-title">Mensajes</h2>
+        <div>
+            <h2 class="panel-title" id="student-messages-title">Mensajes</h2>
+            <p class="panel-description">Tus conversaciones más recientes con los instructores.</p>
+        </div>
+        <?php if ($recentChats !== []): ?>
+            <a class="btn btn-ghost btn-sm" href="?view=messages">Ver todos</a>
+        <?php endif; ?>
     </div>
-    <div class="empty-state">
-        <span class="empty-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        </span>
-        <p class="empty-title">Sin conversaciones</p>
-        <p class="empty-text">La mensajería con los instructores llegará en una entrega posterior.</p>
-    </div>
+    <?php if ($recentChats === []): ?>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <p class="empty-title">Sin conversaciones</p>
+            <p class="empty-text">¿Tienes una duda? Abre uno de tus cursos y usa «Preguntar al instructor».</p>
+        </div>
+    <?php else: ?>
+        <?php $chatItems = $recentChats; require BASE_PATH . '/app/views/messages/html/chat-list.html'; ?>
+    <?php endif; ?>
 </section>
