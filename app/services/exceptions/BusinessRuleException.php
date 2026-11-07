@@ -75,6 +75,11 @@ final class BusinessRuleException extends RuntimeException
         'OPINION_HIDDEN' => [409, 'Tu opinión fue ocultada y ya no se puede cambiar; sí puedes cambiar tus estrellas.', 'opinion'],
         'OPINION_NOT_FOUND' => [404, 'La opinión no existe.', null],
         'INVALID_SELECTION' => [422, 'Hay respuestas que no son de este examen o más de una en una pregunta de opción única.', 'respuestas'],
+        'NOT_ALLOWED' => [403, 'No tienes permiso para hacer esto.', null],
+        'STUDENT_NOT_ENROLLED' => [422, 'Ese alumno no está inscrito en este curso.', 'alumno'],
+        'CHAT_NOT_FOUND' => [404, 'La conversación no existe.', null],
+        'MESSAGE_NOT_FOUND' => [404, 'El mensaje al que respondes ya no está disponible.', null],
+        'INVALID_MESSAGE' => [422, 'Escribe tu mensaje (máximo 2000 caracteres).', 'texto'],
     ];
 
     private function __construct(

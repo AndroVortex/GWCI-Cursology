@@ -107,6 +107,13 @@ SOURCE app/database/procedures/report/sp_admin_overview.sql;
 SOURCE app/database/procedures/report/sp_admin_report_instructors.sql;
 SOURCE app/database/procedures/report/sp_admin_report_students.sql;
 
+-- Mensajes entre alumno e instructor
+SOURCE app/database/procedures/chat/sp_chat_start.sql;
+SOURCE app/database/procedures/chat/sp_chat_list.sql;
+SOURCE app/database/procedures/chat/sp_chat_open.sql;
+SOURCE app/database/procedures/chat/sp_message_send.sql;
+SOURCE app/database/procedures/chat/sp_chat_unread_total.sql;
+
 -- Mi aprendizaje (kardex y compras)
 SOURCE app/database/procedures/student/sp_student_courses.sql;
 SOURCE app/database/procedures/student/sp_student_purchases.sql;
