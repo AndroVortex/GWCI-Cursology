@@ -61,7 +61,7 @@ Registra el resultado de un intento de login en una transacción propia, despué
   - Si `account_status <> 'active'` o `ban = 1`: registra `blocked`. Una contraseña correcta **no** reactiva la cuenta.
   - Si la contraseña es correcta: deja `consecutive_failed_logins = 0`, actualiza `last_login_at` y registra `success`.
   - Si es incorrecta: suma 1 al contador. Al llegar a 3, en el mismo `UPDATE` cambia `account_status = 'locked'` y actualiza `status_changed_at`, e inserta `user_account_event` (`locked`, sin actor). Registra `wrong_password` con el contador nuevo.
-- **Resultado:** una fila `outcome, consecutive_failures, account_status` (`account_status` es NULL para `unknown_user`). PHP la lee con `App\Models\Dto\LoginResult`.
+- **Resultado:** una fila `outcome, consecutive_failures, account_status, ban` (`account_status` y `ban` son NULL para `unknown_user`). Con `blocked`, `account_status` y `ban` dicen si la cuenta está bloqueada, dada de baja o suspendida, para el mensaje del login. PHP la lee con `App\Models\Dto\LoginResult`.
 - **Error:** `USER_NOT_FOUND`, si el id no existe.
 
 ### Administración de cuentas
@@ -80,6 +80,20 @@ Registra el resultado de un intento de login en una transacción propia, despué
 - **`p_actor_id`:** el admin que la reactiva. NULL solo desde `scripts/unlock_account.php`, para cuando el bloqueado es el único admin.
 - **Resultado:** la fila completa de `app_user` ya reactivada.
 - **Errores:** `NOT_ADMIN`, `USER_NOT_FOUND` y `USER_NOT_LOCKED` (la cuenta no estaba bloqueada).
+
+**Cuentas (vista "Cuentas" del admin):**
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_admin_list_users(p_admin_id, p_search, p_role, p_state, p_limit, p_offset)` | 1) las cuentas, de la más reciente a la más antigua: `id, name, father_last_name, mother_last_name, email, avatar, role, account_status, ban, ban_reason, banned_at, created_at, last_login_at, status_changed_at, last_event_type, last_event_at, last_event_reason`; 2) `total`. Nunca el hash de la contraseña | `NOT_ADMIN` |
+| `sp_admin_ban_user(p_admin_id, p_user_id, p_reason)` | Suspende: `ban = 1` con `banned_by`, `banned_at` y `ban_reason` (lo exige `ck_user_ban_metadata`), y el evento `banned` | `NOT_ADMIN`, `USER_NOT_FOUND`, `CANNOT_BAN_ADMIN`, `ALREADY_BANNED` |
+| `sp_admin_unban_user(p_admin_id, p_user_id, p_reason)` | Quita la suspensión (deja los cuatro campos del ban en 0/NULL) y registra `unbanned` con `p_reason` | `NOT_ADMIN`, `USER_NOT_FOUND`, `NOT_BANNED` |
+| `sp_admin_reactivate_user(p_admin_id, p_user_id, p_reason)` | Una cuenta `locked` o `deleted` vuelve a `active` con el contador en 0 (un solo `UPDATE`, por `ck_user_locked`) y el evento `reactivated`. El ban no cambia | `NOT_ADMIN`, `USER_NOT_FOUND`, `USER_ALREADY_ACTIVE` |
+| `sp_admin_user_events(p_admin_id, p_user_id)` | El historial de `user_account_event`, del más reciente al más antiguo: `id, event_type, reason, created_at, actor_id, actor_name` (NULL si fue el sistema) | `NOT_ADMIN`, `USER_NOT_FOUND` |
+
+- **Filtros de `sp_admin_list_users`** (NULL = sin filtrar): `p_search` es un patrón `LIKE` ya escapado por PHP sobre el email o el nombre; `p_role`; `p_state` = `active` (activa y sin ban), `locked`, `deleted` o `banned`.
+- Los tres que escriben usan una transacción propia con la fila del usuario bloqueada por `SELECT ... FOR UPDATE`.
+- **Los textos de los eventos los manda PHP** (`p_reason`), para que los SP no lleven acentos que dependan del juego de caracteres del cliente de MySQL.
 
 **`sp_admin_create_first(p_name, p_father_last_name, p_mother_last_name, p_gender, p_birthday, p_avatar, p_email, p_password_hash)`**
 
@@ -105,6 +119,14 @@ Registra el resultado de un intento de login en una transacción propia, despué
 - Cambian la foto (URL de Cloudinary o el avatar por defecto) o el hash de la contraseña. PHP borra la foto anterior y verifica la contraseña actual.
 - **Resultado:** la fila completa de `app_user`.
 - **Error:** `USER_NOT_AVAILABLE`.
+
+**`sp_user_deactivate(p_user_id, p_reason)`**
+
+- La baja desde el perfil (PHP ya verificó la contraseña): `account_status = 'deleted'`, `status_changed_at` y el evento `deleted` con la propia cuenta como actor y `p_reason`. Se conservan sus cursos, compras, certificados y lo que publicó; solo un admin la reactiva.
+- **Resultado:** la fila completa de `app_user`.
+- **Errores:** `USER_NOT_FOUND`, `USER_NOT_AVAILABLE` (ya no estaba activa o tiene ban) y `ADMIN_CANNOT_DEACTIVATE` (un admin no se da de baja así).
+
+**Cuentas que no están activas o tienen ban.** No inician sesión y el middleware corta sus sesiones. Si son de un instructor, sus cursos salen del catálogo y no se venden: `sp_catalog_search`, `sp_catalog_course`, `sp_purchase_start`, `sp_enrollment_free`, `sp_review_list`, `sp_opinion_react`, `sp_report_create` y `sp_admin_overview` exigen que el instructor del curso esté `active` y sin ban. El reproductor, el kardex y los certificados no cambian: sus alumnos conservan el acceso.
 
 ### Categorías
 
@@ -241,7 +263,7 @@ Cuatro result sets, que lee `App\Models\Dto\PublicCourse`:
 3. los niveles por orden, con su precio y su video de presentación;
 4. los capítulos, con `is_test`, `duration_seconds` del video principal y `question_count`.
 
-**Error:** `COURSE_NOT_FOUND` si no existe, es borrador o está dado de baja.
+**Error:** `COURSE_NOT_FOUND` si no existe, es borrador, está dado de baja o su instructor ya no está activo o tiene ban. `sp_catalog_search` deja fuera esos mismos cursos.
 
 ### Formas de pago
 
@@ -380,8 +402,8 @@ Si la subida falla, queda `pending` y el siguiente intento lo vuelve a generar c
 |---|---|---|
 | `sp_review_mine(p_user_id, p_course_id)` | 1) `enrolled, completed`; 2) su `course_rate`; 3) su `course_opinion` (aunque esté oculta, con el motivo). Lo lee `MyReview` | — |
 | `sp_review_save(p_user_id, p_course_id, p_rate, p_opinion)` | Guarda las estrellas (upsert con `AS incoming`) y crea, cambia o quita la opinión (`p_opinion` NULL o vacía la quita). Devuelve lo mismo que `sp_review_mine` | `NOT_ENROLLED`, `COURSE_NOT_COMPLETED`, `INVALID_RATE`, `OPINION_HIDDEN` |
-| `sp_review_list(p_course_id, p_limit, p_offset, p_viewer_id)` | 1) `rating_avg, rating_count, stars_1 ... stars_5`; 2) opiniones visibles con `rate`, `author_name` y `author_avatar`, de la más reciente a la primera; 3) `total`; 4) las reacciones de esas opiniones (ver "Reacciones"). `p_viewer_id` (NULL para visitantes) solo marca la reacción propia | `COURSE_NOT_FOUND` (no publicado o dado de baja) |
-| `sp_review_hide(p_actor_id, p_opinion_id, p_reason)` | Oculta la opinión (`active = 0`, `deactivated_by`, `deactivated_at`, `reason`). Ocultarla otra vez no cambia nada | `OPINION_NOT_FOUND` |
+| `sp_review_list(p_course_id, p_limit, p_offset, p_viewer_id)` | 1) `rating_avg, rating_count, stars_1 ... stars_5`; 2) opiniones visibles con `rate`, `author_name`, `author_avatar`, `mine` y `reported_by_me`, de la más reciente a la primera; 3) `total`; 4) las reacciones de esas opiniones (ver "Reacciones"). `p_viewer_id` (NULL para visitantes) solo marca lo de quien consulta | `COURSE_NOT_FOUND` (no publicado, dado de baja o de un instructor que ya no está activo o tiene ban) |
+| `sp_review_hide(p_actor_id, p_opinion_id, p_reason)` | Oculta la opinión (`active = 0`, `deactivated_by`, `deactivated_at`, `reason`) y resuelve sus reportes pendientes. Ocultarla otra vez no cambia nada | `OPINION_NOT_FOUND` |
 
 - **Solo con el curso terminado** (`user_courses.completed_at`): no basta con estar inscrito.
 - **Opinión oculta:** ya no cambia de texto. `OPINION_HIDDEN` si llega otro distinto (comparación con `<=>`); con el mismo texto sí se guardan las estrellas.
@@ -458,15 +480,15 @@ Solo lectura, para los paneles del instructor y del admin (los lee `ReportReposi
 
 `chapter_comment`: comentarios de texto en los capítulos de video, con respuestas de un solo nivel (`comment_parent_id` siempre apunta a un comentario principal del mismo capítulo). Los lee `CommentRepository`.
 
-**Columnas de cada comentario** (las mismas en la lista, al crear, editar, eliminar y ocultar): `id, course_chapter_id, comment_parent_id, commented_by, author_name, author_avatar, author_is_instructor, comment, commented_at, updated_at, active, reply_count`. `comment` es NULL si se eliminó o se ocultó.
+**Columnas de cada comentario** (las mismas en la lista, al crear, editar, eliminar, ocultar y restaurar): `id, course_chapter_id, comment_parent_id, commented_by, author_name, author_avatar, author_is_instructor, comment, commented_at, updated_at, active, reply_count`. `comment` es NULL si se eliminó o se ocultó. `sp_comment_list` agrega `reported_by_me` (quien consulta ya lo reportó).
 
 | SP | Qué hace | Errores |
 |---|---|---|
 | `sp_comment_list(p_user_id, p_chapter_id, p_limit, p_offset)` | 1) los principales de la página, del más nuevo al más antiguo; 2) sus respuestas visibles, de la más antigua a la más nueva; 3) las reacciones de todos ellos; 4) `total` y `viewer_is_owner` | `CHAPTER_NOT_FOUND`, `NO_COMMENTS_ON_EXAM`, `NO_LEVEL_ACCESS` |
 | `sp_comment_create(p_user_id, p_chapter_id, p_parent_id, p_content)` | Publica el comentario o la respuesta. Si `p_parent_id` es una respuesta, la nueva se cuelga de su comentario principal | Los de la lista, más `COMMENT_NOT_FOUND` (`p_parent_id` no es un comentario activo del capítulo) e `INVALID_COMMENT` (vacío o de más de 2000 caracteres) |
 | `sp_comment_update(p_user_id, p_comment_id, p_content)` | El autor cambia el texto. `updated_at` solo cambia si el texto es distinto: así se marca "editado" | `COMMENT_NOT_FOUND` (no existe, no es suyo o ya no está activo), `INVALID_COMMENT` |
-| `sp_comment_delete(p_user_id, p_comment_id)` | El autor lo elimina: `active = 0`, `deactivated_by` = él y `reason = 'Eliminado por su autor'` | `COMMENT_NOT_FOUND` |
-| `sp_comment_hide(p_user_id, p_comment_id, p_reason)` | El instructor del curso o un admin lo ocultan con su motivo. Ocultarlo otra vez no cambia nada | `COMMENT_NOT_FOUND` (también para cualquier otro) |
+| `sp_comment_delete(p_user_id, p_comment_id)` | El autor lo elimina: `active = 0`, `deactivated_by` = él y `reason = 'Eliminado por su autor'`. Sus reportes pendientes quedan resueltos | `COMMENT_NOT_FOUND` |
+| `sp_comment_hide(p_user_id, p_comment_id, p_reason)` | El instructor del curso o un admin lo ocultan con su motivo y sus reportes pendientes quedan resueltos. Ocultarlo otra vez no cambia nada | `COMMENT_NOT_FOUND` (también para cualquier otro) |
 | `sp_comment_react(p_user_id, p_comment_id, p_reaction_id)` | Pone, cambia o quita (NULL) la reacción de quien puede ver el comentario. Devuelve las reacciones del comentario | `COMMENT_NOT_FOUND`, `REACTION_NOT_FOUND` |
 | `sp_instructor_course_comments(p_instructor_id, p_course_id, p_chapter_id, p_unanswered, p_limit, p_offset)` | 1) `id, title, active` del curso; 2) sus capítulos de video con `comment_count` y `unanswered_count`; 3) los principales de la página con `chapter_title, level_sort, chapter_sort, answered`; 4) sus respuestas; 5) sus reacciones; 6) `total` | `COURSE_NOT_FOUND` (no existe o es de otro instructor) |
 | `sp_instructor_recent_comments(p_instructor_id, p_limit)` | Los últimos principales activos de alumnos en sus cursos: `id, course_id, course_title, chapter_id, chapter_title, author_name, author_avatar, comment, commented_at, answered` | `NOT_INSTRUCTOR` |
@@ -493,3 +515,21 @@ Solo lectura, para los paneles del instructor y del admin (los lee `ReportReposi
 
 - **Poner o cambiar** es un upsert con `INSERT ... AS incoming ON DUPLICATE KEY UPDATE reaction_id = incoming.reaction_id`; **quitar** es un `DELETE` de la fila del usuario.
 - **No se borran reacciones del catálogo:** tienen historial. Se desactivan.
+
+### Moderación
+
+`content_report`: un reporte por usuario y contenido (comentario u opinión), con su motivo y su estado (`pending`, `resolved` o `dismissed`). Requiere la migración `2026_11_content_report.sql` en bases creadas antes (ver el README, sección "Migraciones"). Los lee `ModerationRepository`.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_report_create(p_user_id, p_target_type, p_target_id, p_reason_code, p_details)` | Crea el reporte. Si el usuario ya lo había reportado no cambia nada. Devuelve `target_type, target_id, created` | `INVALID_REPORT` (tipo o motivo desconocido, u "other" sin detalle), `COMMENT_NOT_FOUND` / `OPINION_NOT_FOUND` (no lo ve, está oculto o no existe), `CANNOT_REPORT_OWN` |
+| `sp_report_dismiss(p_admin_id, p_target_type, p_target_id)` | Sus reportes pendientes pasan a `dismissed`; el contenido sigue visible. Devuelve `dismissed` (cuántos) | `NOT_ADMIN`, `INVALID_REPORT` |
+| `sp_moderation_reports(p_admin_id, p_limit, p_offset)` | 1) la cola, un renglón por contenido con reportes pendientes, del reporte más reciente al más antiguo: `target_type, target_id, content, active, created_at`, el autor (`author_id, author_name, author_email, author_avatar`), `course_id, course_title, chapter_id, chapter_title`, `report_count`, `spam_count, offensive_count, answers_count, other_count`, `first_reported_at, last_reported_at, last_details`; 2) `total` (contenidos) y `report_total` (reportes) | `NOT_ADMIN` |
+| `sp_moderation_content(p_admin_id, p_type, p_state, p_search, p_limit, p_offset)` | 1) comentarios y opiniones, del más reciente al más antiguo, con lo mismo más `deactivated_at, deactivation_reason, deactivated_by_name, removed_by_author, restorable, report_count`; 2) `total`. Filtros: `p_type` (`comment`/`opinion`), `p_state` (`visible`/`hidden`) y `p_search` (patrón `LIKE` escapado por PHP sobre el texto, el nombre y el email del autor) | `NOT_ADMIN` |
+| `sp_comment_restore(p_admin_id, p_comment_id)` | Vuelve a mostrar un comentario oculto (deja los datos de baja en NULL, como exige `ck_comment_deletion`). Devuelve el comentario | `NOT_ADMIN`, `COMMENT_NOT_FOUND`, `NOT_RESTORABLE` (visible o eliminado por su autor) |
+| `sp_opinion_restore(p_admin_id, p_opinion_id)` | Ídem con una opinión: sus estrellas vuelven a contar. Devuelve la fila de `course_opinion` | `NOT_ADMIN`, `OPINION_NOT_FOUND`, `NOT_RESTORABLE` |
+
+- **Quién reporta:** un comentario, quien lo puede ver (como en `sp_comment_list`); una opinión, cualquier usuario mientras esté visible. Nunca lo propio.
+- **Se resuelven solos:** `sp_comment_hide`, `sp_review_hide` y `sp_comment_delete` pasan a `resolved` los reportes pendientes de ese contenido, con quien actuó en `resolved_by`.
+- **Reportar otra vez** después de un descarte no regresa el contenido a la cola (`uq_report_comment_user`, `uq_report_opinion_user`); el reporte de otra persona sí.
+- **La cola y todo el contenido** juntan comentarios y opiniones con `UNION ALL` en una tabla derivada, ordenada y paginada afuera.
