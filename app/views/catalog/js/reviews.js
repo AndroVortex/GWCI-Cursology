@@ -126,6 +126,11 @@
             hide.type = 'button';
             hide.dataset.hideOpinion = review.id;
             body.append(hide);
+        } else if (canReact && !review.mine && window.Cursology.report) {
+            const actions = el('div', 'review-actions');
+            actions.dataset.reportHost = '';
+            actions.append(window.Cursology.report.button('api/opinions/' + encodeURIComponent(review.id) + '/report', review.reported, 'btn btn-ghost btn-sm'));
+            body.append(actions);
         }
         item.append(avatar, body);
         return item;

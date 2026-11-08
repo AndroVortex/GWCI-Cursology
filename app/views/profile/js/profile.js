@@ -248,4 +248,39 @@
                 });
         });
     }
+
+    /* ---------- Dar de baja la cuenta ---------- */
+    const deleteForm = document.getElementById('profile-delete-form');
+    if (deleteForm) {
+        const deleteAlert = deleteForm.querySelector('[data-form-alert]');
+        deleteForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            F.clearErrors(deleteForm);
+            F.hideAlert(deleteAlert);
+            const values = { password: deleteForm.elements.password.value, motivo: deleteForm.elements.motivo.value.trim() };
+            if (values.password === '') {
+                F.showError(deleteForm, 'password', 'Escribe tu contraseña para confirmar.');
+                deleteForm.elements.password.focus();
+                return;
+            }
+            if (!window.confirm('¿Dar de baja tu cuenta? Ya no podrás iniciar sesión; solo un administrador puede reactivarla.')) {
+                return;
+            }
+
+            F.setBusy(deleteForm, true, 'Dando de baja…');
+            api('api/users/me/deactivate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) })
+                .then(function (result) {
+                    if (!result.ok) {
+                        F.setBusy(deleteForm, false);
+                        F.showApiError(deleteForm, deleteAlert, result);
+                        return;
+                    }
+                    window.Cursology.goWithMessage('?view=home', 'Tu cuenta se dio de baja. Si quieres volver, pide a un administrador que la reactive.');
+                })
+                .catch(function () {
+                    F.setBusy(deleteForm, false);
+                    F.showAlert(deleteAlert, F.NETWORK_ERROR);
+                });
+        });
+    }
 })();

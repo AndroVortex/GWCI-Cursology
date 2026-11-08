@@ -8,7 +8,8 @@
 --   3) niveles por orden (id, title, description, onboarding_video, sort_order, cost)
 --   4) capítulos por nivel y orden (id, course_level_id, title, sort_order, is_test,
 --      duration_seconds del video principal, question_count de los exámenes)
--- Errores: COURSE_NOT_FOUND (no existe, es borrador o está dado de baja).
+-- Errores: COURSE_NOT_FOUND (no existe, es borrador, está dado de baja o su instructor ya no
+-- está activo o tiene ban).
 
 DROP PROCEDURE IF EXISTS sp_catalog_course;
 
@@ -18,7 +19,11 @@ CREATE PROCEDURE sp_catalog_course(
     IN p_course_id BIGINT UNSIGNED
 )
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM course WHERE id = p_course_id AND active = 1 AND published_at IS NOT NULL) THEN
+    IF NOT EXISTS (
+        SELECT 1 FROM course c JOIN app_user u ON u.id = c.created_by
+         WHERE c.id = p_course_id AND c.active = 1 AND c.published_at IS NOT NULL
+           AND u.account_status = 'active' AND u.ban = 0
+    ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'COURSE_NOT_FOUND';
     END IF;
 

@@ -10,8 +10,10 @@
 <?php
 /**
  * @var list<\App\Models\Dto\LockedAccount> $lockedAccounts
+ * @var \App\Models\Dto\ModerationPage $moderationSummary los 3 reportes pendientes más recientes
  * @var array{overview: \App\Models\Dto\AdminOverview, instructors: list<\App\Models\Dto\InstructorReportRow>,
  *     students: list<\App\Models\Dto\StudentReportRow>} $adminDashboard
+ * @var \App\Models\Dto\ModerationPage $moderationSummary los 3 más recientes de la cola de reportes
  */
 $adminOverview = $adminDashboard['overview'];
 ?>
@@ -34,6 +36,11 @@ $adminOverview = $adminDashboard['overview'];
         <p class="stat-label">Cuentas bloqueadas</p>
         <p class="stat-value"><?= count($lockedAccounts) ?></p>
     </div>
+    <div class="stat">
+        <p class="stat-label">Reportes pendientes</p>
+        <p class="stat-value"><?= $moderationSummary->total ?></p>
+        <p class="stat-hint"><a href="?view=moderation">Abrir moderación</a></p>
+    </div>
 </div>
 
 <section class="panel" aria-labelledby="admin-locked-title">
@@ -42,6 +49,7 @@ $adminOverview = $adminDashboard['overview'];
             <h2 class="panel-title" id="admin-locked-title">Cuentas bloqueadas</h2>
             <p class="panel-description">Se bloquean tras 3 contraseñas incorrectas consecutivas. Al reactivarla, la cuenta vuelve a entrar con su misma contraseña.</p>
         </div>
+        <a class="btn btn-secondary btn-sm" href="?view=accounts">Administrar cuentas</a>
     </div>
     <div class="table-wrap">
         <table class="table">
@@ -68,7 +76,7 @@ $adminOverview = $adminDashboard['overview'];
                         <td>
                             <?= e(role_label($account->role)) ?>
                             <?php if ($account->banned): ?>
-                                <span class="badge badge-danger">Con ban</span>
+                                <span class="badge badge-danger">Suspendida</span>
                             <?php endif; ?>
                         </td>
                         <td><?= e(format_date($account->lockedAt)) ?></td>
@@ -218,14 +226,38 @@ $adminOverview = $adminDashboard['overview'];
 
     <section class="panel" aria-labelledby="admin-moderation-title">
         <div class="panel-header">
-            <h2 class="panel-title" id="admin-moderation-title">Moderación</h2>
+            <div>
+                <h2 class="panel-title" id="admin-moderation-title">Moderación</h2>
+                <p class="panel-description">
+                    <?= $moderationSummary->total === 1 ? '1 contenido reportado pendiente' : $moderationSummary->total . ' contenidos reportados pendientes' ?>.
+                </p>
+            </div>
+            <a class="btn btn-secondary btn-sm" href="?view=moderation">Abrir moderación</a>
         </div>
-        <div class="empty-state">
-            <span class="empty-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </span>
-            <p class="empty-title">Nada pendiente</p>
-            <p class="empty-text">Desde aquí podrás dar de baja comentarios y opiniones; se mostrarán como “Comentario eliminado”.</p>
-        </div>
+        <?php if ($moderationSummary->items === []): ?>
+            <div class="empty-state">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+                <p class="empty-title">Nada pendiente</p>
+                <p class="empty-text">Los comentarios y opiniones que reporten los usuarios llegarán aquí. Ocultarlos los muestra como "Comentario eliminado".</p>
+            </div>
+        <?php else: ?>
+            <ul class="list">
+                <?php foreach ($moderationSummary->items as $report): ?>
+                    <li>
+                        <div class="recent-review">
+                            <p class="recent-review-head">
+                                <span class="badge"><?= e($report->targetType->label()) ?></span>
+                                <strong><?= e($report->authorName) ?></strong>
+                                <span class="badge badge-danger"><?= $report->reportCount === 1 ? '1 reporte' : $report->reportCount . ' reportes' ?></span>
+                            </p>
+                            <p class="recent-review-text"><?= e(\App\Models\Dto\ChatMessage::excerpt($report->content, 120)) ?></p>
+                            <p class="table-sub"><?= e($report->reasonsSummary()) ?> · <?= e($report->courseTitle) ?></p>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
     </section>
 </div>

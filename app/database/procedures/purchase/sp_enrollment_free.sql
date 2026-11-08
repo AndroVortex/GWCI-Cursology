@@ -46,9 +46,11 @@ BEGIN
 
     START TRANSACTION;
 
+    -- A la venta: activo, publicado y con su instructor activo y sin ban.
     SELECT id, full_course_price, title, currency INTO v_found, v_price, v_title, v_currency
       FROM course
      WHERE id = p_course_id AND active = 1 AND published_at IS NOT NULL
+       AND created_by IN (SELECT u.id FROM app_user u WHERE u.account_status = 'active' AND u.ban = 0)
        FOR UPDATE;
 
     IF v_found IS NULL THEN

@@ -169,14 +169,15 @@ check(!$threads[0]->wasEdited() && $threads[0]->replies[1]->wasEdited(), '"edita
 check($threads[0]->replies[0]->authorIsInstructor && $threads[0]->answered === null && $threads[0]->chapterLabel() === '', 'la etiqueta del instructor; sin datos del capítulo fuera de su vista');
 
 $root = $threads[0];
-check(CommentPresenter::can($root, '7', false) === ['reply' => true, 'edit' => true, 'delete' => true, 'hide' => false], 'el autor responde, edita y elimina');
-check(CommentPresenter::can($root, '8', false) === ['reply' => true, 'edit' => false, 'delete' => false, 'hide' => false], 'otro alumno solo responde');
-check(CommentPresenter::can($root, '4', true) === ['reply' => true, 'edit' => false, 'delete' => false, 'hide' => true], 'el instructor del curso responde y oculta');
+check(CommentPresenter::can($root, '7', false) === ['reply' => true, 'edit' => true, 'delete' => true, 'hide' => false, 'report' => false], 'el autor responde, edita y elimina (no se reporta a sí mismo)');
+check(CommentPresenter::can($root, '8', false) === ['reply' => true, 'edit' => false, 'delete' => false, 'hide' => false, 'report' => true], 'otro alumno responde y reporta');
+check(CommentPresenter::can($root, '4', true) === ['reply' => true, 'edit' => false, 'delete' => false, 'hide' => true, 'report' => false], 'el instructor del curso responde y oculta (no reporta)');
 check(CommentPresenter::can($threads[0]->replies[0], '4', true)['hide'] === false, 'el instructor no oculta los suyos (los elimina)');
-check(CommentPresenter::can($threads[1], '8', true) === ['reply' => false, 'edit' => false, 'delete' => false, 'hide' => false], 'con un eliminado no se puede hacer nada');
+check(CommentPresenter::can($threads[1], '8', true) === ['reply' => false, 'edit' => false, 'delete' => false, 'hide' => false, 'report' => false], 'con un eliminado no se puede hacer nada');
 
 $commentJson = CommentPresenter::comment($root, '7', false);
-check(array_keys($commentJson) === ['id', 'chapterId', 'parentId', 'author', 'avatar', 'isInstructor', 'text', 'removed', 'edited', 'commentedAt', 'commentedAtLabel', 'replyCount', 'replies', 'reactions', 'can'], 'JSON del comentario sin datos internos (ni el id del autor)');
+check(array_keys($commentJson) === ['id', 'chapterId', 'parentId', 'author', 'avatar', 'isInstructor', 'text', 'removed', 'edited', 'commentedAt', 'commentedAtLabel', 'replyCount', 'replies', 'reactions', 'reported', 'can'], 'JSON del comentario sin datos internos (ni el id del autor)');
+check($commentJson['reported'] === false && CommentPresenter::comment(ChapterComment::fromRow(commentRow(['reported_by_me' => 1])), '8', false)['reported'] === true, '"reported" sale de reported_by_me (y es false si el SP no lo trae)');
 check($commentJson['commentedAtLabel'] === '25 oct 2026, 12:00' && count($commentJson['replies']) === 2 && $commentJson['replies'][0]['isInstructor'] === true, 'con la fecha en hora de Monterrey y sus respuestas');
 check(CommentPresenter::comment($threads[1], '7', false)['text'] === null && CommentPresenter::comment($threads[1], '7', false)['removed'] === true, 'el eliminado no manda su texto');
 

@@ -164,10 +164,38 @@ $hasCustomAvatar = $currentUser->avatar() !== App\Services\AuthService::DEFAULT_
             <div class="panel-header">
                 <div>
                     <h2 class="panel-title" id="profile-delete-title">Dar de baja la cuenta</h2>
-                    <p class="panel-description">Se conservan tus cursos, compras y certificados, pero ya no podrás iniciar sesión. Solo un administrador puede reactivarla. Disponible próximamente.</p>
+                    <?php if ($currentUser->role() === \App\Models\Enums\UserRole::Admin): ?>
+                        <p class="panel-description">Las cuentas de administrador no se dan de baja desde el perfil, para que la plataforma no se quede sin administradores.</p>
+                    <?php else: ?>
+                        <p class="panel-description">
+                            Se conservan tus cursos, compras, certificados y lo que publicaste, pero ya no podrás iniciar sesión. Solo un administrador puede reactivarla.
+                            <?php if ($currentUser->role() === \App\Models\Enums\UserRole::Instructor): ?>
+                                Tus cursos saldrán del catálogo y ya no se venderán; tus alumnos conservan el acceso.
+                            <?php endif; ?>
+                        </p>
+                    <?php endif; ?>
                 </div>
-                <button type="button" class="btn btn-danger btn-sm" disabled>Dar de baja</button>
             </div>
+            <?php if ($currentUser->role() !== \App\Models\Enums\UserRole::Admin): ?>
+                <form class="panel-body profile-form" id="profile-delete-form" novalidate>
+                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label class="form-label" for="profile-delete-password">Contraseña actual</label>
+                            <input class="form-control" type="password" id="profile-delete-password" name="password" autocomplete="current-password">
+                            <p class="field-error" aria-live="polite"></p>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label" for="profile-delete-motivo">¿Por qué te vas? <span class="optional">(opcional)</span></label>
+                            <input class="form-control" type="text" id="profile-delete-motivo" name="motivo" maxlength="500">
+                            <p class="field-error" aria-live="polite"></p>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-danger btn-sm">Dar de baja mi cuenta</button>
+                    </div>
+                </form>
+            <?php endif; ?>
         </section>
     </div>
 </div>

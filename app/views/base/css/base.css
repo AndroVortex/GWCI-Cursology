@@ -875,6 +875,36 @@ strong {
     font-size: 1.125rem;
 }
 
+/* ---------- Reportar comentarios y opiniones ---------- */
+.report-form {
+    display: grid;
+    gap: 8px;
+    max-width: 520px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+}
+
+.report-form .form-hint {
+    margin: 0;
+}
+
+.report-form .form-actions {
+    justify-content: flex-start;
+    padding-top: 0;
+}
+
+.report-done {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-style: italic;
+}
+
+.review-actions {
+    margin-top: 4px;
+}
+
 /* ---------- Mensajes: lista de conversaciones (vista de mensajes y paneles) y no leídos ---------- */
 .unread-badge {
     display: inline-grid;

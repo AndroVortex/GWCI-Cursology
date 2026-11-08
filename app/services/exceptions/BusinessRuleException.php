@@ -85,6 +85,14 @@ final class BusinessRuleException extends RuntimeException
         'NO_COMMENTS_ON_EXAM' => [409, 'Los exámenes no tienen comentarios.', null],
         'REACTION_NOT_FOUND' => [404, 'Esa reacción ya no está disponible.', null],
         'REACTION_NAME_TAKEN' => [409, 'Ya existe una reacción con ese nombre.', 'nombre'],
+        'CANNOT_REPORT_OWN' => [409, 'No puedes reportar lo que tú publicaste.', null],
+        'INVALID_REPORT' => [422, 'Elige el motivo del reporte (con "Otro", cuéntanos qué pasa).', 'motivo'],
+        'NOT_RESTORABLE' => [409, 'Esto no se puede restaurar: ya está visible o lo eliminó su autor.', null],
+        'CANNOT_BAN_ADMIN' => [409, 'No se puede suspender una cuenta de administrador.', null],
+        'ALREADY_BANNED' => [409, 'Esta cuenta ya está suspendida.', null],
+        'NOT_BANNED' => [409, 'Esta cuenta no está suspendida.', null],
+        'USER_ALREADY_ACTIVE' => [409, 'Esta cuenta ya está activa.', null],
+        'ADMIN_CANNOT_DEACTIVATE' => [403, 'Las cuentas de administrador no se dan de baja desde el perfil.', null],
     ];
 
     private function __construct(

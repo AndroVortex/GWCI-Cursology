@@ -65,7 +65,7 @@ SOURCE app/database/procedures/install.sql;
 SHOW PROCEDURE STATUS WHERE Db = 'cursology';
 ```
 
-Deben aparecer 91 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
+Deben aparecer 103 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
 
 ### 4. Crear el primer administrador
 
@@ -121,12 +121,14 @@ Una base creada antes de un cambio al esquema necesita su migración. Las migrac
 ```
 mysql -u root -p cursology
 SOURCE app/database/migrations/2026_11_chat_read.sql;
+SOURCE app/database/migrations/2026_11_content_report.sql;
 SOURCE app/database/procedures/install.sql;
 ```
 
 | Migración | Qué hace |
 |---|---|
 | `2026_11_chat_read.sql` | Agrega `chat.student_last_read_at` y `chat.instructor_last_read_at` para los mensajes no leídos. |
+| `2026_11_content_report.sql` | Crea la tabla `content_report` (reportes de comentarios y opiniones para la moderación). |
 
 Cada migración revisa primero si el cambio ya está y, si es así, no hace nada: se puede ejecutar más de una vez. Una base nueva creada con el archivo del esquema ya trae todos los cambios y no necesita migraciones. Si copias los datos de otra PC con el dump de la sección siguiente, ejecuta las migraciones después de importarlo.
 

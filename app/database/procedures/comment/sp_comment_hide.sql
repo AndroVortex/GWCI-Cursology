@@ -1,6 +1,6 @@
 -- sp_comment_hide: oculta un comentario con su motivo. Solo el instructor dueño del curso o un
 -- admin; para cualquier otro el comentario "no existe" (no revela qué ids hay). Ocultarlo otra
--- vez no cambia el motivo ni la fecha.
+-- vez no cambia el motivo ni la fecha. Sus reportes pendientes quedan resueltos.
 -- Devuelve el comentario con las columnas de sp_comment_list (comment NULL).
 -- Errores: COMMENT_NOT_FOUND.
 
@@ -45,6 +45,11 @@ BEGIN
            SET active = 0, deactivated_by = p_user_id, deactivated_at = NOW(6), reason = TRIM(p_reason)
          WHERE id = p_comment_id;
     END IF;
+
+    -- Oculto, ya no hay nada que revisar: sus reportes pendientes quedan resueltos.
+    UPDATE content_report
+       SET status = 'resolved', resolved_by = p_user_id, resolved_at = NOW(6)
+     WHERE comment_id = p_comment_id AND status = 'pending';
 
     COMMIT;
 

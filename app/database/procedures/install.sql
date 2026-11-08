@@ -19,11 +19,17 @@ SOURCE app/database/procedures/user/sp_user_get_by_id.sql;
 SOURCE app/database/procedures/user/sp_user_update_profile.sql;
 SOURCE app/database/procedures/user/sp_user_update_avatar.sql;
 SOURCE app/database/procedures/user/sp_user_change_password.sql;
+SOURCE app/database/procedures/user/sp_user_deactivate.sql;
 
 -- Administración
 SOURCE app/database/procedures/admin/sp_admin_create_first.sql;
 SOURCE app/database/procedures/admin/sp_admin_list_locked_users.sql;
 SOURCE app/database/procedures/admin/sp_admin_unlock_user.sql;
+SOURCE app/database/procedures/admin/sp_admin_list_users.sql;
+SOURCE app/database/procedures/admin/sp_admin_ban_user.sql;
+SOURCE app/database/procedures/admin/sp_admin_unban_user.sql;
+SOURCE app/database/procedures/admin/sp_admin_reactivate_user.sql;
+SOURCE app/database/procedures/admin/sp_admin_user_events.sql;
 
 -- Categorías
 SOURCE app/database/procedures/category/sp_category_list.sql;
@@ -131,6 +137,14 @@ SOURCE app/database/procedures/reaction/sp_reaction_update.sql;
 SOURCE app/database/procedures/reaction/sp_reaction_set_active.sql;
 SOURCE app/database/procedures/reaction/sp_opinion_react.sql;
 SOURCE app/database/procedures/reaction/sp_message_react.sql;
+
+-- Moderación (reportes, cola del admin y restaurar)
+SOURCE app/database/procedures/moderation/sp_report_create.sql;
+SOURCE app/database/procedures/moderation/sp_report_dismiss.sql;
+SOURCE app/database/procedures/moderation/sp_moderation_reports.sql;
+SOURCE app/database/procedures/moderation/sp_moderation_content.sql;
+SOURCE app/database/procedures/moderation/sp_comment_restore.sql;
+SOURCE app/database/procedures/moderation/sp_opinion_restore.sql;
 
 -- Mi aprendizaje (kardex y compras)
 SOURCE app/database/procedures/student/sp_student_courses.sql;

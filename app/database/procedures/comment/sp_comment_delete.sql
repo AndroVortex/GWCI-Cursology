@@ -1,6 +1,6 @@
 -- sp_comment_delete: el autor elimina su comentario (baja lógica con motivo "Eliminado por su
 -- autor"). Si es un comentario principal con respuestas, ellas se siguen viendo y él se muestra
--- como "Comentario eliminado".
+-- como "Comentario eliminado". Sus reportes pendientes quedan resueltos.
 -- Devuelve el comentario con las columnas de sp_comment_list (comment NULL).
 -- Errores: COMMENT_NOT_FOUND (no existe, no es suyo o ya no está activo).
 
@@ -30,6 +30,10 @@ BEGIN
     UPDATE chapter_comment
        SET active = 0, deactivated_by = p_user_id, deactivated_at = NOW(6), reason = 'Eliminado por su autor'
      WHERE id = p_comment_id;
+
+    UPDATE content_report
+       SET status = 'resolved', resolved_by = p_user_id, resolved_at = NOW(6)
+     WHERE comment_id = p_comment_id AND status = 'pending';
 
     SELECT
         c.id, c.course_chapter_id, c.comment_parent_id, c.commented_by,

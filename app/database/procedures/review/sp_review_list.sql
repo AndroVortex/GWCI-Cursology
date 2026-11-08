@@ -4,7 +4,8 @@
 -- Resultados (en este orden):
 --   1) rating_avg (1 decimal, NULL sin calificaciones), rating_count y stars_1 ... stars_5
 --   2) opiniones visibles, de la más reciente a la más antigua (p_limit desde p_offset):
---      id, opinion, commented_at, updated_at, rate, author_name, author_avatar
+--      id, opinion, commented_at, updated_at, rate, author_name, author_avatar, mine (es de quien
+--      consulta: no la puede reportar; NULL para visitantes) y reported_by_me
 --   3) total de opiniones visibles
 --   4) las reacciones de las opiniones de la página: target_id, reaction_id, emoji,
 --      reaction_name, total y mine; solo reacciones activas del catálogo
@@ -21,7 +22,11 @@ CREATE PROCEDURE sp_review_list(
     IN p_viewer_id BIGINT UNSIGNED
 )
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM course WHERE id = p_course_id AND active = 1 AND published_at IS NOT NULL) THEN
+    IF NOT EXISTS (
+        SELECT 1 FROM course c JOIN app_user u ON u.id = c.created_by
+         WHERE c.id = p_course_id AND c.active = 1 AND c.published_at IS NOT NULL
+           AND u.account_status = 'active' AND u.ban = 0
+    ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'COURSE_NOT_FOUND';
     END IF;
 
@@ -39,7 +44,10 @@ BEGIN
 
     SELECT o.id, o.opinion, o.commented_at, o.updated_at, r.rate,
            CONCAT_WS(' ', u.name, u.father_last_name, u.mother_last_name) AS author_name,
-           u.avatar AS author_avatar
+           u.avatar AS author_avatar,
+           o.commented_by = p_viewer_id AS mine,
+           p_viewer_id IS NOT NULL
+               AND EXISTS (SELECT 1 FROM content_report rp WHERE rp.opinion_id = o.id AND rp.reported_by = p_viewer_id) AS reported_by_me
       FROM course_opinion o
       JOIN app_user u ON u.id = o.commented_by
       LEFT JOIN course_rate r ON r.rated_by = o.commented_by AND r.course_id = o.course_id
