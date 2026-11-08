@@ -181,17 +181,17 @@ En PowerShell, si el comodín no se expande, usa: `php -l (Get-ChildItem app/mod
 El script no necesita MySQL ni dependencias. Termina con código `0` si todo pasa y `1` si algo falla, y no usa `assert()`. Comprueba lo siguiente:
 
 1. **Archivos:** que las 29 entidades y 9 enums carguen con el autoload real, y que los nombres de carpetas sean compatibles con Linux.
-2. **Inventario del DDL:** 29 tablas, 254 columnas, 61 FK (79 pares), 28 UNIQUE y 6 PK compuestas.
+2. **Inventario del DDL:** 29 tablas, 256 columnas, 61 FK (79 pares), 28 UNIQUE y 6 PK compuestas.
 3. **Metadatos contra el DDL:** columnas, orden, tipo, nulabilidad, `AUTO_INCREMENT`, columnas generadas, `DEFAULT`, `ON UPDATE`, PK, UNIQUE y FK.
 4. **Enums:** que coincidan exactamente con los `CHECK`.
 5. **FK:** que cada una apunte a la PK o a un UNIQUE completo, con tipos iguales.
 6. **Encapsulamiento:** clases `final`, constructor privado, sin propiedades públicas ni métodos de persistencia o serialización, y nulabilidad PHP coherente con el DDL.
-7. **Hidratación por entidad:** una completa por cada una; una clave ausente y un NULL por cada columna; y casos de conversión por tipo para las 254 columnas.
+7. **Hidratación por entidad:** una completa por cada una; una clave ausente y un NULL por cada columna; y casos de conversión por tipo para las 256 columnas.
 8. **Casos críticos:** `'0'`/`'1'`, `NULL` real frente a `'NULL'`, campo ausente, `'false'`, `18446744073709551615` y su overflow, `'123.45'`, exceso de escala y de rango, float, fecha inexistente, microsegundos, y mensajes de error sin valores.
 9. **Exposición:** `json_encode`, `serialize`, `print_r` y `var_dump` sin el hash ni las claves del examen.
 10. **Sin base de datos:** que no se cargue `conn.php` ni ninguna conexión, y que no haya PDO ni SQL CRUD en el código del mapeo.
 
-Resultado actual: `RESULTADO: OK (7233 comprobaciones)`.
+Resultado actual: `RESULTADO: OK (7281 comprobaciones)`.
 
 ## Conexión con los SP
 

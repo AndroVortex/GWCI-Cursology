@@ -65,7 +65,7 @@ SOURCE app/database/procedures/install.sql;
 SHOW PROCEDURE STATUS WHERE Db = 'cursology';
 ```
 
-Deben aparecer 72 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
+Deben aparecer 77 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
 
 ### 4. Crear el primer administrador
 
@@ -111,7 +111,23 @@ Cada archivo hace `DROP PROCEDURE IF EXISTS` + `CREATE`: reescribe los que cambi
 
 - **Un SP nuevo debe agregarse a `install.sql`** con su línea `SOURCE`; si no, no se instala.
 - **Un SP renombrado o eliminado se queda en la base.** Bórralo a mano con `DROP PROCEDURE nombre;`.
-- **No cambia las tablas.** Un cambio al esquema (columna o tabla nueva) se aplica aparte, con su `ALTER TABLE`, en cada PC. El archivo del esquema no se vuelve a ejecutar.
+- **No cambia las tablas.** Un cambio al esquema (columna o tabla nueva) se aplica con su migración; ver la sección siguiente. El archivo del esquema no se vuelve a ejecutar.
+
+## Migraciones
+
+Una base creada antes de un cambio al esquema necesita su migración. Las migraciones viven en `app/database/migrations/` y se ejecutan en orden de nombre, desde la raíz del repositorio y **antes** de reinstalar los SP (los SP nuevos usan las columnas nuevas):
+
+```
+mysql -u root -p cursology
+SOURCE app/database/migrations/2026_11_chat_read.sql;
+SOURCE app/database/procedures/install.sql;
+```
+
+| Migración | Qué hace |
+|---|---|
+| `2026_11_chat_read.sql` | Agrega `chat.student_last_read_at` y `chat.instructor_last_read_at` para los mensajes no leídos. |
+
+Cada migración revisa primero si el cambio ya está y, si es así, no hace nada: se puede ejecutar más de una vez. Una base nueva creada con el archivo del esquema ya trae todos los cambios y no necesita migraciones. Si copias los datos de otra PC con el dump de la sección siguiente, ejecuta las migraciones después de importarlo.
 
 ## Copiar los datos de otra PC (opcional)
 

@@ -39,6 +39,18 @@ function format_date(DateTimeInterface|string|null $date): string
     return sprintf('%d %s %s', (int) $local->format('j'), $months[(int) $local->format('n') - 1], $local->format('Y'));
 }
 
+/** Fecha y hora de 24 h, para los mensajes ("18 oct 2026, 14:05"). */
+function format_date_time(?DateTimeInterface $date): string
+{
+    if ($date === null) {
+        return '—';
+    }
+
+    $local = DateTimeImmutable::createFromInterface($date)->setTimezone(new DateTimeZone(DISPLAY_TIME_ZONE));
+
+    return format_date($local) . ', ' . $local->format('H:i');
+}
+
 /**
  * Importe con el formato de la rúbrica: símbolo, separador de miles y dos decimales
  * ("$1,249.90 MXN"). Trabaja sobre la cadena DECIMAL exacta, sin pasar por float.

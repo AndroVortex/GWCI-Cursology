@@ -428,7 +428,7 @@ try {
     $ddlUniques = $sum(static fn (array $t): int => count($t['uniqueKeys']));
     $ddlCompositePks = $sum(static fn (array $t): int => count($t['primaryKey']) > 1 ? 1 : 0);
     check(count($ddl) === 29, sprintf('29 tablas en el DDL (encontradas: %d)', count($ddl)));
-    check($ddlColumns === 254, "254 columnas en el DDL (encontradas: $ddlColumns)");
+    check($ddlColumns === 256, "256 columnas en el DDL (encontradas: $ddlColumns)");
     check($ddlFks === 61, "61 FK en el DDL (encontradas: $ddlFks)");
     check($ddlFkPairs === 79, "79 pares de columnas en las FK (encontrados: $ddlFkPairs)");
     check($ddlUniques === 28, "28 índices UNIQUE en el DDL (encontrados: $ddlUniques)");
@@ -437,7 +437,7 @@ try {
     $mappedColumns = array_sum(array_map(static fn (string $c): int => count($c::metadata()->columns), $entities));
     $mappedFks = array_sum(array_map(static fn (string $c): int => count($c::metadata()->foreignKeys), $entities));
     check(array_keys($entities) === array_keys($ddl), 'EntityMap cubre las 29 tablas en el orden del DDL');
-    check($mappedColumns === 254, "254 columnas mapeadas (mapeadas: $mappedColumns)");
+    check($mappedColumns === 256, "256 columnas mapeadas (mapeadas: $mappedColumns)");
     check($mappedFks === 61, "61 FK registradas como restricciones (registradas: $mappedFks)");
 
     // -----------------------------------------------------------

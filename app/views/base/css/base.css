@@ -774,6 +774,104 @@ strong {
     overflow-wrap: anywhere;
 }
 
+/* ---------- Mensajes: lista de conversaciones (vista de mensajes y paneles) y no leídos ---------- */
+.unread-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.unread-badge[hidden] {
+    display: none;
+}
+
+.sidebar-badge {
+    margin-left: auto;
+}
+
+.chat-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chat-list li + li {
+    border-top: 1px solid var(--border);
+}
+
+.chat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 0.875rem;
+}
+
+.chat-item:hover {
+    background: var(--surface-2);
+    text-decoration: none;
+}
+
+.chat-item.is-active {
+    background: var(--accent-soft);
+}
+
+.chat-item-avatar {
+    width: 36px;
+    height: 36px;
+}
+
+.chat-item-body {
+    display: grid;
+    flex: 1;
+    gap: 1px;
+    min-width: 0;
+}
+
+.chat-item-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.chat-item-name,
+.chat-item-course,
+.chat-item-excerpt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-item-date,
+.chat-item-course {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.chat-item-date {
+    flex-shrink: 0;
+}
+
+.chat-item-excerpt {
+    color: var(--text-muted);
+}
+
+.chat-item.has-unread .chat-item-excerpt {
+    color: var(--text);
+    font-weight: 600;
+}
+
 /* ---------- Tablas: texto secundario y acciones de los filtros ---------- */
 .table-sub {
     display: block;

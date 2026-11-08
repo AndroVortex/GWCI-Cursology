@@ -1,0 +1,30 @@
+<?php
+/**
+ * Un mensaje de la conversación abierta. messages.js arma el mismo marcado para los nuevos.
+ *
+ * @var \App\Models\Dto\ChatMessage $message
+ * @var \App\Models\Entities\AppUser $currentUser
+ */
+$isMine = $message->isFrom($currentUser->id());
+?>
+<li class="chat-message<?= $isMine ? ' is-mine' : '' ?>" id="mensaje-<?= e($message->id) ?>" data-message-id="<?= e($message->id) ?>" data-author="<?= e($message->senderName) ?>">
+    <?php if (!$isMine): ?>
+        <img class="account-avatar chat-message-avatar" src="<?= e($message->senderAvatar) ?>" alt="" loading="lazy">
+    <?php endif; ?>
+    <div class="chat-bubble">
+        <?php if ($message->replyTo !== null): ?>
+            <a class="chat-quote" href="#mensaje-<?= e($message->replyTo) ?>">
+                <strong><?= e($message->replySenderName) ?></strong>
+                <span><?= $message->replyContent === null ? 'Mensaje no disponible' : e($message->replyExcerpt()) ?></span>
+            </a>
+        <?php endif; ?>
+        <p class="chat-text"><?= e($message->content) ?></p>
+        <p class="chat-meta">
+            <?php if (!$isMine): ?>
+                <span class="chat-author"><?= e($message->senderName) ?></span> ·
+            <?php endif; ?>
+            <time datetime="<?= e($message->sentAt->format(DATE_ATOM)) ?>"><?= e(format_date_time($message->sentAt)) ?></time>
+            · <button type="button" class="chat-reply-btn" data-reply>Responder</button>
+        </p>
+    </div>
+</li>

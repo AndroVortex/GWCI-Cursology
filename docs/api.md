@@ -424,6 +424,38 @@ Solo lectura. Los importes son la suma de las compras completadas (sin comisión
 - **`?view=course-sales&id=N`** (solo el instructor del curso; si no, redirige a su panel): los alumnos del curso con su inscripción, avance, si terminó, lo que pagaron y la forma de pago.
 - **`?view=dashboard`** del admin: las cifras de la plataforma y las pestañas "Instructores" y "Alumnos".
 
+### Mensajes
+
+Una conversación por curso entre el alumno inscrito y el instructor dueño del curso. Solo texto (de 1 a 2000 caracteres, sin los espacios de los lados); un mensaje puede responder a otro de la misma conversación. Todas las rutas piden sesión de **alumno o instructor**; un admin recibe `403 FORBIDDEN`.
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/chats` | Alumno o instructor | — | `{"data": {chats: [{id, url, courseId, courseTitle, courseActive, other: {name, avatar}, lastMessage, lastActivityAt, lastActivityLabel, unread}], unreadTotal}}` |
+| `POST /api/chats` | Alumno o instructor + CSRF | Alumno: `{curso}`. Instructor: `{curso, alumno}` | `201` si la crea o `200` si ya existía: `{"data": {"chat": {id, url}}}` |
+| `GET /api/chats/{id}/messages?after=` | Participante | — | `{"data": {chat: {id, courseId, courseTitle, courseActive, other}, messages: [...], lastMessageId, unreadTotal}}`. Sin `after`, los últimos 100; con `after`, solo los posteriores a ese id. La marca leída |
+| `POST /api/chats/{id}/messages` | Participante + CSRF | `{texto, responde_a?}` | `201 {"data": {"message": {...}}}` |
+
+- **Cada mensaje:** `{id, mine, author, avatar, text, sentAt, sentAtLabel, replyTo, replyAuthor, replyExcerpt}`. `sentAtLabel` ya viene formateado en hora de Monterrey ("25 oct 2026, 18:05"). `replyExcerpt` viene vacío si el mensaje citado se dio de baja.
+- **`text` es texto plano:** la vista lo pone con `textContent` y respeta los saltos de línea; nunca se interpreta como HTML.
+- **No leídos:** los mensajes del otro participante posteriores a la última vez que abriste la conversación. Abrirla (o recibir mensajes con ella abierta) la marca leída, y enviar también.
+- **El curso dado de baja** no cierra la conversación: `courseActive` es `false`.
+- **Errores:**
+  - `403 NOT_ENROLLED` (el alumno no está inscrito);
+  - `422 STUDENT_NOT_ENROLLED` en `alumno` (el instructor eligió a alguien que no está inscrito);
+  - `403 NOT_ALLOWED` (otro instructor);
+  - `404 COURSE_NOT_FOUND`;
+  - `404 CHAT_NOT_FOUND` (no existe o no participas en ella);
+  - `404 MESSAGE_NOT_FOUND` (`responde_a` no es de esta conversación);
+  - `422 VALIDATION_FAILED` en `texto`, `responde_a`, `curso`, `alumno` o `after`.
+
+**Vistas:**
+- **`?view=messages[&chat=N]`:** la lista de conversaciones con sus no leídos y, a la derecha, la abierta: los mensajes en burbujas (los propios a la derecha), "Responder" en cada uno y el cuadro de texto (Enter envía; Shift + Enter hace un salto de línea). Con la conversación abierta, la página pide los mensajes nuevos cada 10 segundos. En pantallas chicas se ve la lista o la conversación.
+- **Menú lateral:** "Mensajes", con el número de no leídos.
+- **Página del curso:** "Escribirle al instructor" en "Sobre el instructor", solo para alumnos inscritos.
+- **Reproductor:** "Preguntar al instructor" en el índice del curso (también si el curso se dio de baja).
+- **Detalle de ventas** (`?view=course-sales`): "Escribir" en cada alumno.
+- **Paneles del alumno y del instructor:** las 3 conversaciones más recientes y "Ver todos".
+
 ### `GET /api/admin/users/locked`
 
 Cuentas bloqueadas por 3 contraseñas incorrectas consecutivas, de la más reciente a la más antigua. Requiere sesión de **admin** (`RequireAuth` + `RequireRole`).
@@ -489,6 +521,7 @@ php tests/verify_profile_courses_unit.php
 php tests/verify_learning_unit.php
 php tests/verify_certificate_unit.php
 php tests/verify_reports_unit.php
+php tests/verify_messages_unit.php
 
 # Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida
 # y dejan las formas de pago como estaban)
@@ -497,6 +530,7 @@ php tests/verify_profile_courses_db.php
 php tests/verify_learning_db.php
 php tests/verify_certificate_db.php
 php tests/verify_reports_db.php
+php tests/verify_messages_db.php
 
 # Contra Cloudinary real (opcional; sube y borra archivos de prueba, incluido un PDF de certificado)
 php tests/verify_cloudinary_live.php

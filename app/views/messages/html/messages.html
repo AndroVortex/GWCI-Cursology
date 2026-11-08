@@ -1,0 +1,127 @@
+<?php
+/**
+ * Mensajes entre alumno e instructor: la lista de conversaciones y la conversación abierta.
+ *
+ * @var list<\App\Models\Dto\ChatSummary> $chatList
+ * @var ?\App\Models\Dto\ChatThread $chatThread null = ninguna abierta (o no existe)
+ * @var string $requestedChat el id pedido en ?chat=
+ * @var \App\Models\Entities\AppUser $currentUser
+ */
+use App\Models\Enums\UserRole;
+use App\Services\ChatService;
+
+$isStudentViewer = $currentUser->role() === UserRole::Student;
+$thread = $chatThread;
+$activeChatId = $thread?->id;
+?>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Mensajes</h1>
+        <p class="page-subtitle">
+            <?= $isStudentViewer
+                ? 'Tus conversaciones con los instructores de tus cursos.'
+                : 'Las preguntas de tus alumnos, una conversación por curso.' ?>
+        </p>
+    </div>
+</div>
+
+<?php if ($requestedChat !== '' && $thread === null): ?>
+    <div class="notice notice-warning" role="alert">
+        <p>Esa conversación no existe o no participas en ella.</p>
+    </div>
+<?php endif; ?>
+
+<div class="chat-layout<?= $thread !== null ? ' has-thread' : '' ?>">
+    <section class="panel chat-sidebar" aria-labelledby="chat-list-title">
+        <div class="panel-header">
+            <h2 class="panel-title" id="chat-list-title">Conversaciones</h2>
+        </div>
+        <?php if ($chatList === []): ?>
+            <div class="empty-state">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </span>
+                <p class="empty-title">Sin conversaciones</p>
+                <p class="empty-text">
+                    <?= $isStudentViewer
+                        ? 'Abre la página de un curso en el que estás inscrito y usa «Escribirle al instructor», o «Preguntar al instructor» desde el curso.'
+                        : 'Tus alumnos te escriben desde la página de cada curso. Para escribirle a uno, usa «Escribir» en el detalle de ventas del curso.' ?>
+                </p>
+                <?php if ($isStudentViewer): ?>
+                    <a class="btn btn-secondary btn-sm" href="?view=dashboard">Ir a mis cursos</a>
+                <?php else: ?>
+                    <a class="btn btn-secondary btn-sm" href="?view=dashboard#ventas">Ir a mis ventas</a>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
+            <?php $chatItems = $chatList; require __DIR__ . '/chat-list.html'; ?>
+        <?php endif; ?>
+    </section>
+
+    <section class="panel chat-thread" aria-labelledby="chat-thread-title"
+        <?php if ($thread !== null): ?>
+             data-chat="<?= e($thread->id) ?>" data-last-message="<?= e($thread->lastMessageId() ?? '') ?>"
+        <?php endif; ?>>
+        <?php if ($thread === null): ?>
+            <h2 class="visually-hidden" id="chat-thread-title">Conversación</h2>
+            <div class="empty-state chat-thread-empty">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </span>
+                <p class="empty-title">Elige una conversación</p>
+                <p class="empty-text">Aquí verás sus mensajes y podrás responder.</p>
+            </div>
+        <?php else: ?>
+            <div class="panel-header chat-thread-header">
+                <a class="btn btn-ghost btn-sm chat-back" href="?view=messages">← Conversaciones</a>
+                <div class="account-cell">
+                    <img class="account-avatar" src="<?= e($thread->otherAvatar()) ?>" alt="">
+                    <div>
+                        <h2 class="panel-title" id="chat-thread-title"><?= e($thread->otherName()) ?></h2>
+                        <p class="panel-description">
+                            <?= $isStudentViewer ? 'Instructor' : 'Alumno' ?> ·
+                            <?php if ($isStudentViewer): ?>
+                                <a href="?view=learn&amp;course=<?= e($thread->courseId) ?>"><?= e($thread->courseTitle) ?></a>
+                            <?php else: ?>
+                                <a href="?view=course-sales&amp;id=<?= e($thread->courseId) ?>"><?= e($thread->courseTitle) ?></a>
+                            <?php endif; ?>
+                            <?= $thread->courseActive ? '' : '· Dado de baja' ?>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <ol class="chat-messages" data-chat-messages aria-label="Mensajes" aria-live="polite">
+                <?php foreach ($thread->messages as $message): ?>
+                    <?php require __DIR__ . '/chat-message.html'; ?>
+                <?php endforeach; ?>
+                <li class="chat-messages-empty" data-chat-empty<?= $thread->messages === [] ? '' : ' hidden' ?>>
+                    Todavía no hay mensajes. Escribe el primero.
+                </li>
+            </ol>
+
+            <form class="chat-composer" data-chat-composer novalidate>
+                <div class="form-alert" role="alert" data-chat-alert hidden></div>
+                <div class="chat-reply-preview" data-reply-preview hidden>
+                    <p>
+                        Respondiendo a <strong data-reply-author></strong>
+                        <span data-reply-text></span>
+                    </p>
+                    <button type="button" class="icon-btn" data-reply-cancel aria-label="Cancelar la respuesta">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="form-field">
+                    <label class="visually-hidden" for="chat-text">Mensaje</label>
+                    <textarea class="form-control chat-input" id="chat-text" name="texto" rows="2"
+                              maxlength="<?= ChatService::MAX_MESSAGE_CHARS ?>" placeholder="Escribe un mensaje…" data-chat-input></textarea>
+                    <p class="field-error" aria-live="polite"></p>
+                </div>
+                <div class="chat-composer-actions">
+                    <p class="form-hint">Enter envía · Shift + Enter hace un salto de línea · <span data-chat-count>0</span> / <?= ChatService::MAX_MESSAGE_CHARS ?></p>
+                    <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
+                </div>
+            </form>
+        <?php endif; ?>
+    </section>
+</div>

@@ -58,6 +58,7 @@ $chapterState = static function (array $item) use ($course): array {
             <div>
                 <p class="learn-course-title"><?= e($course->title) ?></p>
                 <p class="text-muted">Por <?= e($course->instructorName) ?></p>
+                <button type="button" class="btn btn-ghost btn-sm learn-ask" data-start-chat="<?= e($course->id) ?>">Preguntar al instructor</button>
             </div>
             <div class="learn-progress">
                 <div class="progress-bar" role="progressbar" aria-label="Avance del curso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $course->progressPercent() ?>"

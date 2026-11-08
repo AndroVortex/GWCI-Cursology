@@ -2,6 +2,8 @@
 $navLink = fn (string $name) => $view === $name
     ? 'class="sidebar-link is-active" aria-current="page"'
     : 'class="sidebar-link"';
+$hasMessages = $isLoggedIn && in_array($currentUser->role(), [\App\Models\Enums\UserRole::Student, \App\Models\Enums\UserRole::Instructor], true);
+$unreadMessages ??= 0;
 ?>
 <aside class="sidebar" id="app-sidebar" aria-label="Menú principal">
     <div class="sidebar-head">
@@ -70,6 +72,20 @@ $navLink = fn (string $name) => $view === $name
                         <span>Dashboard</span>
                     </a>
                 </li>
+                <?php if ($hasMessages): ?>
+                    <li>
+                        <a <?= $navLink('messages') ?> href="?view=messages">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <span>Mensajes</span>
+                            <span class="unread-badge sidebar-badge" data-unread-total<?= $unreadMessages > 0 ? '' : ' hidden' ?>>
+                                <span aria-hidden="true"><?= $unreadMessages > 99 ? '99+' : $unreadMessages ?></span>
+                                <span class="visually-hidden"><?= $unreadMessages ?> sin leer</span>
+                            </span>
+                        </a>
+                    </li>
+                <?php endif; ?>
                 <li>
                     <a <?= $navLink('profile') ?> href="?view=profile">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -613,12 +613,16 @@ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 
 -- chat
 -- Conversacion por curso entre estudiante e instructor propietario; PHP valida los roles.
+-- *_last_read_at: ultima lectura de cada participante (mensajes no leidos); en bases ya
+-- creadas se agregan con app/database/migrations/2026_11_chat_read.sql.
 CREATE TABLE `chat` (
 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   course_id BIGINT UNSIGNED NOT NULL,
   instructor_id BIGINT UNSIGNED NOT NULL,
   student_id BIGINT UNSIGNED NOT NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  student_last_read_at DATETIME(6) NULL,
+  instructor_last_read_at DATETIME(6) NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_participants (course_id, instructor_id, student_id),
   KEY ix_chat_student (student_id, created_at),
