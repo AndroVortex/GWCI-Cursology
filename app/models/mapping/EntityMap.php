@@ -10,6 +10,7 @@ use App\Models\Entities\Certificate;
 use App\Models\Entities\ChapterComment;
 use App\Models\Entities\ChapterCommentReaction;
 use App\Models\Entities\Chat;
+use App\Models\Entities\ContentReport;
 use App\Models\Entities\Course;
 use App\Models\Entities\CourseCategory;
 use App\Models\Entities\CourseChapter;
@@ -36,7 +37,7 @@ use App\Models\Entities\UserCourseLevel;
 use InvalidArgumentException;
 
 /**
- * Correspondencia tabla MySQL => clase de entidad (29 tablas, en el orden del DDL).
+ * Correspondencia tabla MySQL => clase de entidad (30 tablas, en el orden del DDL).
  */
 final class EntityMap
 {
@@ -71,6 +72,7 @@ final class EntityMap
         'chat' => Chat::class,
         'message' => Message::class,
         'message_reaction' => MessageReaction::class,
+        'content_report' => ContentReport::class,
     ];
 
     /** @return array<string, class-string<Entity>> */
