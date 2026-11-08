@@ -1,4 +1,5 @@
--- sp_catalog_search: catálogo público. Solo cursos publicados y activos (no dados de baja).
+-- sp_catalog_search: catálogo público. Solo cursos publicados y activos (no dados de baja) de
+-- instructores activos y sin ban.
 -- p_query: texto a buscar en el título y en el nombre del instructor (NULL = todos). PHP ya
 --          escapó % y _ con '\'; la colación de la base no distingue mayúsculas ni acentos.
 -- p_category_id: solo cursos con esa categoría activa (NULL = todas).
@@ -57,6 +58,7 @@ BEGIN
     JOIN app_user u ON u.id = c.created_by
     WHERE c.active = 1
       AND c.published_at IS NOT NULL
+      AND u.account_status = 'active' AND u.ban = 0
       AND (v_pattern IS NULL
            OR c.title LIKE v_pattern
            OR CONCAT_WS(' ', u.name, u.father_last_name, u.mother_last_name) LIKE v_pattern)
@@ -80,6 +82,7 @@ BEGIN
     JOIN app_user u ON u.id = c.created_by
     WHERE c.active = 1
       AND c.published_at IS NOT NULL
+      AND u.account_status = 'active' AND u.ban = 0
       AND (v_pattern IS NULL
            OR c.title LIKE v_pattern
            OR CONCAT_WS(' ', u.name, u.father_last_name, u.mother_last_name) LIKE v_pattern)

@@ -17,9 +17,10 @@ final class CommentPresenter
     /**
      * - reply: cualquier comentario activo (responder a una respuesta la cuelga del principal);
      * - edit y delete: el autor, mientras siga activo;
-     * - hide: el instructor del curso, en los comentarios activos de otros.
+     * - hide: el instructor del curso, en los comentarios activos de otros;
+     * - report: los demás, en los comentarios activos de otros (el instructor los oculta directo).
      *
-     * @return array{reply: bool, edit: bool, delete: bool, hide: bool}
+     * @return array{reply: bool, edit: bool, delete: bool, hide: bool, report: bool}
      */
     public static function can(ChapterComment $comment, string $viewerId, bool $viewerIsOwner): array
     {
@@ -30,6 +31,7 @@ final class CommentPresenter
             'edit' => $comment->active && $mine,
             'delete' => $comment->active && $mine,
             'hide' => $comment->active && $viewerIsOwner && !$mine,
+            'report' => $comment->active && !$viewerIsOwner && !$mine,
         ];
     }
 
@@ -51,6 +53,7 @@ final class CommentPresenter
             'replyCount' => $comment->replyCount,
             'replies' => array_map(static fn (ChapterComment $reply): array => self::comment($reply, $viewerId, $viewerIsOwner), $comment->replies),
             'reactions' => ReactionPresenter::summary($comment->reactions),
+            'reported' => $comment->reportedByMe,
             'can' => self::can($comment, $viewerId, $viewerIsOwner),
         ];
         if ($comment->answered !== null) {

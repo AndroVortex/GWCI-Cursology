@@ -2,7 +2,8 @@
 -- password_verify() en PHP) y aplica el bloqueo por 3 fallos CONSECUTIVOS.
 --
 -- p_user_id NULL = el email no existe (unknown_user).
--- Resultado: outcome, consecutive_failures, account_status (NULL si unknown_user).
+-- Resultado: outcome, consecutive_failures, account_status y ban (NULL los dos si unknown_user);
+-- con outcome blocked, account_status y ban dicen si está bloqueada, dada de baja o suspendida.
 -- Errores: USER_NOT_FOUND.
 -- Transacción propia: bloquea la fila del usuario con FOR UPDATE.
 
@@ -30,7 +31,7 @@ BEGIN
         INSERT INTO login_attempt (user_id, outcome, consecutive_failures)
         VALUES (NULL, 'unknown_user', 0);
 
-        SELECT 'unknown_user' AS outcome, 0 AS consecutive_failures, NULL AS account_status;
+        SELECT 'unknown_user' AS outcome, 0 AS consecutive_failures, NULL AS account_status, NULL AS ban;
     ELSE
         START TRANSACTION;
 
@@ -87,7 +88,7 @@ BEGIN
 
         COMMIT;
 
-        SELECT v_outcome AS outcome, v_failures AS consecutive_failures, v_status AS account_status;
+        SELECT v_outcome AS outcome, v_failures AS consecutive_failures, v_status AS account_status, v_ban AS ban;
     END IF;
 END$$
 

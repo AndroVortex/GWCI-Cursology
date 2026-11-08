@@ -60,6 +60,15 @@ final class UserController
         return JsonResponse::noContent();
     }
 
+    /** POST /api/users/me/deactivate ({password, motivo?}): da de baja la cuenta y cierra la sesión */
+    public function deactivate(Request $request): JsonResponse
+    {
+        $this->profiles->deactivate($this->user($request), $request->json());
+        $this->session->logout();
+
+        return JsonResponse::data(['deactivated' => true]);
+    }
+
     private function user(Request $request): AppUser
     {
         /** @var AppUser */

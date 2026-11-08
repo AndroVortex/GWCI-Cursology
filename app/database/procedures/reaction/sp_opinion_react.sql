@@ -18,7 +18,9 @@ BEGIN
         SELECT 1
           FROM course_opinion o
           JOIN course c ON c.id = o.course_id
+          JOIN app_user owner ON owner.id = c.created_by
          WHERE o.id = p_opinion_id AND o.active = 1 AND c.active = 1 AND c.published_at IS NOT NULL
+           AND owner.account_status = 'active' AND owner.ban = 0
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'OPINION_NOT_FOUND';
     END IF;

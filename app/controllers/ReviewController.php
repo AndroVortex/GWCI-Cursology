@@ -65,6 +65,8 @@ final class ReviewController
                 'avatar' => $review->authorAvatar,
                 'commentedAt' => $review->commentedAt->format(DATE_ATOM),
                 'edited' => $review->wasEdited(),
+                'mine' => $review->mine,
+                'reported' => $review->reportedByMe,
                 'reactions' => ReactionPresenter::summary($review->reactions),
             ], $page->reviews),
             'total' => $page->total,

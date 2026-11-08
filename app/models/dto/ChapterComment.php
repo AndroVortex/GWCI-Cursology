@@ -11,7 +11,8 @@ use DateTimeImmutable;
  * Un comentario de un capítulo con su autor, sus reacciones y, si es principal, sus respuestas
  * (sp_comment_list, sp_comment_create, sp_instructor_course_comments). content es null si se
  * eliminó o se ocultó: se muestra como "Comentario eliminado".
- * chapterTitle, levelSort, chapterSort y answered solo vienen en la vista del instructor.
+ * chapterTitle, levelSort, chapterSort y answered solo vienen en la vista del instructor;
+ * reportedByMe (quien consulta ya lo reportó), solo en la lista del capítulo.
  */
 final class ChapterComment
 {
@@ -33,6 +34,7 @@ final class ChapterComment
         public readonly ?int $levelSort,
         public readonly ?int $chapterSort,
         public readonly ?bool $answered,
+        public readonly bool $reportedByMe,
         public readonly ReactionSummary $reactions,
         public readonly array $replies,
     ) {
@@ -64,6 +66,7 @@ final class ChapterComment
             $withChapter ? $r->intUnsigned('level_sort') : null,
             $withChapter ? $r->intUnsigned('chapter_sort') : null,
             $withChapter ? $r->bool('answered') : null,
+            array_key_exists('reported_by_me', $row) && $r->bool('reported_by_me'),
             $reactions,
             $replies,
         );

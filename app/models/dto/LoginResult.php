@@ -15,6 +15,7 @@ final class LoginResult
         public readonly LoginOutcome $outcome,
         public readonly int $consecutiveFailures,
         public readonly ?AccountStatus $accountStatus,
+        public readonly bool $banned,
     ) {
     }
 
@@ -27,6 +28,7 @@ final class LoginResult
             $r->enum('outcome', LoginOutcome::class),
             $r->tinyIntUnsigned('consecutive_failures'),
             $r->nullableEnum('account_status', AccountStatus::class),
+            array_key_exists('ban', $row) && $r->nullableBool('ban') === true,
         );
     }
 }

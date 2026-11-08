@@ -1,6 +1,7 @@
 -- sp_review_hide: oculta una opinión con su motivo. Solo el instructor del curso o un admin;
 -- para cualquier otro la opinión "no existe" (no revela qué ids hay). Ocultarla otra vez no
--- cambia el motivo ni la fecha. Con la opinión oculta, sus estrellas dejan de contar.
+-- cambia el motivo ni la fecha. Con la opinión oculta, sus estrellas dejan de contar y sus
+-- reportes pendientes quedan resueltos.
 -- Devuelve la fila de course_opinion. Errores: OPINION_NOT_FOUND.
 
 DROP PROCEDURE IF EXISTS sp_review_hide;
@@ -41,6 +42,11 @@ BEGIN
            SET active = 0, deactivated_by = p_actor_id, deactivated_at = NOW(6), reason = TRIM(p_reason)
          WHERE id = p_opinion_id;
     END IF;
+
+    -- Oculta, ya no hay nada que revisar: sus reportes pendientes quedan resueltos.
+    UPDATE content_report
+       SET status = 'resolved', resolved_by = p_actor_id, resolved_at = NOW(6)
+     WHERE opinion_id = p_opinion_id AND status = 'pending';
 
     COMMIT;
 

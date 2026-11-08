@@ -4,7 +4,7 @@
 -- comment NULL ("Comentario eliminado"). Las respuestas eliminadas u ocultas no se listan.
 -- Columnas de cada comentario: id, course_chapter_id, comment_parent_id, commented_by,
 -- author_name, author_avatar, author_is_instructor, comment, commented_at, updated_at, active,
--- reply_count.
+-- reply_count y reported_by_me (1 si quien consulta ya lo reportó).
 -- Resultados (en este orden):
 --   1) los comentarios principales de la página (p_limit desde p_offset), del más nuevo al
 --      más antiguo
@@ -54,7 +54,8 @@ BEGIN
         c.commented_by = v_owner_id AS author_is_instructor,
         IF(c.active = 1, c.comment, NULL) AS comment,
         c.commented_at, c.updated_at, c.active,
-        (SELECT COUNT(*) FROM chapter_comment r WHERE r.comment_parent_id = c.id AND r.active = 1) AS reply_count
+        (SELECT COUNT(*) FROM chapter_comment r WHERE r.comment_parent_id = c.id AND r.active = 1) AS reply_count,
+        EXISTS (SELECT 1 FROM content_report rp WHERE rp.comment_id = c.id AND rp.reported_by = p_user_id) AS reported_by_me
     FROM chapter_comment c
     JOIN app_user u ON u.id = c.commented_by
     WHERE c.course_chapter_id = p_chapter_id AND c.comment_parent_id IS NULL
@@ -69,7 +70,8 @@ BEGIN
         u.avatar AS author_avatar,
         c.commented_by = v_owner_id AS author_is_instructor,
         c.comment, c.commented_at, c.updated_at, c.active,
-        0 AS reply_count
+        0 AS reply_count,
+        EXISTS (SELECT 1 FROM content_report rp WHERE rp.comment_id = c.id AND rp.reported_by = p_user_id) AS reported_by_me
     FROM chapter_comment c
     JOIN app_user u ON u.id = c.commented_by
     JOIN (
