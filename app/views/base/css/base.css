@@ -774,6 +774,107 @@ strong {
     overflow-wrap: anywhere;
 }
 
+/* ---------- Reacciones (comentarios, opiniones y mensajes) ---------- */
+.reactions {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.reactions:empty {
+    display: none;
+}
+
+.reaction-chip,
+.reaction-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.8125rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.reaction-chip:disabled {
+    cursor: default;
+}
+
+.reaction-chip:not(:disabled):hover,
+.reaction-add:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+}
+
+.reaction-chip.is-mine {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.reaction-emoji {
+    font-size: 0.9375rem;
+}
+
+.reaction-add {
+    padding: 0 6px;
+    border-style: dashed;
+    color: var(--text-muted);
+}
+
+.reaction-picker {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.reaction-option {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+
+.reaction-option:hover,
+.reaction-option[aria-checked="true"] {
+    background: var(--surface-2);
+}
+
+.reaction-error {
+    color: var(--danger);
+    font-size: 0.75rem;
+}
+
+.reaction-catalog-emoji {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.reaction-emoji-input {
+    max-width: 120px;
+    font-size: 1.125rem;
+}
+
 /* ---------- Mensajes: lista de conversaciones (vista de mensajes y paneles) y no leídos ---------- */
 .unread-badge {
     display: inline-grid;

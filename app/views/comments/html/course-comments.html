@@ -1,0 +1,118 @@
+<?php
+/**
+ * Comentarios de un curso del instructor, agrupados por capítulo, para responderlos u ocultarlos.
+ *
+ * @var \App\Models\Dto\InstructorCommentPage $instructorComments
+ * @var \App\Models\Entities\AppUser $currentUser
+ */
+$commentsPage = $instructorComments;
+$viewerId = $currentUser->id();
+$viewerIsOwner = true;
+$filters = $commentsPage->filters;
+$isFiltered = $filters['capitulo'] !== '' || $filters['estado'] !== '';
+$pageUrl = static fn (int $number): string => '?' . http_build_query(array_filter([
+    'view' => 'course-comments', 'id' => $commentsPage->courseId,
+    'capitulo' => $filters['capitulo'], 'estado' => $filters['estado'], 'pagina' => $number > 1 ? (string) $number : '',
+], static fn (string $value): bool => $value !== ''));
+$chapterUrl = static fn (string $chapterId): string => '?' . http_build_query(['view' => 'course-comments', 'id' => $commentsPage->courseId, 'capitulo' => $chapterId]);
+$unanswered = $commentsPage->unansweredTotal();
+?>
+<p class="breadcrumb">
+    <a href="?view=dashboard#ventas">Panel del instructor</a> /
+    <a href="?view=course-sales&amp;id=<?= e($commentsPage->courseId) ?>"><?= e($commentsPage->courseTitle) ?></a> / Comentarios
+</p>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Comentarios: <?= e($commentsPage->courseTitle) ?></h1>
+        <p class="page-subtitle">
+            <?= $unanswered === 1 ? '1 comentario sin responder' : $unanswered . ' comentarios sin responder' ?>
+            <?= $commentsPage->courseActive ? '' : '· El curso está dado de baja; sus alumnos conservan el acceso.' ?>
+        </p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="?view=course-sales&amp;id=<?= e($commentsPage->courseId) ?>">Ver ventas del curso</a>
+    </div>
+</div>
+
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
+<section class="panel" aria-label="Filtros de comentarios">
+    <form class="filters" method="get" action="">
+        <input type="hidden" name="view" value="course-comments">
+        <input type="hidden" name="id" value="<?= e($commentsPage->courseId) ?>">
+        <div class="form-field">
+            <label class="form-label" for="comments-capitulo">Capítulo</label>
+            <select class="form-control" id="comments-capitulo" name="capitulo">
+                <option value="">Todos</option>
+                <?php foreach ($commentsPage->chapters as $chapter): ?>
+                    <option value="<?= e($chapter['id']) ?>"<?= $filters['capitulo'] === $chapter['id'] ? ' selected' : '' ?>>
+                        <?= e(sprintf('%d.%d %s (%d)', $chapter['levelSort'], $chapter['chapterSort'], $chapter['title'], $chapter['commentCount'])) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="form-field">
+            <label class="form-label" for="comments-estado">Mostrar</label>
+            <select class="form-control" id="comments-estado" name="estado">
+                <option value="">Todos</option>
+                <option value="sin_responder"<?= $filters['estado'] === 'sin_responder' ? ' selected' : '' ?>>Sin responder</option>
+            </select>
+        </div>
+        <div class="filters-actions">
+            <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+            <?php if ($isFiltered): ?>
+                <a class="btn btn-ghost btn-sm" href="?view=course-comments&amp;id=<?= e($commentsPage->courseId) ?>">Quitar filtros</a>
+            <?php endif; ?>
+        </div>
+    </form>
+</section>
+
+<div data-comments>
+    <?php if ($commentsPage->threads === []): ?>
+        <section class="panel">
+            <div class="empty-state">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </span>
+                <?php if ($isFiltered): ?>
+                    <p class="empty-title">Ningún comentario coincide con los filtros</p>
+                    <p class="empty-text"><?= $filters['estado'] === 'sin_responder' ? 'Ya respondiste todo lo de aquí.' : 'Prueba con otro capítulo.' ?></p>
+                <?php else: ?>
+                    <p class="empty-title">Todavía no hay comentarios</p>
+                    <p class="empty-text">Tus alumnos comentan desde el reproductor, debajo de cada capítulo de video.</p>
+                <?php endif; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <?php foreach ($commentsPage->byChapter() as $group): ?>
+        <section class="panel comments-group" aria-labelledby="comments-group-<?= e($group['chapterId']) ?>">
+            <div class="panel-header">
+                <h2 class="panel-title" id="comments-group-<?= e($group['chapterId']) ?>"><?= e($group['label']) ?></h2>
+                <?php if ($filters['capitulo'] === ''): ?>
+                    <a class="btn btn-ghost btn-sm" href="<?= e($chapterUrl($group['chapterId'])) ?>">Solo este capítulo</a>
+                <?php endif; ?>
+            </div>
+            <div class="panel-body">
+                <ol class="comment-list" data-comment-list>
+                    <?php foreach ($group['threads'] as $thread): ?>
+                        <?php require __DIR__ . '/comment-thread.html'; ?>
+                    <?php endforeach; ?>
+                </ol>
+            </div>
+        </section>
+    <?php endforeach; ?>
+
+    <?php if ($commentsPage->pages > 1): ?>
+        <nav class="comments-pagination" aria-label="Páginas de comentarios">
+            <?php if ($commentsPage->page > 1): ?>
+                <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl($commentsPage->page - 1)) ?>">Anteriores</a>
+            <?php endif; ?>
+            <span class="text-muted">Página <?= $commentsPage->page ?> de <?= $commentsPage->pages ?></span>
+            <?php if ($commentsPage->hasMore()): ?>
+                <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl($commentsPage->page + 1)) ?>">Siguientes</a>
+            <?php endif; ?>
+        </nav>
+    <?php endif; ?>
+</div>

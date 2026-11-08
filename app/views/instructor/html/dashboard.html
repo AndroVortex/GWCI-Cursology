@@ -6,6 +6,8 @@
  *     filters: array{desde: string, hasta: string, categoria: string, estado: string},
  *     recentReviews: list<\App\Models\Dto\RecentReview>} $instructorDashboard
  * @var list<\App\Models\Entities\Category> $salesCategories
+ * @var list<\App\Models\Dto\ChatSummary> $recentChats
+ * @var list<\App\Models\Dto\RecentComment> $recentComments
  */
 $publishedCount = count(array_filter($instructorCourses, static fn ($course): bool => $course->active && $course->isPublished()));
 $draftCount = count(array_filter($instructorCourses, static fn ($course): bool => $course->active && !$course->isPublished()));
@@ -204,6 +206,7 @@ $salesFiltered = array_filter($salesFilters, static fn (string $value): bool => 
                         <td class="num"><?= e(format_money($row->revenue, $row->currency)) ?></td>
                         <td>
                             <div class="table-actions">
+                                <a class="btn btn-ghost btn-sm" href="?view=course-comments&amp;id=<?= e($row->id) ?>">Comentarios</a>
                                 <a class="btn btn-secondary btn-sm" href="?view=course-sales&amp;id=<?= e($row->id) ?>">Ver detalle</a>
                             </div>
                         </td>
@@ -299,3 +302,47 @@ $salesFiltered = array_filter($salesFilters, static fn (string $value): bool => 
         <?php endif; ?>
     </section>
 </div>
+
+<section class="panel" aria-labelledby="instructor-comments-title" id="comentarios">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="instructor-comments-title">Comentarios recientes</h2>
+            <p class="panel-description">Lo último que tus alumnos comentaron en los capítulos. Para ver todos los de un curso, usa «Comentarios» en Ventas.</p>
+        </div>
+        <?php if ($recentComments !== []): ?>
+            <a class="btn btn-ghost btn-sm" href="#ventas">Ver todos por curso</a>
+        <?php endif; ?>
+    </div>
+    <?php if ($recentComments === []): ?>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>
+            </span>
+            <p class="empty-title">Sin comentarios</p>
+            <p class="empty-text">Tus alumnos comentan desde el reproductor, debajo de cada capítulo de video.</p>
+        </div>
+    <?php else: ?>
+        <ul class="list recent-comments">
+            <?php foreach ($recentComments as $recent): ?>
+                <li>
+                    <div class="account-cell recent-comment">
+                        <img class="account-avatar" src="<?= e($recent->authorAvatar) ?>" alt="" loading="lazy">
+                        <div class="recent-review">
+                            <p class="recent-review-head">
+                                <strong><?= e($recent->authorName) ?></strong>
+                                <?php if (!$recent->answered): ?>
+                                    <span class="badge badge-warning">Sin responder</span>
+                                <?php endif; ?>
+                            </p>
+                            <p class="recent-review-text"><?= e($recent->excerpt()) ?></p>
+                            <p class="table-sub">
+                                <?= e($recent->chapterTitle) ?> · <?= e($recent->courseTitle) ?> · <?= e(format_date_time($recent->commentedAt)) ?>
+                            </p>
+                        </div>
+                    </div>
+                    <a class="btn btn-secondary btn-sm" href="<?= e($recent->url()) ?>"><?= $recent->answered ? 'Ver' : 'Responder' ?></a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</section>

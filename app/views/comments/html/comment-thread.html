@@ -1,0 +1,15 @@
+<?php
+/**
+ * Un hilo: el comentario principal y sus respuestas (un solo nivel).
+ *
+ * @var \App\Models\Dto\ChapterComment $thread
+ */
+?>
+<li class="comment-thread" data-thread="<?= e($thread->id) ?>" data-chapter-id="<?= e($thread->chapterId) ?>">
+    <?php $comment = $thread; require __DIR__ . '/comment.html'; ?>
+    <ol class="comment-replies" data-comment-replies>
+        <?php foreach ($thread->replies as $reply): ?>
+            <li><?php $comment = $reply; require __DIR__ . '/comment.html'; ?></li>
+        <?php endforeach; ?>
+    </ol>
+</li>

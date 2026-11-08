@@ -19,6 +19,11 @@ $isMine = $message->isFrom($currentUser->id());
             </a>
         <?php endif; ?>
         <p class="chat-text"><?= e($message->content) ?></p>
+        <?php
+        $reactionSummary = $message->reactions;
+        $reactionUrl = 'api/messages/' . rawurlencode($message->id) . '/reaction';
+        require BASE_PATH . '/app/views/reactions/html/reactions.html';
+        ?>
         <p class="chat-meta">
             <?php if (!$isMine): ?>
                 <span class="chat-author"><?= e($message->senderName) ?></span> ·

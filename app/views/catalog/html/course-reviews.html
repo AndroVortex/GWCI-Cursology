@@ -6,12 +6,17 @@
  * @var \App\Models\Dto\ReviewPage $reviewPage
  * @var ?\App\Models\Dto\MyReview $myReview null = no es alumno
  * @var bool $canModerate el instructor del curso o un admin pueden ocultar opiniones
+ * @var ?\App\Models\Entities\AppUser $currentUser
  */
 $summary = $reviewPage->summary;
 $myRate = $myReview?->rate?->rate();
+// Reaccionan alumnos e instructores con sesión; los visitantes y el admin solo ven los números.
+$canReactToOpinions = $currentUser !== null
+    && in_array($currentUser->role(), [\App\Models\Enums\UserRole::Student, \App\Models\Enums\UserRole::Instructor], true);
 ?>
 <section class="panel" aria-labelledby="reviews-title" id="opiniones" data-reviews
-         data-course-id="<?= e($course->id) ?>" data-can-moderate="<?= $canModerate ? '1' : '0' ?>">
+         data-course-id="<?= e($course->id) ?>" data-can-moderate="<?= $canModerate ? '1' : '0' ?>"
+         data-can-react="<?= $canReactToOpinions ? '1' : '0' ?>">
     <div class="panel-header">
         <div>
             <h2 class="panel-title" id="reviews-title">Opiniones</h2>
@@ -79,6 +84,11 @@ $myRate = $myReview?->rate?->rate();
                                 <span class="review-date"><?= e(format_date($review->commentedAt)) ?><?= $review->wasEdited() ? ' · editada' : '' ?></span>
                             </p>
                             <p class="review-text"><?= nl2br(e($review->opinion)) ?></p>
+                            <?php
+                            $reactionSummary = $review->reactions;
+                            $reactionUrl = $canReactToOpinions ? 'api/opinions/' . rawurlencode($review->opinionId) . '/reaction' : null;
+                            require BASE_PATH . '/app/views/reactions/html/reactions.html';
+                            ?>
                             <?php if ($canModerate): ?>
                                 <button type="button" class="btn btn-ghost btn-sm" data-hide-opinion="<?= e($review->opinionId) ?>">Ocultar</button>
                             <?php endif; ?>

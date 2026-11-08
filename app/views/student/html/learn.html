@@ -187,6 +187,10 @@ $chapterState = static function (array $item) use ($course): array {
                     <?php endif; ?>
                 </div>
             </div>
+
+            <?php if ($chapterComments !== null): ?>
+                <?php require BASE_PATH . '/app/views/comments/html/chapter-comments.html'; ?>
+            <?php endif; ?>
         <?php endif; ?>
     </section>
 </div>
