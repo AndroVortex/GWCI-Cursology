@@ -380,7 +380,7 @@ Si la subida falla, queda `pending` y el siguiente intento lo vuelve a generar c
 |---|---|---|
 | `sp_review_mine(p_user_id, p_course_id)` | 1) `enrolled, completed`; 2) su `course_rate`; 3) su `course_opinion` (aunque esté oculta, con el motivo). Lo lee `MyReview` | — |
 | `sp_review_save(p_user_id, p_course_id, p_rate, p_opinion)` | Guarda las estrellas (upsert con `AS incoming`) y crea, cambia o quita la opinión (`p_opinion` NULL o vacía la quita). Devuelve lo mismo que `sp_review_mine` | `NOT_ENROLLED`, `COURSE_NOT_COMPLETED`, `INVALID_RATE`, `OPINION_HIDDEN` |
-| `sp_review_list(p_course_id, p_limit, p_offset)` | 1) `rating_avg, rating_count, stars_1 ... stars_5`; 2) opiniones visibles con `rate`, `author_name` y `author_avatar`, de la más reciente a la primera; 3) `total` | `COURSE_NOT_FOUND` (no publicado o dado de baja) |
+| `sp_review_list(p_course_id, p_limit, p_offset, p_viewer_id)` | 1) `rating_avg, rating_count, stars_1 ... stars_5`; 2) opiniones visibles con `rate`, `author_name` y `author_avatar`, de la más reciente a la primera; 3) `total`; 4) las reacciones de esas opiniones (ver "Reacciones"). `p_viewer_id` (NULL para visitantes) solo marca la reacción propia | `COURSE_NOT_FOUND` (no publicado o dado de baja) |
 | `sp_review_hide(p_actor_id, p_opinion_id, p_reason)` | Oculta la opinión (`active = 0`, `deactivated_by`, `deactivated_at`, `reason`). Ocultarla otra vez no cambia nada | `OPINION_NOT_FOUND` |
 
 - **Solo con el curso terminado** (`user_courses.completed_at`): no basta con estar inscrito.
@@ -438,7 +438,7 @@ Solo lectura, para los paneles del instructor y del admin (los lee `ReportReposi
 |---|---|---|
 | `sp_chat_start(p_user_id, p_course_id, p_student_id)` | Busca o crea la conversación. El alumno pasa `p_student_id` NULL; el instructor dueño pasa el alumno. Devuelve la fila de `chat` y `created` (1 si se creó, 0 si ya existía) | `COURSE_NOT_FOUND`, `NOT_ENROLLED`, `STUDENT_NOT_ENROLLED` (el alumno que eligió el instructor), `NOT_ALLOWED` (ni el alumno ni el dueño del curso) |
 | `sp_chat_list(p_user_id)` | Sus conversaciones (como alumno o como instructor): `id, course_id, course_title, course_cover, course_active, viewer_role, other_id, other_name, other_avatar, last_message_id, last_message_content, last_message_at, last_message_mine, unread_count, created_at, last_activity_at`, de la de actividad más reciente a la más antigua | — |
-| `sp_chat_open(p_user_id, p_chat_id, p_after_id, p_limit)` | Marca la conversación leída para quien la abre. 1) la conversación con el curso y los dos participantes; 2) los mensajes posteriores a `p_after_id` (NULL = los últimos `p_limit`), del más antiguo al más nuevo: `id, sent_by, sender_name, sender_avatar, content, sent_at, reply_to, reply_sender_name, reply_content`; 3) `unread_total` de todas sus conversaciones | `CHAT_NOT_FOUND` (no existe o no participa) |
+| `sp_chat_open(p_user_id, p_chat_id, p_after_id, p_limit)` | Marca la conversación leída para quien la abre. 1) la conversación con el curso y los dos participantes; 2) los mensajes posteriores a `p_after_id` (NULL = los últimos `p_limit`), del más antiguo al más nuevo: `id, sent_by, sender_name, sender_avatar, content, sent_at, reply_to, reply_sender_name, reply_content`; 3) `unread_total` de todas sus conversaciones; 4) las reacciones de los mensajes de 2) (ver "Reacciones") | `CHAT_NOT_FOUND` (no existe o no participa) |
 | `sp_message_send(p_user_id, p_chat_id, p_content, p_reply_to)` | Guarda el mensaje y marca la conversación leída para quien envía. Devuelve el mensaje con las columnas de los de `sp_chat_open` | `CHAT_NOT_FOUND`, `MESSAGE_NOT_FOUND` (`p_reply_to` no es un mensaje activo de esta conversación), `INVALID_MESSAGE` (vacío o de más de 2000 caracteres) |
 | `sp_chat_unread_total(p_user_id)` | `unread_total` de todas sus conversaciones, para el menú | — |
 
@@ -453,3 +453,43 @@ Solo lectura, para los paneles del instructor y del admin (los lee `ReportReposi
 - **Curso dado de baja:** la conversación sigue disponible; `course_active` lo indica.
 - **Mensajes dados de baja** (`message.active = 0`, la moderación de la fase 3): no se listan ni cuentan como no leídos; una respuesta a uno de ellos trae `reply_content` NULL.
 - **`p_after_id` es un id, no una fecha:** el sondeo pide "lo posterior al último que se ve", así que ningún mensaje se pierde aunque dos lleguen en el mismo instante.
+
+### Comentarios por capítulo
+
+`chapter_comment`: comentarios de texto en los capítulos de video, con respuestas de un solo nivel (`comment_parent_id` siempre apunta a un comentario principal del mismo capítulo). Los lee `CommentRepository`.
+
+**Columnas de cada comentario** (las mismas en la lista, al crear, editar, eliminar y ocultar): `id, course_chapter_id, comment_parent_id, commented_by, author_name, author_avatar, author_is_instructor, comment, commented_at, updated_at, active, reply_count`. `comment` es NULL si se eliminó o se ocultó.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_comment_list(p_user_id, p_chapter_id, p_limit, p_offset)` | 1) los principales de la página, del más nuevo al más antiguo; 2) sus respuestas visibles, de la más antigua a la más nueva; 3) las reacciones de todos ellos; 4) `total` y `viewer_is_owner` | `CHAPTER_NOT_FOUND`, `NO_COMMENTS_ON_EXAM`, `NO_LEVEL_ACCESS` |
+| `sp_comment_create(p_user_id, p_chapter_id, p_parent_id, p_content)` | Publica el comentario o la respuesta. Si `p_parent_id` es una respuesta, la nueva se cuelga de su comentario principal | Los de la lista, más `COMMENT_NOT_FOUND` (`p_parent_id` no es un comentario activo del capítulo) e `INVALID_COMMENT` (vacío o de más de 2000 caracteres) |
+| `sp_comment_update(p_user_id, p_comment_id, p_content)` | El autor cambia el texto. `updated_at` solo cambia si el texto es distinto: así se marca "editado" | `COMMENT_NOT_FOUND` (no existe, no es suyo o ya no está activo), `INVALID_COMMENT` |
+| `sp_comment_delete(p_user_id, p_comment_id)` | El autor lo elimina: `active = 0`, `deactivated_by` = él y `reason = 'Eliminado por su autor'` | `COMMENT_NOT_FOUND` |
+| `sp_comment_hide(p_user_id, p_comment_id, p_reason)` | El instructor del curso o un admin lo ocultan con su motivo. Ocultarlo otra vez no cambia nada | `COMMENT_NOT_FOUND` (también para cualquier otro) |
+| `sp_comment_react(p_user_id, p_comment_id, p_reaction_id)` | Pone, cambia o quita (NULL) la reacción de quien puede ver el comentario. Devuelve las reacciones del comentario | `COMMENT_NOT_FOUND`, `REACTION_NOT_FOUND` |
+| `sp_instructor_course_comments(p_instructor_id, p_course_id, p_chapter_id, p_unanswered, p_limit, p_offset)` | 1) `id, title, active` del curso; 2) sus capítulos de video con `comment_count` y `unanswered_count`; 3) los principales de la página con `chapter_title, level_sort, chapter_sort, answered`; 4) sus respuestas; 5) sus reacciones; 6) `total` | `COURSE_NOT_FOUND` (no existe o es de otro instructor) |
+| `sp_instructor_recent_comments(p_instructor_id, p_limit)` | Los últimos principales activos de alumnos en sus cursos: `id, course_id, course_title, chapter_id, chapter_title, author_name, author_avatar, comment, commented_at, answered` | `NOT_INSTRUCTOR` |
+
+- **Quién ve y comenta:** el alumno con acceso al nivel (`user_course_level`) o el dueño del curso (`course.created_by`). Los exámenes no llevan comentarios.
+- **Visibles:** los principales activos y los eliminados u ocultos que todavía tienen respuestas visibles ("Comentario eliminado"). Las respuestas eliminadas u ocultas no se listan.
+- **Sin responder** (`p_unanswered = 1`, `unanswered_count`): principales activos de alumnos sin una respuesta activa del instructor.
+- **Páginas:** la página de principales se repite como tabla derivada con `LIMIT` en las consultas de respuestas y reacciones, porque MySQL no admite `LIMIT` dentro de `IN`.
+
+### Reacciones
+
+`reaction` es el catálogo (lo administra el admin); `chapter_comment_reaction`, `opinion_reaction` y `message_reaction` guardan una reacción por usuario y elemento (son únicas por usuario). Los lee `ReactionRepository` (y `CommentRepository` las de comentarios).
+
+**Filas de reacciones** (en `sp_comment_list`, `sp_instructor_course_comments`, `sp_review_list`, `sp_chat_open` y los `*_react`): `target_id, reaction_id, emoji, reaction_name, total, mine`, una por emoji y elemento, en el orden del catálogo. `mine` es 1 si es la de quien consulta. Solo cuentan las reacciones activas del catálogo.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_reaction_list(p_only_active)` | El catálogo por `id` (el orden en que se ofrece): con 1 solo las activas, con 0 todas | — |
+| `sp_reaction_create(p_admin_id, p_emoji, p_name)` | Agrega una activa | `NOT_ADMIN`, `REACTION_NAME_TAKEN` |
+| `sp_reaction_update(p_admin_id, p_reaction_id, p_emoji, p_name)` | Cambia emoji y nombre | `NOT_ADMIN`, `REACTION_NOT_FOUND`, `REACTION_NAME_TAKEN` |
+| `sp_reaction_set_active(p_admin_id, p_reaction_id, p_active)` | Activa o desactiva. Las reacciones que ya se dieron se conservan y vuelven a contar si se reactiva | `NOT_ADMIN`, `REACTION_NOT_FOUND` |
+| `sp_opinion_react(p_user_id, p_opinion_id, p_reaction_id)` | Pone, cambia o quita (NULL) la reacción a una opinión visible de un curso publicado y activo | `OPINION_NOT_FOUND`, `REACTION_NOT_FOUND` |
+| `sp_message_react(p_user_id, p_message_id, p_reaction_id)` | Ídem a un mensaje activo de una conversación en la que participa | `MESSAGE_NOT_FOUND`, `REACTION_NOT_FOUND` |
+
+- **Poner o cambiar** es un upsert con `INSERT ... AS incoming ON DUPLICATE KEY UPDATE reaction_id = incoming.reaction_id`; **quitar** es un `DELETE` de la fila del usuario.
+- **No se borran reacciones del catálogo:** tienen historial. Se desactivan.

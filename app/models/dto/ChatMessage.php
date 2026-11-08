@@ -7,7 +7,7 @@ namespace App\Models\Dto;
 use App\Models\Mapping\RowReader;
 use DateTimeImmutable;
 
-/** Un mensaje de una conversación con su autor y la cita del mensaje al que responde (sp_chat_open, sp_message_send). */
+/** Un mensaje de una conversación con su autor, la cita del mensaje al que responde y sus reacciones (sp_chat_open, sp_message_send). */
 final class ChatMessage
 {
     private function __construct(
@@ -20,11 +20,12 @@ final class ChatMessage
         public readonly ?string $replyTo,
         public readonly ?string $replySenderName,
         public readonly ?string $replyContent,
+        public readonly ReactionSummary $reactions,
     ) {
     }
 
     /** @param array<string, mixed> $row */
-    public static function fromRow(array $row): self
+    public static function fromRow(array $row, ReactionSummary $reactions = new ReactionSummary()): self
     {
         $r = new RowReader(self::class, $row);
 
@@ -38,6 +39,7 @@ final class ChatMessage
             $r->nullableId('reply_to'),
             $r->nullableString('reply_sender_name', 350),
             $r->nullableText('reply_content'),
+            $reactions,
         );
     }
 

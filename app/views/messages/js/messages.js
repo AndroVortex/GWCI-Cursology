@@ -81,6 +81,9 @@
             bubble.append(quote);
         }
         bubble.append(el('p', 'chat-text', message.text));
+        if (window.Cursology.reactions) {
+            bubble.append(window.Cursology.reactions.node(message.reactions, 'api/messages/' + encodeURIComponent(message.id) + '/reaction'));
+        }
 
         const meta = el('p', 'chat-meta');
         if (!message.mine) {

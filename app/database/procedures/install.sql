@@ -114,6 +114,24 @@ SOURCE app/database/procedures/chat/sp_chat_open.sql;
 SOURCE app/database/procedures/chat/sp_message_send.sql;
 SOURCE app/database/procedures/chat/sp_chat_unread_total.sql;
 
+-- Comentarios por capítulo
+SOURCE app/database/procedures/comment/sp_comment_list.sql;
+SOURCE app/database/procedures/comment/sp_comment_create.sql;
+SOURCE app/database/procedures/comment/sp_comment_update.sql;
+SOURCE app/database/procedures/comment/sp_comment_delete.sql;
+SOURCE app/database/procedures/comment/sp_comment_hide.sql;
+SOURCE app/database/procedures/comment/sp_comment_react.sql;
+SOURCE app/database/procedures/comment/sp_instructor_course_comments.sql;
+SOURCE app/database/procedures/comment/sp_instructor_recent_comments.sql;
+
+-- Reacciones (catálogo del admin y reacciones a opiniones y mensajes)
+SOURCE app/database/procedures/reaction/sp_reaction_list.sql;
+SOURCE app/database/procedures/reaction/sp_reaction_create.sql;
+SOURCE app/database/procedures/reaction/sp_reaction_update.sql;
+SOURCE app/database/procedures/reaction/sp_reaction_set_active.sql;
+SOURCE app/database/procedures/reaction/sp_opinion_react.sql;
+SOURCE app/database/procedures/reaction/sp_message_react.sql;
+
 -- Mi aprendizaje (kardex y compras)
 SOURCE app/database/procedures/student/sp_student_courses.sql;
 SOURCE app/database/procedures/student/sp_student_purchases.sql;

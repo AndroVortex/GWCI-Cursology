@@ -65,7 +65,7 @@ SOURCE app/database/procedures/install.sql;
 SHOW PROCEDURE STATUS WHERE Db = 'cursology';
 ```
 
-Deben aparecer 77 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
+Deben aparecer 91 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
 
 ### 4. Crear el primer administrador
 
@@ -90,7 +90,8 @@ Abre http://localhost:8000. También funciona con Apache de Laragon apuntando a 
 Entra como administrador:
 
 - crea las categorías;
-- activa las formas de pago en **Formas de pago**.
+- activa las formas de pago en **Formas de pago**;
+- en **Reacciones**, usa "Agregar las sugeridas" (o crea las tuyas): sin reacciones en el catálogo no se puede reaccionar a comentarios, opiniones ni mensajes.
 
 Guías:
 

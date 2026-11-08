@@ -44,5 +44,8 @@
             <?php require __DIR__ . '/footer.html'; ?>
         </div>
     </div>
+    <?php if (isset($activeReactions)): ?>
+        <script type="application/json" id="reaction-catalog"><?= \App\Http\Presenters\ReactionPresenter::catalogJson($activeReactions) ?></script>
+    <?php endif; ?>
 </body>
 </html>

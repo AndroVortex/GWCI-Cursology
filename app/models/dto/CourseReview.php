@@ -7,7 +7,7 @@ namespace App\Models\Dto;
 use App\Models\Mapping\RowReader;
 use DateTimeImmutable;
 
-/** Una opinión visible en la página del curso, con las estrellas de su autor (sp_review_list). */
+/** Una opinión visible en la página del curso, con las estrellas de su autor y sus reacciones (sp_review_list). */
 final class CourseReview
 {
     private function __construct(
@@ -18,11 +18,12 @@ final class CourseReview
         public readonly string $authorAvatar,
         public readonly DateTimeImmutable $commentedAt,
         public readonly DateTimeImmutable $updatedAt,
+        public readonly ReactionSummary $reactions,
     ) {
     }
 
     /** @param array<string, mixed> $row */
-    public static function fromRow(array $row): self
+    public static function fromRow(array $row, ReactionSummary $reactions = new ReactionSummary()): self
     {
         $r = new RowReader(self::class, $row);
 
@@ -34,6 +35,7 @@ final class CourseReview
             $r->string('author_avatar', 2048),
             $r->dateTime('commented_at'),
             $r->dateTime('updated_at'),
+            $reactions,
         );
     }
 

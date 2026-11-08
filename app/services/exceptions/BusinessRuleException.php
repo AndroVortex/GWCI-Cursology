@@ -80,6 +80,11 @@ final class BusinessRuleException extends RuntimeException
         'CHAT_NOT_FOUND' => [404, 'La conversación no existe.', null],
         'MESSAGE_NOT_FOUND' => [404, 'El mensaje al que respondes ya no está disponible.', null],
         'INVALID_MESSAGE' => [422, 'Escribe tu mensaje (máximo 2000 caracteres).', 'texto'],
+        'COMMENT_NOT_FOUND' => [404, 'El comentario ya no está disponible.', null],
+        'INVALID_COMMENT' => [422, 'Escribe tu comentario (máximo 2000 caracteres).', 'texto'],
+        'NO_COMMENTS_ON_EXAM' => [409, 'Los exámenes no tienen comentarios.', null],
+        'REACTION_NOT_FOUND' => [404, 'Esa reacción ya no está disponible.', null],
+        'REACTION_NAME_TAKEN' => [409, 'Ya existe una reacción con ese nombre.', 'nombre'],
     ];
 
     private function __construct(

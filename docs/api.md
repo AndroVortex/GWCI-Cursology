@@ -365,7 +365,7 @@ Uno por alumno y curso terminado. Se emite la primera vez que el alumno lo pide:
 
 | Endpoint | Acceso | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET /api/catalog/courses/{id}/reviews?pagina=` | Público | — | `{"data": {summary: {ratingAvg, ratingCount, stars: {"5": n, ..., "1": n}}, reviews: [{id, opinion, rate, author, avatar, commentedAt, edited}], total, page, pages}}`, 10 por página |
+| `GET /api/catalog/courses/{id}/reviews?pagina=` | Público (con sesión marca tu reacción) | — | `{"data": {summary: {ratingAvg, ratingCount, stars: {"5": n, ..., "1": n}}, reviews: [{id, opinion, rate, author, avatar, commentedAt, edited, reactions}], total, page, pages}}`, 10 por página |
 | `PUT /api/student/courses/{id}/review` | Alumno + CSRF | `{calificacion: 1..5, opinion?: string}` | `200 {"data": {"review": {canReview, rate, opinion, hidden, hiddenReason}}}` |
 | `POST /api/opinions/{id}/hide` | Instructor o admin + CSRF | `{motivo}` (de 3 a 500 caracteres) | `200 {"data": {"opinion": {id, active: false, reason}}}` |
 
@@ -435,7 +435,7 @@ Una conversación por curso entre el alumno inscrito y el instructor dueño del 
 | `GET /api/chats/{id}/messages?after=` | Participante | — | `{"data": {chat: {id, courseId, courseTitle, courseActive, other}, messages: [...], lastMessageId, unreadTotal}}`. Sin `after`, los últimos 100; con `after`, solo los posteriores a ese id. La marca leída |
 | `POST /api/chats/{id}/messages` | Participante + CSRF | `{texto, responde_a?}` | `201 {"data": {"message": {...}}}` |
 
-- **Cada mensaje:** `{id, mine, author, avatar, text, sentAt, sentAtLabel, replyTo, replyAuthor, replyExcerpt}`. `sentAtLabel` ya viene formateado en hora de Monterrey ("25 oct 2026, 18:05"). `replyExcerpt` viene vacío si el mensaje citado se dio de baja.
+- **Cada mensaje:** `{id, mine, author, avatar, text, sentAt, sentAtLabel, replyTo, replyAuthor, replyExcerpt, reactions}` (ver "Reacciones"). Las reacciones a un mensaje ya cargado se ven al recargar: el sondeo solo trae mensajes nuevos. `sentAtLabel` ya viene formateado en hora de Monterrey ("25 oct 2026, 18:05"). `replyExcerpt` viene vacío si el mensaje citado se dio de baja.
 - **`text` es texto plano:** la vista lo pone con `textContent` y respeta los saltos de línea; nunca se interpreta como HTML.
 - **No leídos:** los mensajes del otro participante posteriores a la última vez que abriste la conversación. Abrirla (o recibir mensajes con ella abierta) la marca leída, y enviar también.
 - **El curso dado de baja** no cierra la conversación: `courseActive` es `false`.
@@ -455,6 +455,64 @@ Una conversación por curso entre el alumno inscrito y el instructor dueño del 
 - **Reproductor:** "Preguntar al instructor" en el índice del curso (también si el curso se dio de baja).
 - **Detalle de ventas** (`?view=course-sales`): "Escribir" en cada alumno.
 - **Paneles del alumno y del instructor:** las 3 conversaciones más recientes y "Ver todos".
+
+### Comentarios por capítulo
+
+En los capítulos de video (los exámenes no llevan comentarios). Comentan el alumno con acceso al nivel del capítulo (también si el curso se dio de baja) y el instructor dueño del curso. Texto de 1 a 2000 caracteres, sin los espacios de los lados. Las respuestas son de un solo nivel: responder a una respuesta la cuelga del mismo comentario principal.
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/chapters/{id}/comments?pagina=` | Alumno con acceso o instructor del curso | — | `{"data": {comments: [...], total, page, pages}}`, 10 principales por página, del más nuevo al más antiguo |
+| `POST /api/chapters/{id}/comments` | Ídem + CSRF | `{texto, responde_a?}` | `201 {"data": {"comment": {...}}}` |
+| `PATCH /api/comments/{id}` | El autor + CSRF | `{texto}` | `200 {"data": {"comment": {...}}}`, queda `edited: true` |
+| `DELETE /api/comments/{id}` | El autor + CSRF | — | `200 {"data": {"comment": {..., removed: true}}}` |
+| `POST /api/comments/{id}/hide` | Instructor del curso o admin + CSRF | `{motivo}` (de 3 a 500 caracteres) | `200 {"data": {"comment": {..., removed: true}}}` |
+| `GET /api/instructor/courses/{id}/comments?capitulo=&estado=sin_responder&pagina=` | Instructor, dueño del curso | — | `{"data": {course: {id, title, active}, chapters: [{id, title, levelSort, chapterSort, commentCount, unansweredCount}], comments: [...], filters, total, page, pages}}`, 20 por página |
+
+- **Cada comentario:** `{id, chapterId, parentId, author, avatar, isInstructor, text, removed, edited, commentedAt, commentedAtLabel, replyCount, replies: [...], reactions, can: {reply, edit, delete, hide}}`. En la vista del instructor también `answered` (si ya tiene respuesta suya) y `chapterLabel` ("Nivel 1 · 1.2 Variables").
+- **`can`** dice qué puede hacer quien consulta: responder (comentarios activos), editar y eliminar (el autor) y ocultar (el instructor del curso, en los de otros). La vista no tiene que saber de permisos.
+- **Eliminado u oculto:** sin texto (`text: null`). Si es principal y tiene respuestas visibles, se lista como "Comentario eliminado"; si no, deja de listarse. Ya no se edita ni se le responde directo (sí a sus respuestas).
+- **Sin responder:** comentarios principales activos de alumnos sin una respuesta activa del instructor.
+- **Errores:**
+  - `403 NO_LEVEL_ACCESS` (sin acceso al nivel del capítulo);
+  - `409 NO_COMMENTS_ON_EXAM`;
+  - `404 CHAPTER_NOT_FOUND`, `404 COURSE_NOT_FOUND` (vista del instructor de otro curso);
+  - `404 COMMENT_NOT_FOUND` (no existe, ya no está activo, no es tuyo, o `responde_a` es de otro capítulo);
+  - `422 VALIDATION_FAILED` en `texto`, `responde_a` o `motivo`.
+
+**Vistas:**
+- **Reproductor:** el panel "Comentarios" debajo de "Recursos", con el cuadro para comentar, los hilos, "Responder", "Editar", "Eliminar", las reacciones y "Ver más comentarios".
+- **`?view=course-comments&id=N`** (solo el instructor del curso): filtros por capítulo y "Sin responder", los hilos agrupados por capítulo con "Responder", "Ocultar" (con motivo) y las reacciones. Se llega desde "Comentarios" en el detalle de ventas y en cada curso de "Ventas".
+- **Panel del instructor:** "Comentarios recientes", los últimos 5 de sus alumnos con "Sin responder" y el enlace a su hilo.
+
+### Reacciones
+
+Una reacción por persona en cada comentario, opinión o mensaje: elegir otra la cambia y mandar `null` la quita. El catálogo lo administra el admin; una reacción desactivada deja de ofrecerse y de contarse.
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/reactions` | Público | — | `{"data": {"reactions": [{id, emoji, name}]}}`, las activas en el orden en que se ofrecen |
+| `PUT /api/comments/{id}/reaction` | Quien puede ver el comentario + CSRF | `{reaccion: id \| null}` | `200 {"data": {"reactions": {...}}}` |
+| `PUT /api/opinions/{id}/reaction` | Alumno o instructor + CSRF | `{reaccion: id \| null}` | Ídem |
+| `PUT /api/messages/{id}/reaction` | Participante de la conversación + CSRF | `{reaccion: id \| null}` | Ídem |
+| `GET /api/admin/reactions` | Admin | — | `{"data": {"reactions": [{id, emoji, name, active, updatedAt}]}}` |
+| `POST /api/admin/reactions` | Admin + CSRF | `{emoji, nombre}` | `201 {"data": {"reaction": {...}}}` |
+| `PATCH /api/admin/reactions/{id}` | Admin + CSRF | `{emoji, nombre}` y/o `{activa}` | `200 {"data": {"reaction": {...}}}` |
+| `POST /api/admin/reactions/defaults` | Admin + CSRF | — | `201` con `{added: [...]}`, las sugeridas que faltaban (👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me sorprende, 💡 Me sirvió); `200` con `added: []` si ya estaban |
+
+- **`reactions`** (en comentarios, opiniones, mensajes y en la respuesta de cada `PUT`): `{items: [{id, emoji, name, total, mine}], mine}`. `mine` es el id de tu reacción o `null`.
+- **Emoji:** de 1 a 8 caracteres, solo símbolos (con sus modificadores, como el tono de piel o la variante de "❤️"), sin letras, números ni espacios. **Nombre:** de 1 a 60 caracteres, único sin importar mayúsculas ni acentos.
+- **Errores:**
+  - `404 REACTION_NOT_FOUND` (no existe o está desactivada);
+  - `404 COMMENT_NOT_FOUND`, `404 OPINION_NOT_FOUND` (oculta o de un curso no publicado), `404 MESSAGE_NOT_FOUND` (no participas);
+  - `409 REACTION_NAME_TAKEN` en `nombre`;
+  - `403 NOT_ADMIN`;
+  - `422 VALIDATION_FAILED` en `reaccion` (falta el campo o el id no es válido), `emoji`, `nombre` o `activa`.
+
+**Vistas:**
+- **El selector:** los emojis con su número (la tuya resaltada) y un botón para elegir del catálogo. Sin reacciones activas en el catálogo, el botón no aparece.
+- **Opiniones:** los visitantes y el admin ven los números, pero no reaccionan.
+- **`?view=reactions`** (admin): crear, editar, activar o desactivar y "Agregar las sugeridas". Se llega desde "Administrar" en el panel del admin.
 
 ### `GET /api/admin/users/locked`
 
@@ -522,6 +580,7 @@ php tests/verify_learning_unit.php
 php tests/verify_certificate_unit.php
 php tests/verify_reports_unit.php
 php tests/verify_messages_unit.php
+php tests/verify_comments_unit.php
 
 # Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida
 # y dejan las formas de pago como estaban)
@@ -531,6 +590,7 @@ php tests/verify_learning_db.php
 php tests/verify_certificate_db.php
 php tests/verify_reports_db.php
 php tests/verify_messages_db.php
+php tests/verify_comments_db.php
 
 # Contra Cloudinary real (opcional; sube y borra archivos de prueba, incluido un PDF de certificado)
 php tests/verify_cloudinary_live.php

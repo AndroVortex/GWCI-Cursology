@@ -1,0 +1,134 @@
+<?php
+/**
+ * Catálogo de reacciones del admin: crear, editar, activar o desactivar y agregar las sugeridas.
+ *
+ * @var list<\App\Models\Entities\Reaction> $reactionCatalog
+ */
+use App\Services\ReactionService;
+
+$activeCount = count(array_filter($reactionCatalog, static fn ($reaction): bool => $reaction->active()));
+?>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Reacciones</h1>
+        <p class="page-subtitle">Los emojis con los que alumnos e instructores reaccionan a comentarios, opiniones y mensajes. Desactivar una deja de ofrecerla y de contarla, sin borrar las que ya se dieron.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="?view=dashboard">Volver al panel</a>
+    </div>
+</div>
+
+<div class="form-alert page-alert" role="alert" data-page-alert hidden></div>
+
+<section class="panel" aria-labelledby="reaction-new-title">
+    <div class="panel-header">
+        <h2 class="panel-title" id="reaction-new-title">Nueva reacción</h2>
+    </div>
+    <form class="panel-body" id="reaction-create-form" novalidate>
+        <div class="form-alert" role="alert" data-form-alert hidden></div>
+        <div class="inline-form">
+            <div class="form-field">
+                <label class="form-label" for="reaction-emoji">Emoji</label>
+                <input class="form-control reaction-emoji-input" type="text" id="reaction-emoji" name="emoji" maxlength="<?= ReactionService::MAX_EMOJI_CHARS ?>" placeholder="👏" autocomplete="off">
+                <p class="field-error" aria-live="polite"></p>
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="reaction-nombre">Nombre</label>
+                <input class="form-control" type="text" id="reaction-nombre" name="nombre" maxlength="<?= ReactionService::MAX_NAME_CHARS ?>" placeholder="p. ej. Aplausos">
+                <p class="field-error" aria-live="polite"></p>
+            </div>
+            <div class="form-field">
+                <span class="form-label" aria-hidden="true">&nbsp;</span>
+                <button type="submit" class="btn btn-primary">Crear</button>
+            </div>
+        </div>
+        <p class="form-hint">En Windows abre el selector de emojis con la tecla Windows + punto (.).</p>
+    </form>
+</section>
+
+<section class="panel" aria-labelledby="reaction-list-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="reaction-list-title">Catálogo</h2>
+            <p class="panel-description"><?= count($reactionCatalog) ?> en total · <?= $activeCount ?> activa(s). Se ofrecen en este orden.</p>
+        </div>
+        <?php if ($reactionCatalog !== []): ?>
+            <button type="button" class="btn btn-ghost btn-sm" data-reaction-defaults>Agregar las sugeridas que falten</button>
+        <?php endif; ?>
+    </div>
+    <?php if ($reactionCatalog === []): ?>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4 4 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/></svg>
+            </span>
+            <p class="empty-title">Aún no hay reacciones</p>
+            <p class="empty-text">
+                Mientras el catálogo esté vacío no se puede reaccionar. Crea las tuyas o agrega las sugeridas:
+                <?= e(implode(' ', array_map(static fn (array $default): string => $default['emoji'] . ' ' . $default['nombre'], ReactionService::DEFAULTS))) ?>.
+            </p>
+            <button type="button" class="btn btn-primary btn-sm" data-reaction-defaults>Agregar las sugeridas</button>
+        </div>
+    <?php else: ?>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Emoji</th>
+                        <th scope="col">Nombre</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Actualizada</th>
+                        <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($reactionCatalog as $reaction): ?>
+                        <tr data-reaction-row="<?= e($reaction->id()) ?>">
+                            <td><span class="reaction-catalog-emoji" aria-hidden="true"><?= e($reaction->emoji()) ?></span></td>
+                            <td><strong><?= e($reaction->reactionName()) ?></strong></td>
+                            <td>
+                                <?php if ($reaction->active()): ?>
+                                    <span class="badge badge-success">Activa</span>
+                                <?php else: ?>
+                                    <span class="badge">Inactiva</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= e(format_date($reaction->updatedAt())) ?></td>
+                            <td>
+                                <div class="table-actions">
+                                    <button type="button" class="btn btn-ghost btn-sm" data-reaction-edit="<?= e($reaction->id()) ?>">Editar</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" data-reaction-toggle="<?= e($reaction->id()) ?>" data-active="<?= $reaction->active() ? '1' : '0' ?>">
+                                        <?= $reaction->active() ? 'Desactivar' : 'Activar' ?>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr data-reaction-edit-row="<?= e($reaction->id()) ?>" hidden>
+                            <td colspan="5" class="table-edit-cell">
+                                <form class="inline-form" data-reaction-edit-form="<?= e($reaction->id()) ?>" novalidate>
+                                    <div class="form-field">
+                                        <label class="form-label" for="reaction-edit-emoji-<?= e($reaction->id()) ?>">Emoji</label>
+                                        <input class="form-control reaction-emoji-input" type="text" id="reaction-edit-emoji-<?= e($reaction->id()) ?>" name="emoji" maxlength="<?= ReactionService::MAX_EMOJI_CHARS ?>" value="<?= e($reaction->emoji()) ?>" autocomplete="off">
+                                        <p class="field-error" aria-live="polite"></p>
+                                    </div>
+                                    <div class="form-field">
+                                        <label class="form-label" for="reaction-edit-nombre-<?= e($reaction->id()) ?>">Nombre</label>
+                                        <input class="form-control" type="text" id="reaction-edit-nombre-<?= e($reaction->id()) ?>" name="nombre" maxlength="<?= ReactionService::MAX_NAME_CHARS ?>" value="<?= e($reaction->reactionName()) ?>">
+                                        <p class="field-error" aria-live="polite"></p>
+                                    </div>
+                                    <div class="form-field">
+                                        <span class="form-label" aria-hidden="true">&nbsp;</span>
+                                        <div class="form-actions">
+                                            <button type="button" class="btn btn-ghost btn-sm" data-reaction-cancel="<?= e($reaction->id()) ?>">Cancelar</button>
+                                            <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</section>

@@ -10,6 +10,7 @@
     const ui = window.Cursology.form;
     const courseId = section.dataset.courseId;
     const canModerate = section.dataset.canModerate === '1';
+    const canReact = section.dataset.canReact === '1';
     const list = section.querySelector('[data-review-list]');
     const pageAlert = document.querySelector('[data-page-alert]');
 
@@ -116,6 +117,10 @@
         starsLabel.setAttribute('aria-label', (review.rate || 0) + ' de 5 estrellas');
         head.append(el('strong', '', review.author), starsLabel, el('span', 'review-date', date + (review.edited ? ' · editada' : '')));
         body.append(head, el('p', 'review-text', review.opinion));
+        if (window.Cursology.reactions) {
+            const url = canReact ? 'api/opinions/' + encodeURIComponent(review.id) + '/reaction' : null;
+            body.append(window.Cursology.reactions.node(review.reactions, url));
+        }
         if (canModerate) {
             const hide = el('button', 'btn btn-ghost btn-sm', 'Ocultar');
             hide.type = 'button';

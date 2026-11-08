@@ -53,7 +53,7 @@ $views = [
         'title' => 'Curso',
         'file'  => BASE_PATH . '/app/views/catalog/html/course.html',
         'css'   => ['catalog/css/catalog.css'],
-        'js'    => ['catalog/js/course.js', 'catalog/js/reviews.js', 'messages/js/start-chat.js'],
+        'js'    => ['catalog/js/course.js', 'reactions/js/reactions.js', 'catalog/js/reviews.js', 'messages/js/start-chat.js'],
     ],
     'verify' => [
         'title' => 'Verificar certificado',
@@ -64,8 +64,9 @@ $views = [
     'learn' => [
         'title' => 'Mi curso',
         'file'  => BASE_PATH . '/app/views/student/html/learn.html',
-        'css'   => ['student/css/student.css'],
-        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js', 'student/js/certificate.js', 'messages/js/start-chat.js'],
+        'css'   => ['student/css/student.css', 'comments/css/comments.css'],
+        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js', 'student/js/certificate.js', 'messages/js/start-chat.js',
+                    'reactions/js/reactions.js', 'comments/js/comments.js'],
         'auth'  => true,
         'roles' => [UserRole::Student],
     ],
@@ -95,6 +96,14 @@ $views = [
         'file'  => BASE_PATH . '/app/views/admin/html/categories.html',
         'css'   => [],
         'js'    => ['admin/js/categories.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
+    'reactions' => [
+        'title' => 'Reacciones',
+        'file'  => BASE_PATH . '/app/views/admin/html/reactions.html',
+        'css'   => [],
+        'js'    => ['admin/js/reactions.js'],
         'auth'  => true,
         'roles' => [UserRole::Admin],
     ],
@@ -130,11 +139,19 @@ $views = [
         'auth'  => true,
         'roles' => [UserRole::Instructor],
     ],
+    'course-comments' => [
+        'title' => 'Comentarios del curso',
+        'file'  => BASE_PATH . '/app/views/comments/html/course-comments.html',
+        'css'   => ['comments/css/comments.css'],
+        'js'    => ['reactions/js/reactions.js', 'comments/js/comments.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Instructor],
+    ],
     'messages' => [
         'title' => 'Mensajes',
         'file'  => BASE_PATH . '/app/views/messages/html/messages.html',
         'css'   => ['messages/css/messages.css'],
-        'js'    => ['messages/js/messages.js'],
+        'js'    => ['reactions/js/reactions.js', 'messages/js/messages.js'],
         'auth'  => true,
         'roles' => [UserRole::Student, UserRole::Instructor],
     ],
@@ -211,6 +228,15 @@ if ($view === 'learn') {
         $currentChapter = null;
         http_response_code(403);
     }
+    // Comentarios del capítulo actual: solo en capítulos de video con acceso.
+    $chapterComments = null;
+    if ($learningCourse !== null && $currentChapter !== null && !$currentChapter['isExam'] && $learningCourse->hasAccessTo($currentChapter)) {
+        try {
+            $chapterComments = $commentService->list($currentUser, $currentChapter['id']);
+        } catch (BusinessRuleException) {
+            $chapterComments = null;
+        }
+    }
 }
 
 // Página pública de un curso y su pago: si no existe, es borrador o está dado de baja, la vista lo dice (404).
@@ -226,7 +252,7 @@ if ($view === 'course' || $view === 'checkout') {
     $courseAccess = $checkoutService->access($currentUser, $publicCourseId);
     $isStudent = $currentUser !== null && $currentUser->role() === UserRole::Student;
     if ($view === 'course' && $publicCourse !== null) {
-        $reviewPage = $reviewService->list($publicCourse->id);
+        $reviewPage = $reviewService->list($publicCourse->id, [], $currentUser);
         $myReview = $reviewService->mine($currentUser, $publicCourse->id);
         $canModerate = $currentUser !== null
             && ($currentUser->role() === UserRole::Admin || $currentUser->id() === $publicCourse->instructorId);
@@ -257,6 +283,7 @@ try {
         $instructorCourses = $courseService->listMine($currentUser);
         $instructorDashboard = $reportService->instructorDashboard($currentUser, $_GET);
         $salesCategories = $categoryService->active();
+        $recentComments = $commentService->recentForInstructor($currentUser);
     }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Admin) {
         $lockedAccounts = $accountService->lockedAccounts($currentUser);
@@ -283,8 +310,19 @@ try {
         }
         $chatList = $chatService->list($currentUser);
     }
+    if ($view === 'course-comments') {
+        $instructorComments = $commentService->forInstructor($currentUser, is_string($_GET['id'] ?? null) ? $_GET['id'] : '', $_GET);
+        $views['course-comments']['title'] = 'Comentarios: ' . $instructorComments->courseTitle;
+    }
     if ($view === 'categories') {
         $categories = $categoryService->all();
+    }
+    if ($view === 'reactions') {
+        $reactionCatalog = $reactionService->all();
+    }
+    // Catálogo activo para el selector de reacciones (reactions.js lo lee de la página).
+    if (in_array($view, ['learn', 'course', 'messages', 'course-comments'], true)) {
+        $activeReactions = $reactionService->active();
     }
     if ($view === 'payment-methods') {
         $paymentMethods = $paymentMethodService->overview();

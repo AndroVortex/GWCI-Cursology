@@ -34,8 +34,9 @@ final class ChatThread
     /** @param list<list<array<string, mixed>>> $resultSets */
     public static function fromResultSets(array $resultSets): self
     {
-        [$chatRows, $messageRows, $unreadRows] = $resultSets + [[], [], []];
+        [$chatRows, $messageRows, $unreadRows, $reactionRows] = $resultSets + [[], [], [], []];
         $r = new RowReader(self::class, $chatRows[0] ?? []);
+        $reactions = ReactionSummary::byTarget($reactionRows);
 
         /** @var UserRole $role */
         $role = $r->enum('viewer_role', UserRole::class);
@@ -54,7 +55,7 @@ final class ChatThread
             $r->string('instructor_name', 350),
             $r->string('instructor_avatar', 2048),
             $r->dateTime('created_at'),
-            array_map(ChatMessage::fromRow(...), $messageRows),
+            array_map(static fn (array $row): ChatMessage => ChatMessage::fromRow($row, ReactionSummary::of($reactions, (string) $row['id'])), $messageRows),
             (new RowReader(self::class, $unreadRows[0] ?? ['unread_total' => 0]))->intUnsigned('unread_total'),
         );
     }

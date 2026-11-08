@@ -55,15 +55,16 @@ final class ReviewService
 
     /**
      * @param array<string, mixed> $query {pagina?}
+     * @param ?AppUser $viewer quien consulta, para marcar su reacción en cada opinión
      * @throws BusinessRuleException COURSE_NOT_FOUND
      */
-    public function list(string $courseId, array $query = []): ReviewPage
+    public function list(string $courseId, array $query = [], ?AppUser $viewer = null): ReviewPage
     {
         self::requireId($courseId, 'COURSE_NOT_FOUND');
         $page = UserRules::text($query, 'pagina');
         $page = preg_match('/^[1-9][0-9]{0,3}$/D', $page) === 1 ? min((int) $page, self::MAX_PAGE) : 1;
 
-        [$summary, $reviews, $total] = $this->reviews->list($courseId, self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE);
+        [$summary, $reviews, $total] = $this->reviews->list($courseId, self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE, $viewer?->id());
 
         return new ReviewPage($summary, $reviews, $total, $page, max(1, intdiv($total + self::PAGE_SIZE - 1, self::PAGE_SIZE)));
     }
