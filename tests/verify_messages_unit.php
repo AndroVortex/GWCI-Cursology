@@ -131,14 +131,17 @@ $thread = ChatThread::fromResultSets([
     ]],
     [$messageRow, ['id' => '22', 'reply_to' => null, 'reply_sender_name' => null, 'reply_content' => null] + $messageRow],
     [['unread_total' => 5]],
+    [['target_id' => '22', 'reaction_id' => '1', 'emoji' => '👍', 'reaction_name' => 'Me gusta', 'total' => 2, 'mine' => 1]],
 ]);
 check($thread->otherName() === 'Ana López' && $thread->otherAvatar() === 'img/a.svg', 'para el instructor, la otra persona es la alumna');
 check($thread->lastMessageId() === '22' && count($thread->messages) === 2 && $thread->unreadTotal === 5, 'último id, mensajes y no leídos del menú');
+check($thread->messages[0]->reactions->counts === [] && $thread->messages[1]->reactions->mine === '1' && $thread->messages[1]->reactions->total() === 2, 'cada mensaje con sus reacciones (4.º resultado)');
 
 // -----------------------------------------------------------
 Report::section('JSON de la API');
 $json = ChatPresenter::message($message, '7');
-check(array_keys($json) === ['id', 'mine', 'author', 'avatar', 'text', 'sentAt', 'sentAtLabel', 'replyTo', 'replyAuthor', 'replyExcerpt'], 'mensaje: solo los campos de la vista');
+check(array_keys($json) === ['id', 'mine', 'author', 'avatar', 'text', 'sentAt', 'sentAtLabel', 'replyTo', 'replyAuthor', 'replyExcerpt', 'reactions'], 'mensaje: solo los campos de la vista');
+check($json['reactions'] === ['items' => [], 'mine' => null], 'sin reacciones: la lista vacía');
 check($json['mine'] === true && ChatPresenter::message($message, '4')['mine'] === false, '"mine" depende de quien consulta');
 check($json['sentAtLabel'] === '25 oct 2026, 12:10' && $json['text'] === "Gracias\nprofe", 'fecha en hora de Monterrey y el texto tal cual (el navegador lo pone con textContent)');
 $summaryJson = ChatPresenter::summary($summary);

@@ -47,6 +47,7 @@ final class ChatPresenter
             'replyTo' => $message->replyTo,
             'replyAuthor' => $message->replySenderName,
             'replyExcerpt' => $message->replyTo === null ? null : $message->replyExcerpt(),
+            'reactions' => ReactionPresenter::summary($message->reactions),
         ];
     }
 

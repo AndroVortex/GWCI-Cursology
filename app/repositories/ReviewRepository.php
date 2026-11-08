@@ -7,6 +7,7 @@ namespace App\Repositories;
 use App\Database\StoredProcedures;
 use App\Models\Dto\CourseReview;
 use App\Models\Dto\MyReview;
+use App\Models\Dto\ReactionSummary;
 use App\Models\Dto\ReviewSummary;
 use App\Models\Entities\CourseOpinion;
 
@@ -29,14 +30,18 @@ final class ReviewRepository
         return MyReview::fromResultSets($this->resultSets('sp_review_mine', [$userId, $courseId]));
     }
 
-    /** @return array{0: ReviewSummary, 1: list<CourseReview>, 2: int} [resumen, opiniones, total] */
-    public function list(string $courseId, int $limit, int $offset): array
+    /**
+     * @param ?string $viewerId quien consulta (null para visitantes), para marcar su reacción
+     * @return array{0: ReviewSummary, 1: list<CourseReview>, 2: int} [resumen, opiniones, total]
+     */
+    public function list(string $courseId, int $limit, int $offset, ?string $viewerId = null): array
     {
-        [$summaryRows, $reviewRows, $totalRows] = $this->resultSets('sp_review_list', [$courseId, $limit, $offset]) + [[], [], []];
+        [$summaryRows, $reviewRows, $totalRows, $reactionRows] = $this->resultSets('sp_review_list', [$courseId, $limit, $offset, $viewerId]) + [[], [], [], []];
+        $reactions = ReactionSummary::byTarget($reactionRows);
 
         return [
             ReviewSummary::fromRow($summaryRows[0] ?? []),
-            array_map(CourseReview::fromRow(...), $reviewRows),
+            array_map(static fn (array $row): CourseReview => CourseReview::fromRow($row, ReactionSummary::of($reactions, (string) $row['id'])), $reviewRows),
             (int) ($totalRows[0]['total'] ?? 0),
         ];
     }

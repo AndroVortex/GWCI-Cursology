@@ -10,6 +10,8 @@
 --      tres si no responde a otro; reply_content también es NULL si el mensaje citado se dio
 --      de baja)
 --   3) unread_total: los no leídos de todas sus conversaciones, ya sin los de esta
+--   4) las reacciones de los mensajes de 2): target_id, reaction_id, emoji, reaction_name,
+--      total y mine; solo reacciones activas del catálogo
 -- Errores: CHAT_NOT_FOUND (no existe o el usuario no participa).
 
 DROP PROCEDURE IF EXISTS sp_chat_open;
@@ -97,6 +99,24 @@ BEGIN
        AND m.active = 1 AND m.sent_by <> p_user_id
        AND m.sent_at > COALESCE(IF(ch.student_id = p_user_id, ch.student_last_read_at, ch.instructor_last_read_at),
                                 '1000-01-01');
+
+    -- La página de 2) se repite como tabla derivada: MySQL no admite LIMIT dentro de IN.
+    SELECT mr.message_id AS target_id, re.id AS reaction_id, re.emoji, re.reaction_name,
+           COUNT(*) AS total, MAX(mr.reacted_by = p_user_id) AS mine
+      FROM message_reaction mr
+      JOIN reaction re ON re.id = mr.reaction_id AND re.active = 1
+      JOIN (
+          SELECT m.id
+            FROM message m
+           WHERE m.chat_id = p_chat_id AND m.active = 1
+             AND (p_after_id IS NULL OR m.id > p_after_id)
+           ORDER BY
+               CASE WHEN p_after_id IS NULL THEN m.id END DESC,
+               m.id ASC
+           LIMIT p_limit
+      ) page ON page.id = mr.message_id
+     GROUP BY mr.message_id, re.id, re.emoji, re.reaction_name
+     ORDER BY mr.message_id, re.id;
 END$$
 
 DELIMITER ;

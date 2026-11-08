@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Http\JsonResponse;
+use App\Http\Presenters\ReactionPresenter;
 use App\Http\Request;
 use App\Models\Dto\CourseReview;
 use App\Models\Dto\MyReview;
@@ -19,10 +20,16 @@ final class ReviewController
     {
     }
 
-    /** GET /api/catalog/courses/{id}/reviews?pagina= (público) */
+    /** GET /api/catalog/courses/{id}/reviews?pagina= (público; con sesión marca tu reacción) */
     public function list(Request $request): JsonResponse
     {
-        return JsonResponse::data(self::page($this->reviews->list((string) $request->attribute('id'), $request->queryParams())));
+        $viewer = $request->attribute('user');
+
+        return JsonResponse::data(self::page($this->reviews->list(
+            (string) $request->attribute('id'),
+            $request->queryParams(),
+            $viewer instanceof AppUser ? $viewer : null,
+        )));
     }
 
     /** PUT /api/student/courses/{id}/review ({calificacion, opinion}) */
@@ -58,6 +65,7 @@ final class ReviewController
                 'avatar' => $review->authorAvatar,
                 'commentedAt' => $review->commentedAt->format(DATE_ATOM),
                 'edited' => $review->wasEdited(),
+                'reactions' => ReactionPresenter::summary($review->reactions),
             ], $page->reviews),
             'total' => $page->total,
             'page' => $page->page,
