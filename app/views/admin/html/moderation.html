@@ -1,0 +1,193 @@
+<?php
+/**
+ * Moderación del admin: la cola de reportes pendientes y todo el contenido.
+ *
+ * @var string $moderationTab 'reportes' o 'contenido'
+ * @var \App\Models\Dto\ModerationPage $moderationReports
+ * @var ?\App\Models\Dto\ModerationPage $moderationContent
+ */
+use App\Models\Enums\ReportTarget;
+
+$pending = $moderationReports->total;
+$filters = $moderationContent?->filters ?? ['tipo' => '', 'estado' => '', 'q' => ''];
+$isFiltered = $filters['tipo'] !== '' || $filters['estado'] !== '' || $filters['q'] !== '';
+$pageUrl = static fn (array $params): string => '?' . http_build_query(array_filter(
+    ['view' => 'moderation'] + $params,
+    static fn (string $value): bool => $value !== '',
+));
+$where = static function (string $courseTitle, ?string $chapterTitle): string {
+    return $chapterTitle === null ? $courseTitle : $courseTitle . ' · ' . $chapterTitle;
+};
+?>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Moderación</h1>
+        <p class="page-subtitle">Comentarios y opiniones reportados por alumnos e instructores, y todo el contenido de la plataforma.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="?view=dashboard">Volver al panel</a>
+    </div>
+</div>
+
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
+<nav class="tab-links" aria-label="Secciones de moderación">
+    <a href="?view=moderation"<?= $moderationTab === 'reportes' ? ' aria-current="page"' : '' ?>>
+        Reportes pendientes <span class="badge<?= $pending > 0 ? ' badge-danger' : '' ?>"><?= $pending ?></span>
+    </a>
+    <a href="?view=moderation&amp;tab=contenido"<?= $moderationTab === 'contenido' ? ' aria-current="page"' : '' ?>>Todo el contenido</a>
+</nav>
+
+<?php if ($moderationTab === 'reportes'): ?>
+    <section class="panel" aria-labelledby="moderation-reports-title">
+        <div class="panel-header">
+            <div>
+                <h2 class="panel-title" id="moderation-reports-title">Reportes pendientes</h2>
+                <p class="panel-description">
+                    Un renglón por contenido, del reporte más reciente al más antiguo<?= $moderationReports->reportTotal ? ' · ' . $moderationReports->reportTotal . ' reporte(s) en total' : '' ?>.
+                    "Ocultar" resuelve todos sus reportes; "Descartar" los da por revisados y el contenido sigue visible.
+                </p>
+            </div>
+        </div>
+        <?php if ($moderationReports->items === []): ?>
+            <div class="empty-state">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+                <p class="empty-title">Nada pendiente</p>
+                <p class="empty-text">Cuando alguien reporte un comentario o una opinión, aparecerá aquí. También puedes revisar todo el contenido en la otra pestaña.</p>
+            </div>
+        <?php else: ?>
+            <ul class="moderation-list">
+                <?php foreach ($moderationReports->items as $report): ?>
+                    <li class="moderation-item" data-moderation-item>
+                        <p class="moderation-meta">
+                            <span class="badge"><?= e($report->targetType->label()) ?></span>
+                            <strong><?= $report->reportCount === 1 ? '1 reporte' : $report->reportCount . ' reportes' ?></strong>
+                            · <?= e($report->reasonsSummary()) ?>
+                            · último el <?= e(format_date_time($report->lastReportedAt)) ?>
+                        </p>
+                        <div class="account-cell">
+                            <img class="account-avatar" src="<?= e($report->authorAvatar) ?>" alt="" loading="lazy">
+                            <div>
+                                <span><strong><?= e($report->authorName) ?></strong></span>
+                                <span class="table-sub"><?= e($report->authorEmail) ?> · <?= e(format_date_time($report->createdAt)) ?></span>
+                            </div>
+                        </div>
+                        <p class="moderation-text"><?= e($report->content ?? '') ?></p>
+                        <p class="table-sub">En <?= e($where($report->courseTitle, $report->chapterTitle)) ?></p>
+                        <?php if ($report->lastDetails !== null): ?>
+                            <blockquote class="moderation-details">«<?= e($report->lastDetails) ?>»</blockquote>
+                        <?php endif; ?>
+                        <div class="moderation-actions" data-moderation-actions>
+                            <button type="button" class="btn btn-danger btn-sm" data-moderation-hide
+                                    data-type="<?= e($report->targetType->value) ?>" data-id="<?= e($report->targetId) ?>"
+                                    data-reason="<?= e($report->topReason()->label()) ?>">Ocultar</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-moderation-dismiss
+                                    data-type="<?= e($report->targetType->value) ?>" data-id="<?= e($report->targetId) ?>">Descartar</button>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php if ($moderationReports->pages > 1): ?>
+                <nav class="moderation-pagination" aria-label="Páginas de reportes">
+                    <?php if ($moderationReports->page > 1): ?>
+                        <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl(['pagina' => (string) ($moderationReports->page - 1)])) ?>">Anteriores</a>
+                    <?php endif; ?>
+                    <span class="text-muted">Página <?= $moderationReports->page ?> de <?= $moderationReports->pages ?></span>
+                    <?php if ($moderationReports->hasMore()): ?>
+                        <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl(['pagina' => (string) ($moderationReports->page + 1)])) ?>">Siguientes</a>
+                    <?php endif; ?>
+                </nav>
+            <?php endif; ?>
+        <?php endif; ?>
+    </section>
+<?php else: ?>
+    <section class="panel" aria-labelledby="moderation-content-title">
+        <div class="panel-header">
+            <div>
+                <h2 class="panel-title" id="moderation-content-title">Todo el contenido</h2>
+                <p class="panel-description">Comentarios y opiniones, del más reciente al más antiguo. <?= $moderationContent->total ?> en total con estos filtros.</p>
+            </div>
+        </div>
+        <form class="filters" method="get" action="">
+            <input type="hidden" name="view" value="moderation">
+            <input type="hidden" name="tab" value="contenido">
+            <div class="form-field">
+                <label class="form-label" for="moderation-tipo">Tipo</label>
+                <select class="form-control" id="moderation-tipo" name="tipo">
+                    <option value="">Todos</option>
+                    <option value="comment"<?= $filters['tipo'] === 'comment' ? ' selected' : '' ?>>Comentarios</option>
+                    <option value="opinion"<?= $filters['tipo'] === 'opinion' ? ' selected' : '' ?>>Opiniones</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="moderation-estado">Estado</label>
+                <select class="form-control" id="moderation-estado" name="estado">
+                    <option value="">Todos</option>
+                    <option value="visibles"<?= $filters['estado'] === 'visibles' ? ' selected' : '' ?>>Visibles</option>
+                    <option value="ocultos"<?= $filters['estado'] === 'ocultos' ? ' selected' : '' ?>>Ocultos o eliminados</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="moderation-q">Buscar</label>
+                <input class="form-control" type="search" id="moderation-q" name="q" maxlength="100" value="<?= e($filters['q']) ?>" placeholder="Texto, nombre o email del autor">
+            </div>
+            <div class="filters-actions">
+                <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+                <?php if ($isFiltered): ?>
+                    <a class="btn btn-ghost btn-sm" href="?view=moderation&amp;tab=contenido">Quitar filtros</a>
+                <?php endif; ?>
+            </div>
+        </form>
+        <?php if ($moderationContent->items === []): ?>
+            <div class="empty-state">
+                <p class="empty-title"><?= $isFiltered ? 'Nada coincide con los filtros' : 'Todavía no hay comentarios ni opiniones' ?></p>
+            </div>
+        <?php else: ?>
+            <ul class="moderation-list">
+                <?php foreach ($moderationContent->items as $item): ?>
+                    <li class="moderation-item<?= $item->active ? '' : ' is-hidden' ?>" data-moderation-item>
+                        <p class="moderation-meta">
+                            <span class="badge"><?= e($item->targetType->label()) ?></span>
+                            <span class="badge <?= $item->active ? 'badge-success' : 'badge-warning' ?>"><?= e($item->statusLabel()) ?></span>
+                            <?php if ($item->reportCount > 0): ?>
+                                <span class="badge badge-danger"><?= $item->reportCount === 1 ? '1 reporte' : $item->reportCount . ' reportes' ?></span>
+                            <?php endif; ?>
+                        </p>
+                        <div class="account-cell">
+                            <img class="account-avatar" src="<?= e($item->authorAvatar) ?>" alt="" loading="lazy">
+                            <div>
+                                <span><strong><?= e($item->authorName) ?></strong></span>
+                                <span class="table-sub"><?= e($item->authorEmail) ?> · <?= e(format_date_time($item->createdAt)) ?></span>
+                            </div>
+                        </div>
+                        <p class="moderation-text"><?= e($item->content ?? '') ?></p>
+                        <p class="table-sub">En <?= e($where($item->courseTitle, $item->chapterTitle)) ?></p>
+                        <div class="moderation-actions" data-moderation-actions>
+                            <?php if ($item->active): ?>
+                                <button type="button" class="btn btn-danger btn-sm" data-moderation-hide
+                                        data-type="<?= e($item->targetType->value) ?>" data-id="<?= e($item->targetId) ?>" data-reason="">Ocultar</button>
+                            <?php elseif ($item->restorable): ?>
+                                <button type="button" class="btn btn-secondary btn-sm" data-moderation-restore
+                                        data-type="<?= e($item->targetType->value) ?>" data-id="<?= e($item->targetId) ?>">Restaurar</button>
+                            <?php endif; ?>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php if ($moderationContent->pages > 1): ?>
+                <nav class="moderation-pagination" aria-label="Páginas de contenido">
+                    <?php $base = ['tab' => 'contenido', 'tipo' => $filters['tipo'], 'estado' => $filters['estado'], 'q' => $filters['q']]; ?>
+                    <?php if ($moderationContent->page > 1): ?>
+                        <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl($base + ['pagina' => (string) ($moderationContent->page - 1)])) ?>">Anteriores</a>
+                    <?php endif; ?>
+                    <span class="text-muted">Página <?= $moderationContent->page ?> de <?= $moderationContent->pages ?></span>
+                    <?php if ($moderationContent->hasMore()): ?>
+                        <a class="btn btn-secondary btn-sm" href="<?= e($pageUrl($base + ['pagina' => (string) ($moderationContent->page + 1)])) ?>">Siguientes</a>
+                    <?php endif; ?>
+                </nav>
+            <?php endif; ?>
+        <?php endif; ?>
+    </section>
+<?php endif; ?>

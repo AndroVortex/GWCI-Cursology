@@ -99,6 +99,7 @@
         text.dataset.commentText = '';
 
         const actions = el('div', 'comment-actions');
+        actions.dataset.reportHost = '';
         if (comment.can.reply) {
             actions.append(actionButton('Responder', 'commentReply'));
         }
@@ -110,6 +111,9 @@
         }
         if (comment.can.hide) {
             actions.append(actionButton('Ocultar', 'commentHide', true));
+        }
+        if (comment.can.report && window.Cursology.report) {
+            actions.append(window.Cursology.report.button(commentUrl(comment.id) + '/report', comment.reported));
         }
 
         const body = el('div', 'comment-body');

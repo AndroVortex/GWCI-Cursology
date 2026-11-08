@@ -32,7 +32,7 @@ $can = \App\Http\Presenters\CommentPresenter::can($comment, $viewerId, $viewerIs
             $reactionUrl = 'api/comments/' . rawurlencode($comment->id) . '/reaction';
             require BASE_PATH . '/app/views/reactions/html/reactions.html';
             ?>
-            <div class="comment-actions">
+            <div class="comment-actions" data-report-host>
                 <?php if ($can['reply']): ?>
                     <button type="button" class="comment-action" data-comment-reply>Responder</button>
                 <?php endif; ?>
@@ -44,6 +44,11 @@ $can = \App\Http\Presenters\CommentPresenter::can($comment, $viewerId, $viewerIs
                 <?php endif; ?>
                 <?php if ($can['hide']): ?>
                     <button type="button" class="comment-action comment-action-danger" data-comment-hide>Ocultar</button>
+                <?php endif; ?>
+                <?php if ($can['report'] && $comment->reportedByMe): ?>
+                    <span class="report-done" title="Un administrador lo va a revisar">Reportado</span>
+                <?php elseif ($can['report']): ?>
+                    <button type="button" class="comment-action report-action" data-report data-report-url="api/comments/<?= e(rawurlencode($comment->id)) ?>/report">Reportar</button>
                 <?php endif; ?>
             </div>
         </div>

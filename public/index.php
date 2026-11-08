@@ -53,7 +53,7 @@ $views = [
         'title' => 'Curso',
         'file'  => BASE_PATH . '/app/views/catalog/html/course.html',
         'css'   => ['catalog/css/catalog.css'],
-        'js'    => ['catalog/js/course.js', 'reactions/js/reactions.js', 'catalog/js/reviews.js', 'messages/js/start-chat.js'],
+        'js'    => ['catalog/js/course.js', 'reactions/js/reactions.js', 'base/js/report.js', 'catalog/js/reviews.js', 'messages/js/start-chat.js'],
     ],
     'verify' => [
         'title' => 'Verificar certificado',
@@ -66,7 +66,7 @@ $views = [
         'file'  => BASE_PATH . '/app/views/student/html/learn.html',
         'css'   => ['student/css/student.css', 'comments/css/comments.css'],
         'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js', 'student/js/certificate.js', 'messages/js/start-chat.js',
-                    'reactions/js/reactions.js', 'comments/js/comments.js'],
+                    'reactions/js/reactions.js', 'base/js/report.js', 'comments/js/comments.js'],
         'auth'  => true,
         'roles' => [UserRole::Student],
     ],
@@ -96,6 +96,22 @@ $views = [
         'file'  => BASE_PATH . '/app/views/admin/html/categories.html',
         'css'   => [],
         'js'    => ['admin/js/categories.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
+    'moderation' => [
+        'title' => 'Moderación',
+        'file'  => BASE_PATH . '/app/views/admin/html/moderation.html',
+        'css'   => ['admin/css/admin.css'],
+        'js'    => ['admin/js/moderation.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
+    'accounts' => [
+        'title' => 'Cuentas',
+        'file'  => BASE_PATH . '/app/views/admin/html/accounts.html',
+        'css'   => ['admin/css/admin.css'],
+        'js'    => ['admin/js/accounts.js'],
         'auth'  => true,
         'roles' => [UserRole::Admin],
     ],
@@ -288,6 +304,15 @@ try {
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Admin) {
         $lockedAccounts = $accountService->lockedAccounts($currentUser);
         $adminDashboard = $reportService->adminDashboard($currentUser);
+        $moderationSummary = $moderationService->summary($currentUser);
+    }
+    if ($view === 'moderation') {
+        $moderationTab = ($_GET['tab'] ?? '') === 'contenido' ? 'contenido' : 'reportes';
+        $moderationReports = $moderationService->reports($currentUser, $moderationTab === 'reportes' ? $_GET : []);
+        $moderationContent = $moderationTab === 'contenido' ? $moderationService->content($currentUser, $_GET) : null;
+    }
+    if ($view === 'accounts') {
+        $accountPage = $accountService->users($currentUser, $_GET);
     }
     if ($view === 'course-sales') {
         $courseSales = $reportService->courseStudents($currentUser, is_string($_GET['id'] ?? null) ? $_GET['id'] : '');

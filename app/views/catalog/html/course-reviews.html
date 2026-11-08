@@ -91,6 +91,14 @@ $canReactToOpinions = $currentUser !== null
                             ?>
                             <?php if ($canModerate): ?>
                                 <button type="button" class="btn btn-ghost btn-sm" data-hide-opinion="<?= e($review->opinionId) ?>">Ocultar</button>
+                            <?php elseif ($canReactToOpinions && !$review->mine): ?>
+                                <div class="review-actions" data-report-host>
+                                    <?php if ($review->reportedByMe): ?>
+                                        <span class="report-done" title="Un administrador lo va a revisar">Reportado</span>
+                                    <?php else: ?>
+                                        <button type="button" class="btn btn-ghost btn-sm" data-report data-report-url="api/opinions/<?= e(rawurlencode($review->opinionId)) ?>/report">Reportar</button>
+                                    <?php endif; ?>
+                                </div>
                             <?php endif; ?>
                         </div>
                     </li>
