@@ -167,4 +167,17 @@ foreach (['student/html/dashboard.html', 'instructor/html/dashboard.html'] as $f
     check(!str_contains((string) file_get_contents("$views/$file"), 'entrega posterior'), "$file sin el aviso de \"entrega posterior\"");
 }
 
+// -----------------------------------------------------------
+Report::section('Menú lateral escondido');
+$sidebar = (string) file_get_contents("$views/base/html/sidebar.html");
+$css = (string) file_get_contents("$views/base/css/base.css");
+$baseJs = (string) file_get_contents("$views/base/js/base.js");
+$handle = strpos($sidebar, 'data-sidebar-pin');
+check(str_starts_with(trim(substr($sidebar, strpos($sidebar, '<div class="sidebar-dock"'))), '<div class="sidebar-dock" data-sidebar-dock>') && $handle !== false && $handle < strpos($sidebar, '<aside class="sidebar"'), 'el menú y su pestaña van juntos, la pestaña primero (orden del teclado)');
+check(substr_count($sidebar, 'data-unread-total') === 2, 'la pestaña repite el contador de mensajes sin leer (messages.js actualiza los dos)');
+check(preg_match('/\.app-shell \{\s+display: grid;\s+grid-template-columns: minmax\(0, 1fr\);/', $css) === 1, 'el menú ya no ocupa una columna');
+check(preg_match('/@media \(min-width: 1024px\) \{\s+\.sidebar-dock \{\s+position: fixed;/', $css) === 1 && str_contains($css, '.sidebar-dock:hover .sidebar,'), 'en escritorio se despliega encima del contenido con el cursor');
+check(str_contains($css, '.sidebar-dock.is-pinned .sidebar,') && str_contains($css, '.sidebar-dock.has-focus .sidebar {'), 'también con la pestaña (pantallas táctiles) y con el teclado');
+check(str_contains($baseJs, "dock.addEventListener('focusout'") && str_contains($baseJs, '!dock.contains(event.relatedTarget)'), 'con el teclado sigue abierto mientras el foco pase entre sus enlaces');
+
 Report::finish();
