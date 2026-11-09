@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 /**
  * Verificación de la moderación (reportes, cola, todo el contenido, restaurar) y de las cuentas
- * (suspender, quitar la suspensión, dar de baja, reactivar e historial) contra la base LOCAL, con
- * la migración 2026_11_content_report.sql aplicada y los SP instalados.
+ * (suspender, quitar la suspensión, dar de baja, reactivar e historial) contra la base de pruebas
+ * (cursology_test), creada con php scripts/setup_test_db.php. También comprueba que la migración
+ * 2026_11_content_report.sql se puede volver a aplicar.
  *
  *   php tests/verify_moderation_db.php
  *
@@ -61,7 +62,7 @@ require __DIR__ . '/support.php';
 require dirname(__DIR__) . '/app/database/conn.php';
 require dirname(__DIR__) . '/app/view_helpers.php';
 
-$connection = new Connection($DATABASES['local']);
+$connection = new Connection(testDatabase());
 $procedures = new StoredProcedures($connection);
 $users = new UserRepository($procedures);
 $noCloudinary = new CloudinaryClient('', '', '');
@@ -82,11 +83,10 @@ $moderation = new ModerationService($moderationRepository);
 $accounts = new AccountAdminService($users);
 $profiles = new ProfileService($users, new ProfileValidator(), $noCloudinary);
 
-/** Ejecuta un archivo .sql de sentencias simples (sin DELIMITER), como lo haría SOURCE. */
+/** Ejecuta un archivo .sql como lo haría SOURCE. */
 function runSqlFile(Connection $connection, string $path): void
 {
-    $sql = (string) preg_replace('/^\s*--.*$/m', '', (string) file_get_contents($path));
-    foreach (array_filter(array_map('trim', explode(';', $sql))) as $statement) {
+    foreach (SqlScript::statements((string) file_get_contents($path)) as $statement) {
         $connection->pdo()->exec($statement);
     }
 }
@@ -96,9 +96,8 @@ try {
     $procedures->call('sp_moderation_reports', [0, 1, 0]);
 } catch (Throwable $exception) {
     if (!($exception instanceof App\Database\ProcedureException) || $exception->businessCode !== 'NOT_ADMIN') {
-        fwrite(STDERR, 'No se pudieron ejecutar los SP de moderación en la base local. Revisa el .env y que MySQL esté encendido,' . PHP_EOL
-            . 'aplica la migración con: SOURCE app/database/migrations/2026_11_content_report.sql;' . PHP_EOL
-            . 'e instala los SP con: SOURCE app/database/procedures/install.sql;' . PHP_EOL
+        fwrite(STDERR, 'No se pudieron ejecutar la migración o los SP de moderación en la base de pruebas. Revisa que MySQL' . PHP_EOL
+            . 'esté encendido y recrea la base con: php scripts/setup_test_db.php' . PHP_EOL
             . 'Detalle: ' . ($exception->getPrevious()?->getMessage() ?? $exception->getMessage()) . PHP_EOL);
         exit(1);
     }

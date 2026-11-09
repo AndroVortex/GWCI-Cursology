@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Verificación de inscripción, pagos, reproductor, exámenes y "Mi aprendizaje" contra la base
- * LOCAL, con los SP instalados (app/database/procedures/install.sql).
+ * de pruebas (cursology_test), creada con php scripts/setup_test_db.php.
  *
  *   php tests/verify_learning_db.php
  *
@@ -50,7 +50,7 @@ use App\Services\VerifiedMedia;
 require __DIR__ . '/support.php';
 require dirname(__DIR__) . '/app/database/conn.php';
 
-$procedures = new StoredProcedures(new Connection($DATABASES['local']));
+$procedures = new StoredProcedures(new Connection(testDatabase()));
 $users = new UserRepository($procedures);
 $noCloudinary = new CloudinaryClient('', '', '');
 $auth = new AuthService($users, new RegistrationValidator(), $noCloudinary);
@@ -104,8 +104,8 @@ $checkout = new CheckoutService($purchaseRepository, $methods, $paypal);
 try {
     $procedures->call('sp_course_access', [1, 1]);
 } catch (ProcedureException $exception) {
-    fwrite(STDERR, 'No se pudo ejecutar sp_course_access en la base local. Revisa el .env y que MySQL esté encendido,' . PHP_EOL
-        . 'e instala los SP con: SOURCE app/database/procedures/install.sql;' . PHP_EOL
+    fwrite(STDERR, 'No se pudo ejecutar sp_course_access en la base de pruebas. Revisa que MySQL esté encendido' . PHP_EOL
+        . 'y recrea la base con: php scripts/setup_test_db.php' . PHP_EOL
         . 'Detalle: ' . ($exception->getPrevious()?->getMessage() ?? $exception->getMessage()) . PHP_EOL);
     exit(1);
 }

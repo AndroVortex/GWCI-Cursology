@@ -11,7 +11,8 @@ define('USE_LOCAL_DB', true);
 
 require_once BASE_PATH . '/app/autoload.php';
 require_once BASE_PATH . '/app/database/conn.php';
-define('DB_DEFAULT', $DATABASES[USE_LOCAL_DB ? 'local' : 'prod']);
+// Con la variable de entorno CURSOLOGY_DB=test (servidor de las pruebas HTTP) usa la base de pruebas.
+define('DB_DEFAULT', $DATABASES[getenv('CURSOLOGY_DB') === 'test' ? 'test' : (USE_LOCAL_DB ? 'local' : 'prod')]);
 
 require_once BASE_PATH . '/app/bootstrap.php';
 
