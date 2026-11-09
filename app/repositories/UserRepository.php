@@ -103,6 +103,26 @@ final class UserRepository
         ]);
     }
 
+    /**
+     * Un administrador más, aunque ya exista otro. Solo para scripts/create_admin.php --adicional.
+     *
+     * @throws BusinessRuleException EMAIL_TAKEN
+     */
+    public function createAdditionalAdmin(
+        string $name,
+        string $fatherLastName,
+        ?string $motherLastName,
+        string $gender,
+        string $birthday,
+        string $avatar,
+        string $email,
+        string $passwordHash,
+    ): AppUser {
+        return $this->user('sp_admin_create', [
+            $name, $fatherLastName, $motherLastName, $gender, $birthday, $avatar, $email, $passwordHash,
+        ]);
+    }
+
     /** @throws BusinessRuleException EMAIL_TAKEN, USER_NOT_AVAILABLE */
     public function updateProfile(string $userId, ProfileData $data): AppUser
     {
