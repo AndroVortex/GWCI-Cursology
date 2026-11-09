@@ -37,11 +37,12 @@
     /* ---------- Formularios: errores por campo, alertas y estado de envío ---------- */
 
     // form.elements[name] es un RadioNodeList para radios o casillas con el mismo nombre;
-    // en ese caso el error se muestra en el fieldset que los agrupa.
+    // en ese caso el error se muestra en el fieldset que los agrupa. Un grupo que puede
+    // quedar sin controles (p. ej. sin categorías) se marca con data-field="name".
     function fieldAnchor(form, name) {
         const field = form.elements[name];
         if (!field) {
-            return null;
+            return form.querySelector('[data-field="' + name + '"]');
         }
         const isGroup = !field.tagName && typeof field.length === 'number';
         return isGroup ? (field[0] ? field[0].closest('fieldset') : null) : field;
@@ -213,16 +214,65 @@
         });
     }
 
-    /* ---------- Sidebar en pantallas chicas ---------- */
+    /* ---------- Sidebar ---------- */
     const sidebar = document.getElementById('app-sidebar');
     const backdrop = document.querySelector('[data-sidebar-backdrop]');
     const openers = document.querySelectorAll('[data-sidebar-open]');
     const closers = document.querySelectorAll('[data-sidebar-close]');
+    const dock = document.querySelector('[data-sidebar-dock]');
+    const pin = document.querySelector('[data-sidebar-pin]');
     const desktop = window.matchMedia('(min-width: 1024px)');
 
     if (!sidebar) {
         return;
     }
+
+    /* Escritorio: el cursor lo despliega solo (CSS); la pestaña lo deja abierto en pantallas táctiles,
+       y con el teclado sigue abierto mientras el foco esté dentro (has-focus). Escondido, sus enlaces
+       no reciben el foco, así que la clase debe seguir puesta mientras el foco pasa de uno a otro. */
+    function setPinned(open) {
+        if (!dock || !pin) {
+            return;
+        }
+        dock.classList.toggle('is-pinned', open);
+        pin.setAttribute('aria-expanded', String(open));
+    }
+
+    if (dock && pin) {
+        pin.addEventListener('click', function () {
+            setPinned(!dock.classList.contains('is-pinned'));
+        });
+        dock.addEventListener('mouseleave', function () {
+            setPinned(false);
+        });
+        document.addEventListener('click', function (event) {
+            if (dock.classList.contains('is-pinned') && !dock.contains(event.target)) {
+                setPinned(false);
+            }
+        });
+        dock.addEventListener('focusin', function (event) {
+            if (event.target.matches(':focus-visible')) {
+                dock.classList.add('has-focus');
+            }
+        });
+        dock.addEventListener('focusout', function (event) {
+            if (!dock.contains(event.relatedTarget)) {
+                dock.classList.remove('has-focus');
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && desktop.matches && dock.contains(document.activeElement)) {
+                setPinned(false);
+                dock.classList.remove('has-focus');
+                const main = document.getElementById('main-content');
+                if (main) {
+                    main.focus();
+                }
+            }
+        });
+    }
+
+    /* Pantallas chicas: panel lateral con el botón del encabezado. */
 
     function setSidebar(open) {
         sidebar.classList.toggle('is-open', open);
@@ -263,6 +313,8 @@
     desktop.addEventListener('change', function (event) {
         if (event.matches) {
             setSidebar(false);
+        } else {
+            setPinned(false);
         }
     });
 })();

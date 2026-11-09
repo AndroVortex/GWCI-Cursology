@@ -3,15 +3,15 @@
 declare(strict_types=1);
 
 /**
- * Verificación de perfil, primer admin, cuentas bloqueadas, categorías y cursos contra la base LOCAL,
- * con los SP instalados (app/database/procedures/install.sql).
+ * Verificación de perfil, primer admin, cuentas bloqueadas, categorías y cursos contra la base de
+ * pruebas (cursology_test), creada con php scripts/setup_test_db.php.
  *
  *   php tests/verify_profile_courses_db.php
  *
  * Usa referencias de medios inventadas: no llama a Cloudinary. Cada corrida deja en la
- * base tres cuentas de prueba (prueba+<marca>...@cursology.test), dos categorías
- * "Prueba <marca>" (desactivadas al terminar) y un curso en borrador: no hay SP de
- * borrado para ellos y no se ejecuta SQL directo desde PHP.
+ * base de pruebas tres cuentas (prueba+<marca>...@cursology.test), un admin adicional (la
+ * limpieza nunca borra admins: se va al recrear la base), dos categorías "Prueba <marca>"
+ * (desactivadas al terminar) y un curso en borrador.
  */
 
 use App\Database\Connection;
@@ -48,7 +48,7 @@ use App\Services\VerifiedMedia;
 require __DIR__ . '/support.php';
 require dirname(__DIR__) . '/app/database/conn.php';
 
-$procedures = new StoredProcedures(new Connection($DATABASES['local']));
+$procedures = new StoredProcedures(new Connection(testDatabase()));
 $users = new UserRepository($procedures);
 $noCloudinary = new CloudinaryClient('', '', '');
 $auth = new AuthService($users, new RegistrationValidator(), $noCloudinary);
@@ -64,8 +64,8 @@ $catalog = new CatalogService(new CatalogRepository($procedures));
 try {
     $procedures->call('sp_category_list', [1]);
 } catch (ProcedureException $exception) {
-    fwrite(STDERR, 'No se pudo ejecutar sp_category_list en la base local. Revisa el .env y que MySQL esté encendido,' . PHP_EOL
-        . 'e instala los SP con: SOURCE app/database/procedures/install.sql;' . PHP_EOL
+    fwrite(STDERR, 'No se pudo ejecutar sp_category_list en la base de pruebas. Revisa que MySQL esté encendido' . PHP_EOL
+        . 'y recrea la base con: php scripts/setup_test_db.php' . PHP_EOL
         . 'Detalle: ' . ($exception->getPrevious()?->getMessage() ?? $exception->getMessage()) . PHP_EOL);
     exit(1);
 }
@@ -139,7 +139,7 @@ try {
     $instructor = fresh($users, $instructor);
 
     // -----------------------------------------------------------
-    Report::section('Primer administrador');
+    Report::section('Administradores');
     $admin = $users->findForLogin('admin@cursology.local');
     check($admin !== null && $admin->role() === UserRole::Admin, 'existe la cuenta admin@cursology.local');
     check(
@@ -147,6 +147,17 @@ try {
         'un segundo admin por el script -> ADMIN_EXISTS',
     );
     check($users->findForLogin("prueba+$mark-admin@cursology.test") === null, 'y no se crea la cuenta');
+    $extraEmail = "prueba+$mark-admin2@cursology.test";
+    $extra = $users->createAdditionalAdmin('Segunda', 'Admin', null, 'otro', '1990-01-01', AuthService::DEFAULT_AVATAR, $extraEmail, password_hash($password, PASSWORD_DEFAULT));
+    check($extra->role() === UserRole::Admin && $extra->active() && !$extra->ban(), 'con --adicional (sp_admin_create) se crea otro admin activo');
+    check($auth->login($extraEmail, $password)->id() === $extra->id(), 'el admin adicional inicia sesión');
+    [$admins] = $users->listUsers($extra->id(), null, UserRole::Admin, null, 100, 0);
+    $adminEmails = array_map(static fn ($row): string => $row->email, $admins);
+    check(in_array('admin@cursology.local', $adminEmails, true) && in_array($extraEmail, $adminEmails, true), 'y pasa los permisos de admin: ve a los dos administradores');
+    check(
+        ruleCode(static fn () => $users->createAdditionalAdmin('Otra', 'Admin', null, 'otro', '1990-01-01', AuthService::DEFAULT_AVATAR, 'admin@cursology.local', password_hash($password, PASSWORD_DEFAULT))) === 'EMAIL_TAKEN',
+        'un email que ya existe -> EMAIL_TAKEN',
+    );
 
     // -----------------------------------------------------------
     Report::section('Cuentas bloqueadas');

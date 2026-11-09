@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Verificación de registro/login contra la base LOCAL, con los SP instalados
- * (app/database/procedures/install.sql). Usa la configuración 'local' del .env.
+ * Verificación de registro/login contra la base de pruebas ($DATABASES['test'], cursology_test),
+ * creada con php scripts/setup_test_db.php.
  *
  *   php tests/verify_auth_db.php
  *
- * Cada corrida crea dos cuentas de prueba (prueba+<marca>@cursology.test) que quedan
- * en la base: no hay un SP de borrado y no se ejecuta SQL directo desde PHP.
+ * Cada corrida crea dos cuentas de prueba (prueba+<marca>@cursology.test) que quedan en la
+ * base de pruebas hasta que se vuelve a crear.
  */
 
 use App\Database\Connection;
@@ -30,7 +30,7 @@ use App\Services\RegistrationValidator;
 require __DIR__ . '/support.php';
 require dirname(__DIR__) . '/app/database/conn.php';
 
-$procedures = new StoredProcedures(new Connection($DATABASES['local']));
+$procedures = new StoredProcedures(new Connection(testDatabase()));
 $users = new UserRepository($procedures);
 $validator = new RegistrationValidator();
 $auth = new AuthService($users, $validator, new CloudinaryClient('', '', ''));
@@ -38,8 +38,8 @@ $auth = new AuthService($users, $validator, new CloudinaryClient('', '', ''));
 try {
     $procedures->call('sp_user_get_by_id', ['1']);
 } catch (ProcedureException $exception) {
-    fwrite(STDERR, 'No se pudo ejecutar sp_user_get_by_id en la base local. Revisa el .env y que MySQL esté encendido,' . PHP_EOL
-        . 'e instala los SP con: SOURCE app/database/procedures/install.sql;' . PHP_EOL
+    fwrite(STDERR, 'No se pudo ejecutar sp_user_get_by_id en la base de pruebas. Revisa que MySQL esté encendido' . PHP_EOL
+        . 'y recrea la base con: php scripts/setup_test_db.php' . PHP_EOL
         . 'Detalle: ' . ($exception->getPrevious()?->getMessage() ?? $exception->getMessage()) . PHP_EOL);
     exit(1);
 }

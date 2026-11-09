@@ -11,7 +11,8 @@ define('USE_LOCAL_DB', true);
 
 require_once BASE_PATH . '/app/autoload.php';
 require_once BASE_PATH . '/app/database/conn.php';
-define('DB_DEFAULT', $DATABASES[USE_LOCAL_DB ? 'local' : 'prod']);
+// Con la variable de entorno CURSOLOGY_DB=test (servidor de las pruebas HTTP) usa la base de pruebas.
+define('DB_DEFAULT', $DATABASES[getenv('CURSOLOGY_DB') === 'test' ? 'test' : (USE_LOCAL_DB ? 'local' : 'prod')]);
 
 require_once BASE_PATH . '/app/bootstrap.php';
 
@@ -53,13 +54,20 @@ $views = [
         'title' => 'Curso',
         'file'  => BASE_PATH . '/app/views/catalog/html/course.html',
         'css'   => ['catalog/css/catalog.css'],
-        'js'    => ['catalog/js/course.js'],
+        'js'    => ['catalog/js/course.js', 'reactions/js/reactions.js', 'base/js/report.js', 'catalog/js/reviews.js', 'messages/js/start-chat.js'],
+    ],
+    'verify' => [
+        'title' => 'Verificar certificado',
+        'file'  => BASE_PATH . '/app/views/catalog/html/verify.html',
+        'css'   => ['catalog/css/catalog.css'],
+        'js'    => [],
     ],
     'learn' => [
         'title' => 'Mi curso',
         'file'  => BASE_PATH . '/app/views/student/html/learn.html',
-        'css'   => ['student/css/student.css'],
-        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js'],
+        'css'   => ['student/css/student.css', 'comments/css/comments.css'],
+        'js'    => ['student/js/learn.js', 'student/js/exam-attempt.js', 'student/js/certificate.js', 'messages/js/start-chat.js',
+                    'reactions/js/reactions.js', 'base/js/report.js', 'comments/js/comments.js'],
         'auth'  => true,
         'roles' => [UserRole::Student],
     ],
@@ -92,6 +100,30 @@ $views = [
         'auth'  => true,
         'roles' => [UserRole::Admin],
     ],
+    'moderation' => [
+        'title' => 'Moderación',
+        'file'  => BASE_PATH . '/app/views/admin/html/moderation.html',
+        'css'   => ['admin/css/admin.css'],
+        'js'    => ['admin/js/moderation.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
+    'accounts' => [
+        'title' => 'Cuentas',
+        'file'  => BASE_PATH . '/app/views/admin/html/accounts.html',
+        'css'   => ['admin/css/admin.css'],
+        'js'    => ['admin/js/accounts.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
+    'reactions' => [
+        'title' => 'Reacciones',
+        'file'  => BASE_PATH . '/app/views/admin/html/reactions.html',
+        'css'   => [],
+        'js'    => ['admin/js/reactions.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Admin],
+    ],
     'payment-methods' => [
         'title' => 'Formas de pago',
         'file'  => BASE_PATH . '/app/views/admin/html/payment-methods.html',
@@ -116,6 +148,30 @@ $views = [
         'auth'  => true,
         'roles' => [UserRole::Instructor],
     ],
+    'course-sales' => [
+        'title' => 'Ventas del curso',
+        'file'  => BASE_PATH . '/app/views/instructor/html/course-sales.html',
+        'css'   => [],
+        'js'    => ['messages/js/start-chat.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Instructor],
+    ],
+    'course-comments' => [
+        'title' => 'Comentarios del curso',
+        'file'  => BASE_PATH . '/app/views/comments/html/course-comments.html',
+        'css'   => ['comments/css/comments.css'],
+        'js'    => ['reactions/js/reactions.js', 'comments/js/comments.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Instructor],
+    ],
+    'messages' => [
+        'title' => 'Mensajes',
+        'file'  => BASE_PATH . '/app/views/messages/html/messages.html',
+        'css'   => ['messages/css/messages.css'],
+        'js'    => ['reactions/js/reactions.js', 'messages/js/messages.js'],
+        'auth'  => true,
+        'roles' => [UserRole::Student, UserRole::Instructor],
+    ],
 ];
 
 // Cada rol tiene su propio panel en ?view=dashboard.
@@ -124,6 +180,7 @@ $dashboards = [
         'title' => 'Mi aprendizaje',
         'file'  => BASE_PATH . '/app/views/student/html/dashboard.html',
         'css'   => ['student/css/student.css'],
+        'js'    => ['student/js/certificate.js'],
     ],
     UserRole::Instructor->value => [
         'title' => 'Panel del instructor',
@@ -160,6 +217,19 @@ if ($view === 'dashboard') {
     $views['dashboard'] = $dashboards[$currentUser->role()->value] + ['css' => [], 'js' => []];
 }
 
+// Verificación pública de un certificado por su código (sin sesión).
+if ($view === 'verify') {
+    $verifyCode = is_string($_GET['code'] ?? null) ? trim($_GET['code']) : '';
+    $verifiedCertificate = null;
+    if ($verifyCode !== '') {
+        try {
+            $verifiedCertificate = $certificateService->verify($verifyCode);
+        } catch (BusinessRuleException) {
+            http_response_code(404);
+        }
+    }
+}
+
 // Reproductor: el capítulo pedido o el último que vio el alumno. Sin inscripción, la vista lo dice (403).
 if ($view === 'learn') {
     try {
@@ -175,6 +245,15 @@ if ($view === 'learn') {
         $currentChapter = null;
         http_response_code(403);
     }
+    // Comentarios del capítulo actual: solo en capítulos de video con acceso.
+    $chapterComments = null;
+    if ($learningCourse !== null && $currentChapter !== null && !$currentChapter['isExam'] && $learningCourse->hasAccessTo($currentChapter)) {
+        try {
+            $chapterComments = $commentService->list($currentUser, $currentChapter['id']);
+        } catch (BusinessRuleException) {
+            $chapterComments = null;
+        }
+    }
 }
 
 // Página pública de un curso y su pago: si no existe, es borrador o está dado de baja, la vista lo dice (404).
@@ -189,6 +268,12 @@ if ($view === 'course' || $view === 'checkout') {
     }
     $courseAccess = $checkoutService->access($currentUser, $publicCourseId);
     $isStudent = $currentUser !== null && $currentUser->role() === UserRole::Student;
+    if ($view === 'course' && $publicCourse !== null) {
+        $reviewPage = $reviewService->list($publicCourse->id, [], $currentUser);
+        $myReview = $reviewService->mine($currentUser, $publicCourse->id);
+        $canModerate = $currentUser !== null
+            && ($currentUser->role() === UserRole::Admin || $currentUser->id() === $publicCourse->instructorId);
+    }
     if ($view === 'checkout') {
         $checkoutLevelId = is_string($_GET['level'] ?? null) && $_GET['level'] !== '' ? $_GET['level'] : null;
         $paymentProviders = $paymentMethodService->available();
@@ -209,15 +294,61 @@ try {
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Student) {
         $studentDashboard = $studentService->dashboard($currentUser, $_GET);
         $kardexCategories = $categoryService->active();
+        $studentCertificates = $certificateService->forStudent($currentUser);
     }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Instructor) {
         $instructorCourses = $courseService->listMine($currentUser);
+        $instructorDashboard = $reportService->instructorDashboard($currentUser, $_GET);
+        $salesCategories = $categoryService->active();
+        $recentComments = $commentService->recentForInstructor($currentUser);
     }
     if ($view === 'dashboard' && $currentUser->role() === UserRole::Admin) {
         $lockedAccounts = $accountService->lockedAccounts($currentUser);
+        $adminDashboard = $reportService->adminDashboard($currentUser);
+        $moderationSummary = $moderationService->summary($currentUser);
+    }
+    if ($view === 'moderation') {
+        $moderationTab = ($_GET['tab'] ?? '') === 'contenido' ? 'contenido' : 'reportes';
+        $moderationReports = $moderationService->reports($currentUser, $moderationTab === 'reportes' ? $_GET : []);
+        $moderationContent = $moderationTab === 'contenido' ? $moderationService->content($currentUser, $_GET) : null;
+    }
+    if ($view === 'accounts') {
+        $accountPage = $accountService->users($currentUser, $_GET);
+    }
+    if ($view === 'course-sales') {
+        $courseSales = $reportService->courseStudents($currentUser, is_string($_GET['id'] ?? null) ? $_GET['id'] : '');
+        $views['course-sales']['title'] = 'Ventas: ' . $courseSales->title;
+    }
+    if ($view === 'dashboard' && in_array($currentUser->role(), [UserRole::Student, UserRole::Instructor], true)) {
+        $recentChats = array_slice($chatService->list($currentUser), 0, 3);
+    }
+    if ($view === 'messages') {
+        // Abrir la conversación la marca leída: va antes de la lista y del contador del menú.
+        $chatThread = null;
+        $requestedChat = is_string($_GET['chat'] ?? null) ? $_GET['chat'] : '';
+        if ($requestedChat !== '') {
+            try {
+                $chatThread = $chatService->open($currentUser, $requestedChat);
+                $views['messages']['title'] = 'Mensajes: ' . $chatThread->otherName();
+            } catch (BusinessRuleException) {
+                http_response_code(404);
+            }
+        }
+        $chatList = $chatService->list($currentUser);
+    }
+    if ($view === 'course-comments') {
+        $instructorComments = $commentService->forInstructor($currentUser, is_string($_GET['id'] ?? null) ? $_GET['id'] : '', $_GET);
+        $views['course-comments']['title'] = 'Comentarios: ' . $instructorComments->courseTitle;
     }
     if ($view === 'categories') {
         $categories = $categoryService->all();
+    }
+    if ($view === 'reactions') {
+        $reactionCatalog = $reactionService->all();
+    }
+    // Catálogo activo para el selector de reacciones (reactions.js lo lee de la página).
+    if (in_array($view, ['learn', 'course', 'messages', 'course-comments'], true)) {
+        $activeReactions = $reactionService->active();
     }
     if ($view === 'payment-methods') {
         $paymentMethods = $paymentMethodService->overview();
@@ -231,6 +362,14 @@ try {
 } catch (BusinessRuleException) {
     header('Location: ?view=dashboard');
     exit;
+}
+
+// Contador de mensajes no leídos del menú (0 para visitantes y administradores).
+try {
+    $unreadMessages = $chatService->unreadTotal($currentUser);
+} catch (Throwable $exception) {
+    error_log('[view] no se pudo contar los mensajes no leídos: ' . $exception);
+    $unreadMessages = 0;
 }
 
 $page = $views[$view];

@@ -1,0 +1,224 @@
+/* Vista ?view=messages: lista de conversaciones a la izquierda y la abierta a la derecha. */
+.chat-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.chat-layout > .panel {
+    margin-bottom: 0;
+}
+
+.chat-sidebar {
+    max-height: min(74vh, 760px);
+    overflow-y: auto;
+}
+
+.chat-thread {
+    display: flex;
+    flex-direction: column;
+    height: min(74vh, 760px);
+    min-height: 420px;
+}
+
+.chat-thread-empty {
+    flex: 1;
+    justify-content: center;
+}
+
+.chat-thread-header {
+    justify-content: flex-start;
+}
+
+.chat-thread-header .panel-description a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.chat-back {
+    display: none;
+}
+
+/* ---------- Mensajes ---------- */
+.chat-messages {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0;
+    padding: 16px;
+    overflow-y: auto;
+    background: var(--bg);
+    list-style: none;
+}
+
+.chat-messages-empty {
+    margin: auto;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.chat-messages-empty[hidden] {
+    display: none;
+}
+
+.chat-message {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: min(78%, 640px);
+}
+
+.chat-message.is-mine {
+    align-self: flex-end;
+}
+
+.chat-message:target .chat-bubble,
+.chat-message.is-highlighted .chat-bubble {
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.chat-message-avatar {
+    margin-bottom: 18px;
+}
+
+.chat-bubble {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
+    background: var(--surface);
+}
+
+.chat-message.is-mine .chat-bubble {
+    border-color: transparent;
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+    background: var(--accent-soft);
+}
+
+.chat-text {
+    margin: 0;
+    font-size: 0.9375rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.chat-quote {
+    display: grid;
+    gap: 1px;
+    padding: 4px 8px;
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+}
+
+.chat-quote:hover {
+    text-decoration: none;
+}
+
+.chat-quote strong {
+    color: var(--text);
+    font-size: 0.75rem;
+}
+
+.chat-quote span {
+    overflow-wrap: anywhere;
+}
+
+.chat-meta {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.chat-message.is-mine .chat-meta {
+    text-align: right;
+}
+
+.chat-reply-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.chat-reply-btn:hover {
+    text-decoration: underline;
+}
+
+/* ---------- Cuadro para escribir ---------- */
+.chat-composer {
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+}
+
+.chat-input {
+    min-height: 64px;
+    max-height: 200px;
+}
+
+.chat-composer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.chat-reply-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    font-size: 0.8125rem;
+}
+
+.chat-reply-preview[hidden] {
+    display: none;
+}
+
+.chat-reply-preview p {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-reply-preview strong {
+    color: var(--text);
+}
+
+/* En pantallas chicas se ve la lista o la conversación, no las dos. */
+@media (max-width: 767.98px) {
+    .chat-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .chat-layout.has-thread .chat-sidebar,
+    .chat-layout:not(.has-thread) .chat-thread {
+        display: none;
+    }
+
+    .chat-back {
+        display: inline-flex;
+    }
+
+    .chat-message {
+        max-width: 92%;
+    }
+}

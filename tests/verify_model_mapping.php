@@ -26,6 +26,9 @@ use App\Models\Enums\ContentType;
 use App\Models\Enums\LoginOutcome;
 use App\Models\Enums\PurchaseScope;
 use App\Models\Enums\PurchaseStatus;
+use App\Models\Enums\ReportReason;
+use App\Models\Enums\ReportStatus;
+use App\Models\Enums\ReportTarget;
 use App\Models\Enums\SelectionMode;
 use App\Models\Enums\UserRole;
 use App\Models\Mapping\Column;
@@ -399,6 +402,7 @@ try {
     $enums = [
         UserRole::class, AccountStatus::class, LoginOutcome::class, AccountEventType::class, ContentType::class,
         SelectionMode::class, PurchaseScope::class, PurchaseStatus::class, CertificateStatus::class,
+        ReportTarget::class, ReportReason::class, ReportStatus::class,
     ];
     foreach ($enums as $enum) {
         check(enum_exists($enum), "$enum se carga con app/autoload.php");
@@ -413,7 +417,7 @@ try {
     );
     sort($entityFiles);
     sort($expectedFiles);
-    check($entityFiles === $expectedFiles, 'app/models/entities contiene exactamente las 29 entidades');
+    check($entityFiles === $expectedFiles, 'app/models/entities contiene exactamente las 30 entidades');
     $modelDirs = scandir($root . '/app/models');
     foreach (['entities', 'enums', 'mapping'] as $dir) {
         check(in_array($dir, $modelDirs, true), "app/models/$dir existe en minúsculas, como espera el autoload");
@@ -427,18 +431,18 @@ try {
     $ddlFkPairs = $sum(static fn (array $t): int => array_sum(array_map(static fn (array $fk): int => count($fk[1]), $t['foreignKeys'])));
     $ddlUniques = $sum(static fn (array $t): int => count($t['uniqueKeys']));
     $ddlCompositePks = $sum(static fn (array $t): int => count($t['primaryKey']) > 1 ? 1 : 0);
-    check(count($ddl) === 29, sprintf('29 tablas en el DDL (encontradas: %d)', count($ddl)));
-    check($ddlColumns === 254, "254 columnas en el DDL (encontradas: $ddlColumns)");
-    check($ddlFks === 61, "61 FK en el DDL (encontradas: $ddlFks)");
-    check($ddlFkPairs === 79, "79 pares de columnas en las FK (encontrados: $ddlFkPairs)");
-    check($ddlUniques === 28, "28 índices UNIQUE en el DDL (encontrados: $ddlUniques)");
+    check(count($ddl) === 30, sprintf('30 tablas en el DDL (encontradas: %d)', count($ddl)));
+    check($ddlColumns === 267, "267 columnas en el DDL (encontradas: $ddlColumns)");
+    check($ddlFks === 65, "65 FK en el DDL (encontradas: $ddlFks)");
+    check($ddlFkPairs === 83, "83 pares de columnas en las FK (encontrados: $ddlFkPairs)");
+    check($ddlUniques === 30, "30 índices UNIQUE en el DDL (encontrados: $ddlUniques)");
     check($ddlCompositePks === 6, "6 PK compuestas en el DDL (encontradas: $ddlCompositePks)");
 
     $mappedColumns = array_sum(array_map(static fn (string $c): int => count($c::metadata()->columns), $entities));
     $mappedFks = array_sum(array_map(static fn (string $c): int => count($c::metadata()->foreignKeys), $entities));
-    check(array_keys($entities) === array_keys($ddl), 'EntityMap cubre las 29 tablas en el orden del DDL');
-    check($mappedColumns === 254, "254 columnas mapeadas (mapeadas: $mappedColumns)");
-    check($mappedFks === 61, "61 FK registradas como restricciones (registradas: $mappedFks)");
+    check(array_keys($entities) === array_keys($ddl), 'EntityMap cubre las 30 tablas en el orden del DDL');
+    check($mappedColumns === 267, "267 columnas mapeadas (mapeadas: $mappedColumns)");
+    check($mappedFks === 65, "65 FK registradas como restricciones (registradas: $mappedFks)");
 
     // -----------------------------------------------------------
     Report::section('Metadatos contra el DDL');

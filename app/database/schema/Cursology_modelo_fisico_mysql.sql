@@ -613,12 +613,16 @@ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 
 -- chat
 -- Conversacion por curso entre estudiante e instructor propietario; PHP valida los roles.
+-- *_last_read_at: ultima lectura de cada participante (mensajes no leidos); en bases ya
+-- creadas se agregan con app/database/migrations/2026_11_chat_read.sql.
 CREATE TABLE `chat` (
 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   course_id BIGINT UNSIGNED NOT NULL,
   instructor_id BIGINT UNSIGNED NOT NULL,
   student_id BIGINT UNSIGNED NOT NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  student_last_read_at DATETIME(6) NULL,
+  instructor_last_read_at DATETIME(6) NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_participants (course_id, instructor_id, student_id),
   KEY ix_chat_student (student_id, created_at),
@@ -673,6 +677,44 @@ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   CONSTRAINT fk_message_reaction_target FOREIGN KEY (message_id) REFERENCES message (id),
   CONSTRAINT fk_message_reaction_user FOREIGN KEY (reacted_by) REFERENCES app_user (id),
   CONSTRAINT fk_message_reaction_reaction FOREIGN KEY (reaction_id) REFERENCES reaction (id)
+) ENGINE=InnoDB;
+
+-- content_report
+-- Reportes de alumnos e instructores sobre comentarios y opiniones, para la cola de moderacion.
+-- Un reporte por usuario y contenido. status pasa a resolved (el contenido se oculto o su autor
+-- lo elimino) o dismissed (el admin lo reviso y lo dejo visible). En bases ya creadas se agrega
+-- con app/database/migrations/2026_11_content_report.sql.
+CREATE TABLE `content_report` (
+id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  target_type VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  comment_id BIGINT UNSIGNED NULL,
+  opinion_id BIGINT UNSIGNED NULL,
+  reported_by BIGINT UNSIGNED NOT NULL,
+  reason_code VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  details VARCHAR(500) NULL,
+  reported_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  status VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'pending',
+  resolved_by BIGINT UNSIGNED NULL,
+  resolved_at DATETIME(6) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_report_comment_user (comment_id, reported_by),
+  UNIQUE KEY uq_report_opinion_user (opinion_id, reported_by),
+  KEY ix_report_status (status, reported_at),
+  CONSTRAINT fk_report_comment FOREIGN KEY (comment_id) REFERENCES chapter_comment (id),
+  CONSTRAINT fk_report_opinion FOREIGN KEY (opinion_id) REFERENCES course_opinion (id),
+  CONSTRAINT fk_report_user FOREIGN KEY (reported_by) REFERENCES app_user (id),
+  CONSTRAINT fk_report_resolver FOREIGN KEY (resolved_by) REFERENCES app_user (id),
+  CONSTRAINT ck_report_target CHECK (
+    (target_type = 'comment' AND comment_id IS NOT NULL AND opinion_id IS NULL)
+    OR (target_type = 'opinion' AND opinion_id IS NOT NULL AND comment_id IS NULL)),
+  CONSTRAINT ck_report_reason CHECK (reason_code IN ('spam', 'offensive', 'answers', 'other')),
+  CONSTRAINT ck_report_details CHECK (
+    (details IS NULL OR CHAR_LENGTH(TRIM(details)) > 0)
+    AND (reason_code <> 'other' OR details IS NOT NULL)),
+  CONSTRAINT ck_report_status CHECK (status IN ('pending', 'resolved', 'dismissed')),
+  CONSTRAINT ck_report_resolution CHECK (
+    (status = 'pending' AND resolved_by IS NULL AND resolved_at IS NULL)
+    OR (status <> 'pending' AND resolved_by IS NOT NULL AND resolved_at IS NOT NULL))
 ) ENGINE=InnoDB;
 
 -- Fin del esquema. Catalogos y primer administrador se crean desde un bootstrap PHP.

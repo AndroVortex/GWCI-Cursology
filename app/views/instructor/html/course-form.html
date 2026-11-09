@@ -18,6 +18,11 @@ $pricingHelp = [
 ];
 ?>
 <form class="panel-body course-form" id="course-form" data-course-id="<?= e($formCourse?->id()) ?>" novalidate>
+    <?php if ($activeCategories === [] && $isNewCourse): ?>
+        <div class="notice notice-warning" role="note">
+            <p>El administrador aún no ha creado categorías: sin al menos una no puedes crear el curso.</p>
+        </div>
+    <?php endif; ?>
     <div class="form-alert" role="alert" data-form-alert hidden></div>
 
     <div class="form-field">
@@ -63,7 +68,7 @@ $pricingHelp = [
         </div>
     </div>
 
-    <fieldset class="form-field fieldset-reset">
+    <fieldset class="form-field fieldset-reset" data-field="categorias">
         <legend class="form-label">Categorías</legend>
         <?php if ($activeCategories === []): ?>
             <p class="form-hint">El administrador aún no ha creado categorías; sin al menos una no se puede guardar el curso.</p>
@@ -116,6 +121,6 @@ $pricingHelp = [
         <?php if ($isNewCourse): ?>
             <a class="btn btn-ghost" href="?view=dashboard">Cancelar</a>
         <?php endif; ?>
-        <button type="submit" class="btn btn-primary"><?= $isNewCourse ? 'Crear borrador' : 'Guardar cambios' ?></button>
+        <button type="submit" class="btn btn-primary"<?= $isNewCourse && $activeCategories === [] ? ' disabled' : '' ?>><?= $isNewCourse ? 'Crear borrador' : 'Guardar cambios' ?></button>
     </div>
 </form>

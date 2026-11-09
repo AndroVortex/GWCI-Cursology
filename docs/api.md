@@ -85,7 +85,7 @@ Respuestas:
 | 401 | `INVALID_CREDENTIALS` | Email inexistente o contraseña incorrecta (mismo mensaje y mismo tiempo de respuesta). |
 | 422 | `VALIDATION_FAILED` | Falta el email o la contraseña. |
 | 423 | `ACCOUNT_LOCKED` | La cuenta se bloqueó por 3 contraseñas incorrectas **consecutivas** (en este intento o antes). Solo un administrador la reactiva. |
-| 403 | `ACCOUNT_UNAVAILABLE` | La cuenta está dada de baja o baneada. |
+| 403 | `ACCOUNT_UNAVAILABLE` | La cuenta está dada de baja ("Esta cuenta está dada de baja…") o suspendida por un admin ("Esta cuenta está suspendida…"). El mensaje dice cuál. |
 
 Un login correcto reinicia el contador de fallos. Todos los intentos quedan en `login_attempt`, y el bloqueo, en `user_account_event`.
 
@@ -119,8 +119,11 @@ Requieren sesión y `X-CSRF-Token`.
 | `POST /api/users/me/avatar` | `multipart/form-data`, campo `foto` (JPG, PNG o WEBP, 5 MB) | `200 {"data": {"user"}}`; la foto anterior se borra de Cloudinary |
 | `DELETE /api/users/me/avatar` | — | `200 {"data": {"user"}}` con el avatar por defecto |
 | `PUT /api/users/me/password` | JSON: `current_password, new_password, confirm_password` | `204`; la sesión se regenera |
+| `POST /api/users/me/deactivate` | JSON: `password` (la actual) y `motivo?` (hasta 500) | `200 {"data": {"deactivated": true}}`; la cuenta queda dada de baja y la sesión se cierra |
 
-Errores: `422 VALIDATION_FAILED` por campo (contraseña actual incorrecta va en `current_password`), `409 EMAIL_TAKEN` en `email`, `502 MEDIA_UPLOAD_FAILED` / `503 MEDIA_UNAVAILABLE` si Cloudinary falla o no está configurado.
+Errores: `422 VALIDATION_FAILED` por campo (contraseña actual incorrecta va en `current_password` o, al darse de baja, en `password`), `409 EMAIL_TAKEN` en `email`, `403 ADMIN_CANNOT_DEACTIVATE` (un admin no se da de baja desde el perfil), `502 MEDIA_UPLOAD_FAILED` / `503 MEDIA_UNAVAILABLE` si Cloudinary falla o no está configurado.
+
+**Dar de baja la cuenta:** se conservan sus cursos, compras, certificados y lo que publicó, pero ya no inicia sesión (`403 ACCOUNT_UNAVAILABLE`). Solo un admin la reactiva desde "Cuentas". Si es instructor, sus cursos salen del catálogo y no se venden; sus alumnos conservan el acceso.
 
 ### Categorías
 
@@ -247,7 +250,7 @@ Sin sesión. Solo muestra cursos **publicados y activos**; un borrador o un curs
 ```json
 {"data": {"courses": [{"id": "4", "title": "...", "coverImage": "https://...", "instructor": "Ana López",
   "categories": ["Desarrollo web"], "pricingMode": "niveles", "fullCoursePrice": null, "levelPriceTotal": "199.00",
-  "currency": "MXN", "levels": 1, "chapters": 2, "publishedAt": "..."}], "total": 1, "page": 1, "pages": 1,
+  "currency": "MXN", "levels": 1, "chapters": 2, "ratingAvg": "4.5", "ratingCount": 12, "publishedAt": "..."}], "total": 1, "page": 1, "pages": 1,
   "filters": {"q": "php", "categoria": null, "orden": "recientes", "pagina": 1}}}
 ```
 
@@ -255,6 +258,8 @@ Sin sesión. Solo muestra cursos **publicados y activos**; un borrador o un curs
 - El curso con su instructor (nombre, avatar y descripción) y sus categorías.
 - Sus niveles, cada uno con su precio, su video de presentación (público), su duración y sus capítulos (`{title, sortOrder, isExam, durationSeconds, questionCount}`).
 - Nunca trae las URIs del contenido ni las preguntas de los exámenes.
+
+`ratingAvg` (texto con 1 decimal, `null` sin calificaciones) y `ratingCount` vienen en las tarjetas y en el detalle. No cuentan las estrellas de quien tiene su opinión oculta.
 
 **Vistas:**
 - `?view=home`: categorías y cursos recientes.
@@ -336,6 +341,227 @@ Alumno + CSRF. El importe **siempre lo calcula la base** (`sp_purchase_start`); 
 
 `ready` es `false` para PayPal mientras falten las credenciales de Sandbox: aunque esté activa, no se ofrece. La vista es `?view=payment-methods`. Errores: `403 NOT_ADMIN`, `422` en `codigo` o `activa`.
 
+### Certificados
+
+Uno por alumno y curso terminado. Se emite la primera vez que el alumno lo pide: la base congela los datos, el servidor genera el PDF (PHP puro) y lo guarda en Cloudinary como archivo protegido. Diseño, datos congelados y `APP_URL`: [certificates.md](certificates.md).
+
+| Endpoint | Acceso | Respuesta |
+|---|---|---|
+| `POST /api/student/courses/{id}/certificate` | Alumno + CSRF | `200 {"data": {"certificate": {id, courseId, code, studentName, courseTitle, certifierName, completedAt, issuedAt, downloadUrl, verifyUrl}}}`. Pedirlo otra vez devuelve el mismo |
+| `GET /api/student/certificates/{id}/download` | Alumno, dueño | El PDF con `Content-Type: application/pdf` y `Content-Disposition: attachment; filename="Certificado - <curso>.pdf"` |
+| `GET /api/certificates/verify?code=` | Público | `200 {"data": {"certificate": {code, studentName, courseTitle, certifierName, completedAt, issuedAt}}}` |
+
+- `downloadUrl` es la ruta de descarga de la app; no caduca y solo funciona con la sesión del alumno.
+- El código se acepta en mayúsculas o con espacios alrededor. Solo se verifican los certificados emitidos.
+- Errores:
+  - `403 NOT_ENROLLED`;
+  - `409 COURSE_NOT_COMPLETED`;
+  - `404 CERTIFICATE_NOT_FOUND` (código que no existe, certificado pendiente o de otro alumno);
+  - `502 MEDIA_UPLOAD_FAILED` o `503 MEDIA_UNAVAILABLE` si Cloudinary falla. El certificado queda pendiente y el siguiente intento lo vuelve a generar con los mismos datos.
+
+**Vistas:**
+- **Reproductor:** con el curso terminado, "Obtener certificado".
+- **"Mi aprendizaje":** el panel "Certificados", con "Descargar" y "Verificar", y la cifra real.
+- **`?view=verify&code=`:** página pública. Al abrirla con un código ya muestra el resultado; el botón "Verificar" sirve para revisar otro código.
+
+### Calificaciones y opiniones
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/catalog/courses/{id}/reviews?pagina=` | Público (con sesión marca tu reacción) | — | `{"data": {summary: {ratingAvg, ratingCount, stars: {"5": n, ..., "1": n}}, reviews: [{id, opinion, rate, author, avatar, commentedAt, edited, mine, reported, reactions}], total, page, pages}}`, 10 por página. `mine` (es tuya) y `reported` (ya la reportaste) son `false` para visitantes |
+| `PUT /api/student/courses/{id}/review` | Alumno + CSRF | `{calificacion: 1..5, opinion?: string}` | `200 {"data": {"review": {canReview, rate, opinion, hidden, hiddenReason}}}` |
+| `POST /api/opinions/{id}/hide` | Instructor o admin + CSRF | `{motivo}` (de 3 a 500 caracteres) | `200 {"data": {"opinion": {id, active: false, reason}}}` |
+
+- **Quién califica:** solo quien terminó el curso, y puede editar. La opinión (hasta 2000 caracteres) es opcional; enviarla vacía o no enviarla la quita.
+- **Quién oculta:** solo el instructor del curso o un admin. Para cualquier otro, `404 OPINION_NOT_FOUND`. Ocultarla otra vez no cambia el motivo.
+- **Opinión oculta:**
+  - deja de listarse y sus estrellas dejan de contar en el promedio;
+  - su autor ve el motivo y ya no puede cambiar el texto (`409 OPINION_HIDDEN`), pero sí sus estrellas enviando el mismo texto.
+- **Errores:**
+  - `403 NOT_ENROLLED`;
+  - `409 COURSE_NOT_COMPLETED`;
+  - `422 VALIDATION_FAILED` en `calificacion`, `opinion` o `motivo`;
+  - `422 INVALID_RATE` (lo rechaza el SP);
+  - `404 COURSE_NOT_FOUND` (lista de un curso no publicado o dado de baja).
+
+**Vistas:**
+- **Página del curso, sección "Opiniones":**
+  - el promedio y las barras por estrella;
+  - el formulario "Tu calificación" para quien terminó;
+  - las opiniones, con "Ver más";
+  - "Ocultar" para el instructor del curso o el admin.
+- **Tarjetas del catálogo:** "4.5 ★ (12)" o "Sin calificaciones".
+
+### Reportes
+
+Solo lectura. Los importes son la suma de las compras completadas (sin comisión, en MXN); las inscripciones de $0 no suman. Las calificaciones no cuentan las estrellas de quien tiene su opinión oculta.
+
+| Endpoint | Acceso | Respuesta |
+|---|---|---|
+| `GET /api/instructor/sales?desde=&hasta=&categoria=&estado=` | Instructor | `{overview: {revenueTotal, studentTotal, ratingAvg, ratingCount}, courses: [...], byMethod: [{method, purchases, total}], revenueTotal, filters, recentReviews: [...]}` |
+| `GET /api/instructor/courses/{id}/students` | Instructor, dueño del curso | `{course: {id, title, active, chapters, students, avgProgress, revenue, currency, enrollments: [{userId, name, email, enrolledAt, completedAt, progress, paid, paymentMethods}]}}` |
+| `GET /api/admin/reports` | Admin | `{overview: {activeStudents, activeInstructors, publishedCourses}, instructors: [{id, email, name, joinedAt, publishedCourses, earnings}], students: [{id, email, name, joinedAt, enrolledCourses, completedCourses, completedPercent}]}` |
+
+**Ventas del instructor:**
+- Solo cursos que alguna vez se publicaron.
+- Cada curso: `{id, title, active, createdAt, students, avgProgress, revenue, currency, ratingAvg, ratingCount}`.
+- Filtros:
+  - `desde`/`hasta`: fecha de creación del curso (`AAAA-MM-DD`, días completos);
+  - `categoria`: id;
+  - `estado=activos`: sin los cursos dados de baja.
+
+  Los filtros inválidos se ignoran, y las fechas al revés se acomodan.
+- **Avance** (`avgProgress`, `progress`): capítulos terminados / capítulos del curso × 100, con 1 decimal. El del curso es el promedio entre sus alumnos.
+- **`recentReviews`:** las últimas 5 opiniones de sus cursos, incluidas las ocultas (`hidden`, `reason`).
+- **`paymentMethods`** vacío significa que el alumno entró gratis.
+
+**Reportes del admin:** solo cuentas activas y sin ban. `publishedCourses` cuenta los cursos activos y publicados; `completedPercent` es terminados / inscritos × 100.
+
+**Errores:** `403 NOT_INSTRUCTOR`, `403 NOT_ADMIN`, `404 COURSE_NOT_FOUND` (curso que no existe o es de otro instructor). La API responde `403 FORBIDDEN` si el rol no corresponde.
+
+**Vistas:**
+- **`?view=dashboard`** del instructor:
+  - las cifras de ingresos y calificación promedio;
+  - "Ventas", con filtros, el total por forma de pago y "Ver detalle";
+  - "Opiniones recientes".
+- **`?view=course-sales&id=N`** (solo el instructor del curso; si no, redirige a su panel): los alumnos del curso con su inscripción, avance, si terminó, lo que pagaron y la forma de pago.
+- **`?view=dashboard`** del admin: las cifras de la plataforma y las pestañas "Instructores" y "Alumnos".
+
+### Mensajes
+
+Una conversación por curso entre el alumno inscrito y el instructor dueño del curso. Solo texto (de 1 a 2000 caracteres, sin los espacios de los lados); un mensaje puede responder a otro de la misma conversación. Todas las rutas piden sesión de **alumno o instructor**; un admin recibe `403 FORBIDDEN`.
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/chats` | Alumno o instructor | — | `{"data": {chats: [{id, url, courseId, courseTitle, courseActive, other: {name, avatar}, lastMessage, lastActivityAt, lastActivityLabel, unread}], unreadTotal}}` |
+| `POST /api/chats` | Alumno o instructor + CSRF | Alumno: `{curso}`. Instructor: `{curso, alumno}` | `201` si la crea o `200` si ya existía: `{"data": {"chat": {id, url}}}` |
+| `GET /api/chats/{id}/messages?after=` | Participante | — | `{"data": {chat: {id, courseId, courseTitle, courseActive, other}, messages: [...], lastMessageId, unreadTotal}}`. Sin `after`, los últimos 100; con `after`, solo los posteriores a ese id. La marca leída |
+| `POST /api/chats/{id}/messages` | Participante + CSRF | `{texto, responde_a?}` | `201 {"data": {"message": {...}}}` |
+
+- **Cada mensaje:** `{id, mine, author, avatar, text, sentAt, sentAtLabel, replyTo, replyAuthor, replyExcerpt, reactions}` (ver "Reacciones"). Las reacciones a un mensaje ya cargado se ven al recargar: el sondeo solo trae mensajes nuevos. `sentAtLabel` ya viene formateado en hora de Monterrey ("25 oct 2026, 18:05"). `replyExcerpt` viene vacío si el mensaje citado se dio de baja.
+- **`text` es texto plano:** la vista lo pone con `textContent` y respeta los saltos de línea; nunca se interpreta como HTML.
+- **No leídos:** los mensajes del otro participante posteriores a la última vez que abriste la conversación. Abrirla (o recibir mensajes con ella abierta) la marca leída, y enviar también.
+- **El curso dado de baja** no cierra la conversación: `courseActive` es `false`.
+- **Errores:**
+  - `403 NOT_ENROLLED` (el alumno no está inscrito);
+  - `422 STUDENT_NOT_ENROLLED` en `alumno` (el instructor eligió a alguien que no está inscrito);
+  - `403 NOT_ALLOWED` (otro instructor);
+  - `404 COURSE_NOT_FOUND`;
+  - `404 CHAT_NOT_FOUND` (no existe o no participas en ella);
+  - `404 MESSAGE_NOT_FOUND` (`responde_a` no es de esta conversación);
+  - `422 VALIDATION_FAILED` en `texto`, `responde_a`, `curso`, `alumno` o `after`.
+
+**Vistas:**
+- **`?view=messages[&chat=N]`:** la lista de conversaciones con sus no leídos y, a la derecha, la abierta: los mensajes en burbujas (los propios a la derecha), "Responder" en cada uno y el cuadro de texto (Enter envía; Shift + Enter hace un salto de línea). Con la conversación abierta, la página pide los mensajes nuevos cada 10 segundos. En pantallas chicas se ve la lista o la conversación.
+- **Menú lateral:** "Mensajes", con el número de no leídos.
+- **Página del curso:** "Escribirle al instructor" en "Sobre el instructor", solo para alumnos inscritos.
+- **Reproductor:** "Preguntar al instructor" en el índice del curso (también si el curso se dio de baja).
+- **Detalle de ventas** (`?view=course-sales`): "Escribir" en cada alumno.
+- **Paneles del alumno y del instructor:** las 3 conversaciones más recientes y "Ver todos".
+
+### Comentarios por capítulo
+
+En los capítulos de video (los exámenes no llevan comentarios). Comentan el alumno con acceso al nivel del capítulo (también si el curso se dio de baja) y el instructor dueño del curso. Texto de 1 a 2000 caracteres, sin los espacios de los lados. Las respuestas son de un solo nivel: responder a una respuesta la cuelga del mismo comentario principal.
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/chapters/{id}/comments?pagina=` | Alumno con acceso o instructor del curso | — | `{"data": {comments: [...], total, page, pages}}`, 10 principales por página, del más nuevo al más antiguo |
+| `POST /api/chapters/{id}/comments` | Ídem + CSRF | `{texto, responde_a?}` | `201 {"data": {"comment": {...}}}` |
+| `PATCH /api/comments/{id}` | El autor + CSRF | `{texto}` | `200 {"data": {"comment": {...}}}`, queda `edited: true` |
+| `DELETE /api/comments/{id}` | El autor + CSRF | — | `200 {"data": {"comment": {..., removed: true}}}` |
+| `POST /api/comments/{id}/hide` | Instructor del curso o admin + CSRF | `{motivo}` (de 3 a 500 caracteres) | `200 {"data": {"comment": {..., removed: true}}}` |
+| `GET /api/instructor/courses/{id}/comments?capitulo=&estado=sin_responder&pagina=` | Instructor, dueño del curso | — | `{"data": {course: {id, title, active}, chapters: [{id, title, levelSort, chapterSort, commentCount, unansweredCount}], comments: [...], filters, total, page, pages}}`, 20 por página |
+
+- **Cada comentario:** `{id, chapterId, parentId, author, avatar, isInstructor, text, removed, edited, commentedAt, commentedAtLabel, replyCount, replies: [...], reactions, reported, can: {reply, edit, delete, hide, report}}`. `reported` dice si ya lo reportaste. En la vista del instructor también `answered` (si ya tiene respuesta suya) y `chapterLabel` ("Nivel 1 · 1.2 Variables").
+- **`can`** dice qué puede hacer quien consulta: responder (comentarios activos), editar y eliminar (el autor), ocultar (el instructor del curso, en los de otros) y reportar (los demás, en los de otros). La vista no tiene que saber de permisos.
+- **Eliminado u oculto:** sin texto (`text: null`). Si es principal y tiene respuestas visibles, se lista como "Comentario eliminado"; si no, deja de listarse. Ya no se edita ni se le responde directo (sí a sus respuestas).
+- **Sin responder:** comentarios principales activos de alumnos sin una respuesta activa del instructor.
+- **Errores:**
+  - `403 NO_LEVEL_ACCESS` (sin acceso al nivel del capítulo);
+  - `409 NO_COMMENTS_ON_EXAM`;
+  - `404 CHAPTER_NOT_FOUND`, `404 COURSE_NOT_FOUND` (vista del instructor de otro curso);
+  - `404 COMMENT_NOT_FOUND` (no existe, ya no está activo, no es tuyo, o `responde_a` es de otro capítulo);
+  - `422 VALIDATION_FAILED` en `texto`, `responde_a` o `motivo`.
+
+**Vistas:**
+- **Reproductor:** el panel "Comentarios" debajo de "Recursos", con el cuadro para comentar, los hilos, "Responder", "Editar", "Eliminar", las reacciones y "Ver más comentarios".
+- **`?view=course-comments&id=N`** (solo el instructor del curso): filtros por capítulo y "Sin responder", los hilos agrupados por capítulo con "Responder", "Ocultar" (con motivo) y las reacciones. Se llega desde "Comentarios" en el detalle de ventas y en cada curso de "Ventas".
+- **Panel del instructor:** "Comentarios recientes", los últimos 5 de sus alumnos con "Sin responder" y el enlace a su hilo.
+
+### Reacciones
+
+Una reacción por persona en cada comentario, opinión o mensaje: elegir otra la cambia y mandar `null` la quita. El catálogo lo administra el admin; una reacción desactivada deja de ofrecerse y de contarse.
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET /api/reactions` | Público | — | `{"data": {"reactions": [{id, emoji, name}]}}`, las activas en el orden en que se ofrecen |
+| `PUT /api/comments/{id}/reaction` | Quien puede ver el comentario + CSRF | `{reaccion: id \| null}` | `200 {"data": {"reactions": {...}}}` |
+| `PUT /api/opinions/{id}/reaction` | Alumno o instructor + CSRF | `{reaccion: id \| null}` | Ídem |
+| `PUT /api/messages/{id}/reaction` | Participante de la conversación + CSRF | `{reaccion: id \| null}` | Ídem |
+| `GET /api/admin/reactions` | Admin | — | `{"data": {"reactions": [{id, emoji, name, active, updatedAt}]}}` |
+| `POST /api/admin/reactions` | Admin + CSRF | `{emoji, nombre}` | `201 {"data": {"reaction": {...}}}` |
+| `PATCH /api/admin/reactions/{id}` | Admin + CSRF | `{emoji, nombre}` y/o `{activa}` | `200 {"data": {"reaction": {...}}}` |
+| `POST /api/admin/reactions/defaults` | Admin + CSRF | — | `201` con `{added: [...]}`, las sugeridas que faltaban (👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me sorprende, 💡 Me sirvió); `200` con `added: []` si ya estaban |
+
+- **`reactions`** (en comentarios, opiniones, mensajes y en la respuesta de cada `PUT`): `{items: [{id, emoji, name, total, mine}], mine}`. `mine` es el id de tu reacción o `null`.
+- **Emoji:** de 1 a 8 caracteres, solo símbolos (con sus modificadores, como el tono de piel o la variante de "❤️"), sin letras, números ni espacios. **Nombre:** de 1 a 60 caracteres, único sin importar mayúsculas ni acentos.
+- **Errores:**
+  - `404 REACTION_NOT_FOUND` (no existe o está desactivada);
+  - `404 COMMENT_NOT_FOUND`, `404 OPINION_NOT_FOUND` (oculta o de un curso no publicado), `404 MESSAGE_NOT_FOUND` (no participas);
+  - `409 REACTION_NAME_TAKEN` en `nombre`;
+  - `403 NOT_ADMIN`;
+  - `422 VALIDATION_FAILED` en `reaccion` (falta el campo o el id no es válido), `emoji`, `nombre` o `activa`.
+
+**Vistas:**
+- **El selector:** los emojis con su número (la tuya resaltada) y un botón para elegir del catálogo. Sin reacciones activas en el catálogo, el botón no aparece.
+- **Opiniones:** los visitantes y el admin ven los números, pero no reaccionan.
+- **`?view=reactions`** (admin): crear, editar, activar o desactivar y "Agregar las sugeridas". Se llega desde "Administrar" en el panel del admin.
+
+### Reportes y moderación
+
+Alumnos e instructores reportan comentarios y opiniones de otros; el admin revisa la cola y todo el contenido. Para ocultar se usan las rutas de siempre (`POST /api/comments/{id}/hide`, `POST /api/opinions/{id}/hide`), que el admin ya puede usar.
+
+| Endpoint | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `POST /api/comments/{id}/report` | Alumno o instructor que ve el comentario + CSRF | `{motivo: spam\|offensive\|answers\|other, detalle?}` | `201 {"data": {reported: true, created: true}}`; `200` con `created: false` si ya lo habías reportado |
+| `POST /api/opinions/{id}/report` | Alumno o instructor + CSRF | Ídem | Ídem |
+| `GET /api/admin/moderation/reports?pagina=` | Admin | — | `{"data": {reports: [{type, id, text, author: {name, email, avatar}, course, chapter, reportCount, reasons, reasonsSummary, topReason, lastDetails, lastReportedAt}], total, reportTotal, page, pages}}`, 20 por página |
+| `GET /api/admin/moderation/content?tipo=&estado=&q=&pagina=` | Admin | — | `{"data": {items: [{type, id, text, active, status, removedByAuthor, restorable, author, course, chapter, reportCount, createdAt}], filters, total, page, pages}}` |
+| `POST /api/admin/comments/{id}/dismiss-reports` y `POST /api/admin/opinions/{id}/dismiss-reports` | Admin + CSRF | — | `{"data": {dismissed: n}}` |
+| `POST /api/admin/comments/{id}/restore` y `POST /api/admin/opinions/{id}/restore` | Admin + CSRF | — | `{"data": {restored: true}}` |
+
+- **Motivos:** "Spam o publicidad" (`spam`), "Ofensivo o acoso" (`offensive`), "Comparte respuestas del examen" (`answers`) y "Otro" (`other`). Con "Otro", `detalle` es obligatorio; en los demás es opcional. Siempre de 3 a 500 caracteres.
+- **Un reporte por persona y contenido.** No se reporta lo propio, ni lo oculto o eliminado.
+- **La cola** agrupa los reportes pendientes por contenido, del más reciente al más antiguo. Ocultar el contenido (el admin o el instructor del curso) o que su autor lo elimine resuelve sus reportes; "Descartar" los da por revisados y el contenido sigue visible.
+- **Todo el contenido:** `tipo` = `comment` u `opinion`; `estado` = `visibles` u `ocultos`; `q` busca en el texto, el nombre y el email del autor (hasta 100 caracteres; `%` y `_` son literales).
+- **Restaurar** vuelve a mostrar lo que se ocultó. Lo que eliminó su propio autor no se restaura.
+- **Errores:** `409 CANNOT_REPORT_OWN`, `422 INVALID_REPORT` / `VALIDATION_FAILED` en `motivo` o `detalle`, `404 COMMENT_NOT_FOUND` / `OPINION_NOT_FOUND`, `409 NOT_RESTORABLE`, `403 NOT_ADMIN`.
+
+**Vistas:**
+- **"Reportar"** en los comentarios de otros (reproductor) y en las opiniones de otros (página del curso); abre un formulario con el motivo y el detalle y luego dice "Reportado". El instructor del curso no reporta: oculta directo.
+- **`?view=moderation`** (admin): las pestañas "Reportes pendientes" (con "Ocultar", que propone el motivo más repetido, y "Descartar") y "Todo el contenido" (con filtros, "Ocultar" y "Restaurar").
+- **Panel del admin:** la cifra "Reportes pendientes" y el panel "Moderación" con los 3 más recientes.
+
+### Cuentas (admin)
+
+| Endpoint | Cuerpo | Respuesta |
+|---|---|---|
+| `GET /api/admin/users?q=&rol=&estado=&pagina=` | — | `{"data": {users: [{id, fullName, email, avatar, role, status, banned, banReason, createdAt, lastLoginAt, lastEvent}], filters, total, page, pages}}`, 20 por página |
+| `POST /api/admin/users/{id}/ban` | `{motivo}` (de 3 a 500) | `{"data": {"user": {id, status, banned, banReason}}}` |
+| `POST /api/admin/users/{id}/unban` | — | Ídem |
+| `POST /api/admin/users/{id}/reactivate` | — | Ídem; una cuenta bloqueada o dada de baja vuelve a estar activa |
+| `GET /api/admin/users/{id}/events` | — | `{"data": {events: [{id, type, label, reason, actor, createdAt, createdAtLabel}]}}`, del más reciente al más antiguo |
+
+Todas piden sesión de admin; las escrituras, `X-CSRF-Token`.
+
+- **Filtros:** `q` busca en el email y el nombre; `rol` = `alumno`, `instructor` o `admin`; `estado` = `activas` (activas y sin ban), `bloqueadas`, `de_baja` o `suspendidas`.
+- **Suspender (ban):** la cuenta no inicia sesión y sus sesiones abiertas se cortan en la siguiente petición. Si es instructor, sus cursos salen del catálogo y no se venden, pero sus alumnos conservan el acceso. Todo vuelve al quitar la suspensión. No se suspende a un administrador.
+- **Reactivar** no quita la suspensión: son independientes.
+- **Historial:** `actor` es el admin que actuó, "La propia cuenta" (baja desde el perfil) o "Sistema" (bloqueo automático).
+- **Errores:** `404 USER_NOT_FOUND`, `409 CANNOT_BAN_ADMIN`, `409 ALREADY_BANNED`, `409 NOT_BANNED`, `409 USER_ALREADY_ACTIVE`, `422 VALIDATION_FAILED` en `motivo`.
+
+**Vista `?view=accounts`:** búsqueda y filtros, las insignias de estado ("Activa", "Bloqueada", "Dada de baja", "Suspendida"), "Suspender" con motivo, "Quitar suspensión", "Reactivar" e "Historial". Se llega desde "Administrar cuentas" en el panel del admin.
+
 ### `GET /api/admin/users/locked`
 
 Cuentas bloqueadas por 3 contraseñas incorrectas consecutivas, de la más reciente a la más antigua. Requiere sesión de **admin** (`RequireAuth` + `RequireRole`).
@@ -380,7 +606,10 @@ CLOUDINARY_API_SECRET=
 APP_ALLOWED_ORIGINS=
 PAYPAL_SANDBOX_CLIENT_ID=
 PAYPAL_SANDBOX_CLIENT_SECRET=
+APP_URL=
 ```
+
+`APP_URL` (opcional) es la dirección pública que se imprime en el enlace de verificación de los certificados; vacía, se usa la dirección con la que se abrió la página.
 
 Las credenciales de PayPal son **solo de Sandbox** (ver [payments.md](payments.md)); sin ellas, PayPal no se ofrece y la tarjeta simulada sigue funcionando.
 
@@ -396,20 +625,37 @@ php tests/verify_model_mapping.php
 php tests/verify_auth_unit.php
 php tests/verify_profile_courses_unit.php
 php tests/verify_learning_unit.php
+php tests/verify_certificate_unit.php
+php tests/verify_reports_unit.php
+php tests/verify_messages_unit.php
+php tests/verify_comments_unit.php
+php tests/verify_moderation_unit.php
+php tests/verify_maintenance_unit.php
 
-# Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida)
+# Contra la base de pruebas (cursology_test, nunca la local). Créala, y vuelve a crearla cuando
+# cambien el esquema o un SP (las pruebas avisan si está desactualizada):
+php scripts/setup_test_db.php
+# Crean cuentas, categorías y cursos de prueba por corrida y dejan las formas de pago como estaban
 php tests/verify_auth_db.php
 php tests/verify_profile_courses_db.php
 php tests/verify_learning_db.php
+php tests/verify_certificate_db.php
+php tests/verify_reports_db.php
+php tests/verify_messages_db.php
+php tests/verify_comments_db.php
+php tests/verify_moderation_db.php
+php tests/verify_maintenance_db.php
 
-# Contra Cloudinary real (opcional; sube y borra archivos de prueba)
+# Contra Cloudinary real (opcional; sube y borra archivos de prueba, incluido un PDF de certificado)
 php tests/verify_cloudinary_live.php
 
-# Contra PayPal Sandbox real (opcional; crea una orden de prueba de $1.00 MXN sin pagarla)
-php tests/verify_paypal_live.php
+# Contra PayPal Sandbox por red (opcional; crea una orden de prueba de $1.00 MXN sin pagarla)
+php tests/verify_paypal_sandbox.php
 ```
 
-Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`):
+Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`). Para que esas pruebas a mano
+tampoco llenen la base local, levanta el servidor sobre la base de pruebas:
+`$env:CURSOLOGY_DB = 'test'; php -S localhost:8099 -t public` (en otra terminal, la variable no está puesta).
 
 ```powershell
 curl.exe -s -c jar.txt -b jar.txt http://localhost:8000/api/auth/csrf

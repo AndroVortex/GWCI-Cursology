@@ -36,6 +36,8 @@ final class PublicCourse
         public readonly ?string $instructorDescription,
         public readonly array $categories,
         public readonly array $levels,
+        public readonly ?string $ratingAvg,
+        public readonly int $ratingCount,
     ) {
     }
 
@@ -94,6 +96,8 @@ final class PublicCourse
                 return ['id' => $c->id('id'), 'name' => $c->string('name', 100)];
             }, $categoryRows),
             $levels,
+            $r->nullableDecimal('rating_avg', 3, 1),
+            $r->intUnsigned('rating_count'),
         );
     }
 

@@ -1,0 +1,118 @@
+<?php
+/**
+ * Detalle de ventas de un curso del instructor: sus alumnos, avance, lo que pagaron y cómo.
+ *
+ * @var \App\Models\Dto\CourseSalesDetail $courseSales
+ */
+$detail = $courseSales;
+?>
+<p class="breadcrumb"><a href="?view=dashboard#ventas">Panel del instructor</a> / Ventas / <?= e($detail->title) ?></p>
+<div class="form-alert page-alert" role="status" data-page-alert hidden></div>
+
+<div class="page-header">
+    <div class="course-cell">
+        <img class="course-thumb" src="<?= e($detail->coverImage) ?>" alt="">
+        <div>
+            <h1 class="page-title"><?= e($detail->title) ?></h1>
+            <p class="page-subtitle">
+                <?= $detail->chapterCount ?> capítulo(s)
+                <?= $detail->publishedAt !== null ? '· Publicado el ' . e(format_date($detail->publishedAt)) : '· Borrador' ?>
+                <?= $detail->active ? '' : '· Dado de baja' ?>
+            </p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="?view=course-comments&amp;id=<?= e($detail->id) ?>">Comentarios</a>
+        <a class="btn btn-secondary" href="?view=course-editor&amp;id=<?= e($detail->id) ?>">Editar curso</a>
+        <?php if ($detail->publishedAt !== null && $detail->active): ?>
+            <a class="btn btn-ghost" href="?view=course&amp;id=<?= e($detail->id) ?>">Ver página pública</a>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat">
+        <p class="stat-label">Alumnos inscritos</p>
+        <p class="stat-value"><?= $detail->studentCount ?></p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Avance promedio</p>
+        <p class="stat-value"><?= e($detail->avgProgress) ?>%</p>
+        <p class="stat-hint">Capítulos terminados / capítulos del curso</p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Ingresos</p>
+        <p class="stat-value"><?= e(format_money($detail->revenue, $detail->currency)) ?></p>
+        <p class="stat-hint">Compras completadas</p>
+    </div>
+</div>
+
+<section class="panel" aria-labelledby="course-sales-title">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="course-sales-title">Alumnos</h2>
+            <p class="panel-description">Del inscrito más reciente al primero.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Alumno</th>
+                    <th scope="col">Inscripción</th>
+                    <th scope="col" class="num">Avance</th>
+                    <th scope="col">Terminado</th>
+                    <th scope="col" class="num">Pagado</th>
+                    <th scope="col">Forma de pago</th>
+                    <th scope="col"><span class="visually-hidden">Mensaje</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($detail->students as $student): ?>
+                    <tr>
+                        <td>
+                            <div class="account-cell">
+                                <img class="account-avatar" src="<?= e($student->avatar) ?>" alt="" loading="lazy">
+                                <div>
+                                    <span><?= e($student->fullName) ?></span>
+                                    <span class="table-sub"><?= e($student->email) ?></span>
+                                </div>
+                            </div>
+                        </td>
+                        <td><?= e(format_date($student->enrolledAt)) ?></td>
+                        <td class="num">
+                            <div class="progress-cell">
+                                <div class="progress-bar" role="img" aria-label="Avance <?= e($student->progress) ?>%"><span style="width: <?= e($student->progress) ?>%"></span></div>
+                                <span><?= e($student->progress) ?>%</span>
+                            </div>
+                        </td>
+                        <td>
+                            <?php if ($student->completedAt !== null): ?>
+                                <span class="badge badge-success">Terminado</span>
+                                <span class="table-sub"><?= e(format_date($student->completedAt)) ?></span>
+                            <?php else: ?>
+                                <span class="badge">En progreso</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="num"><?= e(format_money($student->paid, $detail->currency)) ?></td>
+                        <td><?= $student->paymentMethods === [] ? 'Gratis' : e(implode(', ', $student->paymentMethods)) ?></td>
+                        <td>
+                            <button type="button" class="btn btn-secondary btn-sm" data-start-chat="<?= e($detail->id) ?>" data-student="<?= e($student->userId) ?>"
+                                    aria-label="Escribirle a <?= e($student->fullName) ?>">Escribir</button>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($detail->students === []): ?>
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <p class="empty-title">Sin alumnos todavía</p>
+                                <p class="empty-text">Cuando alguien se inscriba o compre un nivel, aparecerá aquí.</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</section>

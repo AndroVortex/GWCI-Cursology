@@ -1,0 +1,132 @@
+/* Vistas del admin: moderación (?view=moderation) y cuentas (?view=accounts). */
+.tab-links {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-bottom: 16px;
+    padding: 3px;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+}
+
+.tab-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.tab-links a:hover {
+    color: var(--text);
+    text-decoration: none;
+}
+
+.tab-links a[aria-current="page"] {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+}
+
+.moderation-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.moderation-item {
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.moderation-item:last-child {
+    border-bottom: 0;
+}
+
+.moderation-item.is-hidden .moderation-text {
+    color: var(--text-muted);
+}
+
+.moderation-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+}
+
+.moderation-meta strong {
+    color: var(--text);
+}
+
+.moderation-text {
+    margin: 0;
+    padding: 8px 12px;
+    border-left: 3px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.moderation-details {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.moderation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.moderation-hide-form,
+.account-ban-form {
+    display: grid;
+    gap: 8px;
+    max-width: 560px;
+}
+
+.moderation-hide-form .form-actions,
+.account-ban-form .form-actions {
+    justify-content: flex-start;
+    padding-top: 0;
+}
+
+.moderation-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+}
+
+.account-history {
+    display: grid;
+    gap: 6px;
+}
+
+.account-history-title {
+    margin: 0;
+    font-weight: 600;
+}
+
+.account-history-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.875rem;
+}

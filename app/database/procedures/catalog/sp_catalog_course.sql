@@ -2,12 +2,14 @@
 -- Solo datos públicos: nunca las URIs del contenido de los capítulos (los videos de
 -- presentación del curso y de los niveles sí son públicos).
 -- Resultados (en este orden):
---   1) el curso con su instructor (nombre completo, avatar y descripción)
+--   1) el curso con su instructor (nombre completo, avatar y descripción) y su calificación
+--      (rating_avg con 1 decimal o NULL, rating_count; sin las estrellas de opiniones ocultas)
 --   2) categorías activas (id, name)
 --   3) niveles por orden (id, title, description, onboarding_video, sort_order, cost)
 --   4) capítulos por nivel y orden (id, course_level_id, title, sort_order, is_test,
 --      duration_seconds del video principal, question_count de los exámenes)
--- Errores: COURSE_NOT_FOUND (no existe, es borrador o está dado de baja).
+-- Errores: COURSE_NOT_FOUND (no existe, es borrador, está dado de baja o su instructor ya no
+-- está activo o tiene ban).
 
 DROP PROCEDURE IF EXISTS sp_catalog_course;
 
@@ -17,7 +19,11 @@ CREATE PROCEDURE sp_catalog_course(
     IN p_course_id BIGINT UNSIGNED
 )
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM course WHERE id = p_course_id AND active = 1 AND published_at IS NOT NULL) THEN
+    IF NOT EXISTS (
+        SELECT 1 FROM course c JOIN app_user u ON u.id = c.created_by
+         WHERE c.id = p_course_id AND c.active = 1 AND c.published_at IS NOT NULL
+           AND u.account_status = 'active' AND u.ban = 0
+    ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'COURSE_NOT_FOUND';
     END IF;
 
@@ -27,7 +33,15 @@ BEGIN
         u.id AS instructor_id,
         CONCAT_WS(' ', u.name, u.father_last_name, u.mother_last_name) AS instructor_name,
         u.avatar AS instructor_avatar,
-        u.description AS instructor_description
+        u.description AS instructor_description,
+        (SELECT CAST(ROUND(AVG(r.rate), 1) AS DECIMAL(3,1))
+           FROM course_rate r
+           LEFT JOIN course_opinion o ON o.commented_by = r.rated_by AND o.course_id = r.course_id
+          WHERE r.course_id = c.id AND (o.id IS NULL OR o.active = 1)) AS rating_avg,
+        (SELECT COUNT(*)
+           FROM course_rate r
+           LEFT JOIN course_opinion o ON o.commented_by = r.rated_by AND o.course_id = r.course_id
+          WHERE r.course_id = c.id AND (o.id IS NULL OR o.active = 1)) AS rating_count
     FROM course c
     JOIN app_user u ON u.id = c.created_by
     WHERE c.id = p_course_id;

@@ -39,6 +39,18 @@ function format_date(DateTimeInterface|string|null $date): string
     return sprintf('%d %s %s', (int) $local->format('j'), $months[(int) $local->format('n') - 1], $local->format('Y'));
 }
 
+/** Fecha y hora de 24 h, para los mensajes ("18 oct 2026, 14:05"). */
+function format_date_time(?DateTimeInterface $date): string
+{
+    if ($date === null) {
+        return '—';
+    }
+
+    $local = DateTimeImmutable::createFromInterface($date)->setTimezone(new DateTimeZone(DISPLAY_TIME_ZONE));
+
+    return format_date($local) . ', ' . $local->format('H:i');
+}
+
 /**
  * Importe con el formato de la rúbrica: símbolo, separador de miles y dos decimales
  * ("$1,249.90 MXN"). Trabaja sobre la cadena DECIMAL exacta, sin pasar por float.
@@ -65,6 +77,20 @@ function course_price_label(?string $fullCoursePrice, string $levelPriceTotal, s
         PricingMode::Bundle => format_money($fullCoursePrice, $currency),
         PricingMode::Levels => $levelPriceTotal === '0.00' ? 'Gratis' : 'Por niveles · ' . format_money($levelPriceTotal, $currency),
     };
+}
+
+/** Calificación de un curso para las tarjetas: "4.5 ★ (12)" o "Sin calificaciones". */
+function format_rating(?string $average, int $count): string
+{
+    return $average === null || $count === 0 ? 'Sin calificaciones' : sprintf('%s ★ (%d)', $average, $count);
+}
+
+/** Estrellas llenas y vacías de una calificación de 0 a 5 ("★★★★☆"). */
+function star_string(int $stars): string
+{
+    $stars = max(0, min(5, $stars));
+
+    return str_repeat('★', $stars) . str_repeat('☆', 5 - $stars);
 }
 
 /** Tamaño legible de un BIGINT UNSIGNED en bytes ("2.4 MB"). */

@@ -24,6 +24,8 @@ final class CatalogCourse
         public readonly int $levelCount,
         public readonly int $chapterCount,
         public readonly string $levelPriceTotal,
+        public readonly ?string $ratingAvg,
+        public readonly int $ratingCount,
     ) {
     }
 
@@ -45,6 +47,8 @@ final class CatalogCourse
             $r->intUnsigned('level_count'),
             $r->intUnsigned('chapter_count'),
             $r->decimal('level_price_total', 14, 2),
+            $r->nullableDecimal('rating_avg', 3, 1),
+            $r->intUnsigned('rating_count'),
         );
     }
 

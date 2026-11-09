@@ -1,6 +1,6 @@
 # Mapeo de modelos de Cursology
 
-Este documento describe cómo las 29 tablas de la base `cursology` se representan como clases PHP, y qué falta para conectarlas con procedimientos almacenados (SP).
+Este documento describe cómo las 30 tablas de la base `cursology` se representan como clases PHP, y qué falta para conectarlas con procedimientos almacenados (SP).
 
 > **Estado:** las entidades se construyen a partir de filas que se les entregan; no abren conexiones ni ejecutan consultas. El acceso a datos vive en los repositorios, que llaman a SP mediante `App\Database\StoredProcedures`. El primer caso conectado es registro/login: ver [stored-procedures.md](stored-procedures.md) y [api.md](api.md).
 
@@ -11,7 +11,7 @@ Fuente de verdad del esquema: [`app/database/schema/Cursology_modelo_fisico_mysq
 | Ruta | Namespace | Contenido |
 |---|---|---|
 | `app/autoload.php` | — | Autoload mínimo con `spl_autoload_register` (sin Composer). |
-| `app/models/entities/` | `App\Models\Entities` | Una entidad por tabla (29 clases). |
+| `app/models/entities/` | `App\Models\Entities` | Una entidad por tabla (30 clases). |
 | `app/models/enums/` | `App\Models\Enums` | Enums con los valores exactos de los `CHECK ... IN`. |
 | `app/models/mapping/` | `App\Models\Mapping` | `RowReader`, `HydrationException`, metadatos y `EntityMap`. |
 | `tests/verify_model_mapping.php` | — | Verificación CLI sin base de datos. |
@@ -53,6 +53,7 @@ La capa de modelo de MVC se completa con `app/repositories/` (persistencia media
 | `chat` | `Chat` | `id` |
 | `message` | `Message` | `id` |
 | `message_reaction` | `MessageReaction` | `id` |
+| `content_report` | `ContentReport` | `id` |
 
 `EntityMap::all()` devuelve esta misma correspondencia y `EntityMap::classFor('app_user')` resuelve una tabla.
 
@@ -118,7 +119,7 @@ Algunos casos con atención especial:
 - **Defaults:** los `DEFAULT` del DDL describen la creación de filas. Nunca rellenan una columna que falte al hidratar.
 - **Lo que no se valida:** las reglas `CHECK` entre columnas y los rangos de negocio (por ejemplo, `rate BETWEEN 1 AND 5` o `amount >= 0`) los garantiza MySQL; el mapeo valida el tipo físico. Presentar fechas en `America/Monterrey` o formatear importes con moneda pertenece a otra capa.
 
-Enums (`app/models/enums/`): `UserRole`, `AccountStatus`, `LoginOutcome`, `AccountEventType`, `ContentType`, `SelectionMode` (usado en `selection_mode` y `selection_mode_snapshot`), `PurchaseScope`, `PurchaseStatus` y `CertificateStatus`.
+Enums (`app/models/enums/`): `UserRole`, `AccountStatus`, `LoginOutcome`, `AccountEventType`, `ContentType`, `SelectionMode` (usado en `selection_mode` y `selection_mode_snapshot`), `PurchaseScope`, `PurchaseStatus`, `CertificateStatus`, y para `content_report`: `ReportTarget` (`target_type`), `ReportReason` (`reason_code`) y `ReportStatus` (`status`).
 
 ## Metadatos: PK, FK y UNIQUE
 
@@ -180,18 +181,18 @@ En PowerShell, si el comodín no se expande, usa: `php -l (Get-ChildItem app/mod
 
 El script no necesita MySQL ni dependencias. Termina con código `0` si todo pasa y `1` si algo falla, y no usa `assert()`. Comprueba lo siguiente:
 
-1. **Archivos:** que las 29 entidades y 9 enums carguen con el autoload real, y que los nombres de carpetas sean compatibles con Linux.
-2. **Inventario del DDL:** 29 tablas, 254 columnas, 61 FK (79 pares), 28 UNIQUE y 6 PK compuestas.
+1. **Archivos:** que las 30 entidades y 12 enums carguen con el autoload real, y que los nombres de carpetas sean compatibles con Linux.
+2. **Inventario del DDL:** 30 tablas, 267 columnas, 65 FK (83 pares), 30 UNIQUE y 6 PK compuestas.
 3. **Metadatos contra el DDL:** columnas, orden, tipo, nulabilidad, `AUTO_INCREMENT`, columnas generadas, `DEFAULT`, `ON UPDATE`, PK, UNIQUE y FK.
 4. **Enums:** que coincidan exactamente con los `CHECK`.
 5. **FK:** que cada una apunte a la PK o a un UNIQUE completo, con tipos iguales.
 6. **Encapsulamiento:** clases `final`, constructor privado, sin propiedades públicas ni métodos de persistencia o serialización, y nulabilidad PHP coherente con el DDL.
-7. **Hidratación por entidad:** una completa por cada una; una clave ausente y un NULL por cada columna; y casos de conversión por tipo para las 254 columnas.
+7. **Hidratación por entidad:** una completa por cada una; una clave ausente y un NULL por cada columna; y casos de conversión por tipo para las 267 columnas.
 8. **Casos críticos:** `'0'`/`'1'`, `NULL` real frente a `'NULL'`, campo ausente, `'false'`, `18446744073709551615` y su overflow, `'123.45'`, exceso de escala y de rango, float, fecha inexistente, microsegundos, y mensajes de error sin valores.
 9. **Exposición:** `json_encode`, `serialize`, `print_r` y `var_dump` sin el hash ni las claves del examen.
 10. **Sin base de datos:** que no se cargue `conn.php` ni ninguna conexión, y que no haya PDO ni SQL CRUD en el código del mapeo.
 
-Resultado actual: `RESULTADO: OK (7233 comprobaciones)`.
+Resultado actual: `RESULTADO: OK (7590 comprobaciones)`.
 
 ## Conexión con los SP
 

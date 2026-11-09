@@ -1,10 +1,20 @@
 <?php
-/** @var list<\App\Models\Dto\InstructorCourseSummary> $instructorCourses */
+/**
+ * @var list<\App\Models\Dto\InstructorCourseSummary> $instructorCourses
+ * @var array{overview: \App\Models\Dto\InstructorOverview, sales: list<\App\Models\Dto\CourseSalesRow>,
+ *     byMethod: list<\App\Models\Dto\PaymentMethodTotal>, revenueTotal: string,
+ *     filters: array{desde: string, hasta: string, categoria: string, estado: string},
+ *     recentReviews: list<\App\Models\Dto\RecentReview>} $instructorDashboard
+ * @var list<\App\Models\Entities\Category> $salesCategories
+ * @var list<\App\Models\Dto\ChatSummary> $recentChats
+ * @var list<\App\Models\Dto\RecentComment> $recentComments
+ */
 $publishedCount = count(array_filter($instructorCourses, static fn ($course): bool => $course->active && $course->isPublished()));
 $draftCount = count(array_filter($instructorCourses, static fn ($course): bool => $course->active && !$course->isPublished()));
 $inactiveCount = count(array_filter($instructorCourses, static fn ($course): bool => !$course->active));
-$studentTotal = array_sum(array_map(static fn ($course): int => $course->studentCount, $instructorCourses));
-$previewMessage = 'Ya puedes publicar tus cursos. Ventas, mensajes y opiniones se llenarán cuando conectemos compras y alumnos.';
+$overview = $instructorDashboard['overview'];
+$salesFilters = $instructorDashboard['filters'];
+$salesFiltered = array_filter($salesFilters, static fn (string $value): bool => $value !== '') !== [];
 ?>
 <div class="page-header">
     <div>
@@ -21,8 +31,6 @@ $previewMessage = 'Ya puedes publicar tus cursos. Ventas, mensajes y opiniones s
 
 <div class="form-alert page-alert" role="status" data-page-alert hidden></div>
 
-<?php require BASE_PATH . '/app/views/base/html/preview-notice.html'; ?>
-
 <div class="stat-grid">
     <div class="stat">
         <p class="stat-label">Cursos publicados</p>
@@ -31,17 +39,17 @@ $previewMessage = 'Ya puedes publicar tus cursos. Ventas, mensajes y opiniones s
     </div>
     <div class="stat">
         <p class="stat-label">Alumnos inscritos</p>
-        <p class="stat-value"><?= $studentTotal ?></p>
+        <p class="stat-value"><?= $overview->studentTotal ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Ingresos</p>
-        <p class="stat-value">—</p>
-        <p class="stat-hint">MXN, compras completadas</p>
+        <p class="stat-value"><?= e(format_money($overview->revenueTotal)) ?></p>
+        <p class="stat-hint">Compras completadas, sin las inscripciones gratis</p>
     </div>
     <div class="stat">
         <p class="stat-label">Calificación promedio</p>
-        <p class="stat-value">—</p>
-        <p class="stat-hint">Sin calificar</p>
+        <p class="stat-value"><?= $overview->ratingAvg !== null ? e($overview->ratingAvg) . ' ★' : '—' ?></p>
+        <p class="stat-hint"><?= $overview->ratingCount > 0 ? 'De ' . $overview->ratingCount . ' calificación(es)' : 'Sin calificar' ?></p>
     </div>
 </div>
 
@@ -123,83 +131,218 @@ $previewMessage = 'Ya puedes publicar tus cursos. Ventas, mensajes y opiniones s
     </div>
 </section>
 
-<section class="panel" aria-labelledby="instructor-sales-title">
+<section class="panel" aria-labelledby="instructor-sales-title" id="ventas">
     <div class="panel-header">
         <div>
             <h2 class="panel-title" id="instructor-sales-title">Ventas</h2>
-            <p class="panel-description">Alumnos inscritos, nivel promedio alcanzado e ingresos por curso.</p>
+            <p class="panel-description">Alumnos inscritos, avance promedio e ingresos de tus cursos publicados.</p>
         </div>
     </div>
-    <fieldset class="filters" disabled>
-        <legend class="visually-hidden">Filtros de ventas</legend>
+    <form class="filters" method="get" action="">
+        <input type="hidden" name="view" value="dashboard">
         <div class="form-field">
             <label class="form-label" for="sales-desde">Cursos creados desde</label>
-            <input class="form-control" type="date" id="sales-desde">
+            <input class="form-control" type="date" id="sales-desde" name="desde" value="<?= e($salesFilters['desde']) ?>">
         </div>
         <div class="form-field">
             <label class="form-label" for="sales-hasta">Hasta</label>
-            <input class="form-control" type="date" id="sales-hasta">
+            <input class="form-control" type="date" id="sales-hasta" name="hasta" value="<?= e($salesFilters['hasta']) ?>">
         </div>
         <div class="form-field">
             <label class="form-label" for="sales-categoria">Categoría</label>
-            <select class="form-control" id="sales-categoria"><option>Todas</option></select>
+            <select class="form-control" id="sales-categoria" name="categoria">
+                <option value="">Todas</option>
+                <?php foreach ($salesCategories as $category): ?>
+                    <option value="<?= e($category->id()) ?>"<?= $salesFilters['categoria'] === $category->id() ? ' selected' : '' ?>><?= e($category->name()) ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
         <div class="form-field">
             <label class="form-label" for="sales-activos">Cursos</label>
-            <select class="form-control" id="sales-activos"><option>Todos</option><option>Solo activos</option></select>
+            <select class="form-control" id="sales-activos" name="estado">
+                <option value="">Todos</option>
+                <option value="activos"<?= $salesFilters['estado'] === 'activos' ? ' selected' : '' ?>>Solo activos</option>
+            </select>
         </div>
-    </fieldset>
+        <div class="filters-actions">
+            <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+            <?php if ($salesFiltered): ?>
+                <a class="btn btn-ghost btn-sm" href="?view=dashboard#ventas">Quitar filtros</a>
+            <?php endif; ?>
+        </div>
+    </form>
     <div class="table-wrap">
         <table class="table">
             <thead>
                 <tr>
                     <th scope="col">Curso</th>
                     <th scope="col" class="num">Alumnos</th>
-                    <th scope="col" class="num">Nivel promedio</th>
+                    <th scope="col" class="num">Avance promedio</th>
+                    <th scope="col">Calificación</th>
                     <th scope="col" class="num">Ingresos</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="4">
-                        <div class="empty-state">
-                            <p class="empty-title">Sin ventas todavía</p>
-                            <p class="empty-text">Las compras completadas de tus cursos aparecerán aquí, con el total por forma de pago.</p>
-                        </div>
-                    </td>
-                </tr>
+                <?php foreach ($instructorDashboard['sales'] as $row): ?>
+                    <tr>
+                        <td>
+                            <div class="course-cell">
+                                <img class="course-thumb" src="<?= e($row->coverImage) ?>" alt="" loading="lazy">
+                                <div>
+                                    <a href="?view=course-sales&amp;id=<?= e($row->id) ?>"><?= e($row->title) ?></a>
+                                    <span class="table-sub">Creado el <?= e(format_date($row->createdAt)) ?><?= $row->active ? '' : ' · Dado de baja' ?></span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="num"><?= $row->studentCount ?></td>
+                        <td class="num">
+                            <div class="progress-cell">
+                                <div class="progress-bar" role="img" aria-label="Avance promedio <?= e($row->avgProgress) ?>%"><span style="width: <?= e($row->avgProgress) ?>%"></span></div>
+                                <span><?= e($row->avgProgress) ?>%</span>
+                            </div>
+                        </td>
+                        <td><?= e(format_rating($row->ratingAvg, $row->ratingCount)) ?></td>
+                        <td class="num"><?= e(format_money($row->revenue, $row->currency)) ?></td>
+                        <td>
+                            <div class="table-actions">
+                                <a class="btn btn-ghost btn-sm" href="?view=course-comments&amp;id=<?= e($row->id) ?>">Comentarios</a>
+                                <a class="btn btn-secondary btn-sm" href="?view=course-sales&amp;id=<?= e($row->id) ?>">Ver detalle</a>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($instructorDashboard['sales'] === []): ?>
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <p class="empty-title"><?= $salesFiltered ? 'Ningún curso coincide con los filtros' : 'Sin cursos publicados' ?></p>
+                                <p class="empty-text"><?= $salesFiltered ? 'Prueba con otras fechas, categoría o estado.' : 'Cuando publiques un curso, aquí verás sus alumnos, su avance y sus ingresos.' ?></p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
-    <div class="panel-footer">
-        <span class="text-muted">Total por forma de pago: —</span>
+    <div class="panel-footer sales-totals">
+        <?php foreach ($instructorDashboard['byMethod'] as $method): ?>
+            <span class="text-muted"><?= e($method->methodName) ?> (<?= $method->purchases ?>): <strong><?= e(format_money($method->total)) ?></strong></span>
+        <?php endforeach; ?>
+        <?php if ($instructorDashboard['byMethod'] === []): ?>
+            <span class="text-muted">Sin cobros con PayPal ni con la tarjeta todavía.</span>
+        <?php endif; ?>
+        <span>Total: <strong><?= e(format_money($instructorDashboard['revenueTotal'])) ?></strong></span>
     </div>
 </section>
 
 <div class="grid-2">
     <section class="panel" aria-labelledby="instructor-messages-title">
         <div class="panel-header">
-            <h2 class="panel-title" id="instructor-messages-title">Mensajes de alumnos</h2>
+            <div>
+                <h2 class="panel-title" id="instructor-messages-title">Mensajes de alumnos</h2>
+                <p class="panel-description">Las conversaciones con actividad más reciente.</p>
+            </div>
+            <?php if ($recentChats !== []): ?>
+                <a class="btn btn-ghost btn-sm" href="?view=messages">Ver todos</a>
+            <?php endif; ?>
         </div>
-        <div class="empty-state">
-            <span class="empty-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </span>
-            <p class="empty-title">Sin mensajes</p>
-            <p class="empty-text">Las preguntas de tus alumnos sobre cada curso llegarán aquí.</p>
-        </div>
+        <?php if ($recentChats === []): ?>
+            <div class="empty-state">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </span>
+                <p class="empty-title">Sin mensajes</p>
+                <p class="empty-text">Las preguntas de tus alumnos sobre cada curso llegarán aquí.</p>
+            </div>
+        <?php else: ?>
+            <?php $chatItems = $recentChats; require BASE_PATH . '/app/views/messages/html/chat-list.html'; ?>
+        <?php endif; ?>
     </section>
 
     <section class="panel" aria-labelledby="instructor-reviews-title">
         <div class="panel-header">
-            <h2 class="panel-title" id="instructor-reviews-title">Opiniones recientes</h2>
+            <div>
+                <h2 class="panel-title" id="instructor-reviews-title">Opiniones recientes</h2>
+                <p class="panel-description">Las últimas de tus cursos, también las que ocultaste.</p>
+            </div>
         </div>
-        <div class="empty-state">
-            <span class="empty-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
-            </span>
-            <p class="empty-title">Sin opiniones</p>
-            <p class="empty-text">Los alumnos califican y opinan al terminar un curso.</p>
-        </div>
+        <?php if ($instructorDashboard['recentReviews'] === []): ?>
+            <div class="empty-state">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+                </span>
+                <p class="empty-title">Sin opiniones</p>
+                <p class="empty-text">Los alumnos califican y opinan al terminar un curso.</p>
+            </div>
+        <?php else: ?>
+            <ul class="list recent-reviews">
+                <?php foreach ($instructorDashboard['recentReviews'] as $review): ?>
+                    <li>
+                        <div class="recent-review">
+                            <p class="recent-review-head">
+                                <strong><?= e($review->authorName) ?></strong>
+                                <span class="recent-review-stars" aria-label="<?= $review->rate ?? 0 ?> de 5 estrellas"><?= star_string($review->rate ?? 0) ?></span>
+                                <?php if (!$review->active): ?>
+                                    <span class="badge badge-warning" title="<?= e($review->reason) ?>">Oculta</span>
+                                <?php endif; ?>
+                            </p>
+                            <p class="recent-review-text"><?= e($review->excerpt()) ?></p>
+                            <p class="table-sub">
+                                <a href="?view=course&amp;id=<?= e($review->courseId) ?>#opiniones"><?= e($review->courseTitle) ?></a>
+                                · <?= e(format_date($review->commentedAt)) ?>
+                                <?php if (!$review->active && $review->reason !== null): ?>
+                                    · Motivo: <?= e($review->reason) ?>
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
     </section>
 </div>
+
+<section class="panel" aria-labelledby="instructor-comments-title" id="comentarios">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="instructor-comments-title">Comentarios recientes</h2>
+            <p class="panel-description">Lo último que tus alumnos comentaron en los capítulos. Para ver todos los de un curso, usa «Comentarios» en Ventas.</p>
+        </div>
+        <?php if ($recentComments !== []): ?>
+            <a class="btn btn-ghost btn-sm" href="#ventas">Ver todos por curso</a>
+        <?php endif; ?>
+    </div>
+    <?php if ($recentComments === []): ?>
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>
+            </span>
+            <p class="empty-title">Sin comentarios</p>
+            <p class="empty-text">Tus alumnos comentan desde el reproductor, debajo de cada capítulo de video.</p>
+        </div>
+    <?php else: ?>
+        <ul class="list recent-comments">
+            <?php foreach ($recentComments as $recent): ?>
+                <li>
+                    <div class="account-cell recent-comment">
+                        <img class="account-avatar" src="<?= e($recent->authorAvatar) ?>" alt="" loading="lazy">
+                        <div class="recent-review">
+                            <p class="recent-review-head">
+                                <strong><?= e($recent->authorName) ?></strong>
+                                <?php if (!$recent->answered): ?>
+                                    <span class="badge badge-warning">Sin responder</span>
+                                <?php endif; ?>
+                            </p>
+                            <p class="recent-review-text"><?= e($recent->excerpt()) ?></p>
+                            <p class="table-sub">
+                                <?= e($recent->chapterTitle) ?> · <?= e($recent->courseTitle) ?> · <?= e(format_date_time($recent->commentedAt)) ?>
+                            </p>
+                        </div>
+                    </div>
+                    <a class="btn btn-secondary btn-sm" href="<?= e($recent->url()) ?>"><?= $recent->answered ? 'Ver' : 'Responder' ?></a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</section>

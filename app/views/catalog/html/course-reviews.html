@@ -1,0 +1,115 @@
+<?php
+/**
+ * Calificaciones y opiniones en la página del curso (la incluye course.html).
+ *
+ * @var \App\Models\Dto\PublicCourse $course
+ * @var \App\Models\Dto\ReviewPage $reviewPage
+ * @var ?\App\Models\Dto\MyReview $myReview null = no es alumno
+ * @var bool $canModerate el instructor del curso o un admin pueden ocultar opiniones
+ * @var ?\App\Models\Entities\AppUser $currentUser
+ */
+$summary = $reviewPage->summary;
+$myRate = $myReview?->rate?->rate();
+// Reaccionan alumnos e instructores con sesión; los visitantes y el admin solo ven los números.
+$canReactToOpinions = $currentUser !== null
+    && in_array($currentUser->role(), [\App\Models\Enums\UserRole::Student, \App\Models\Enums\UserRole::Instructor], true);
+?>
+<section class="panel" aria-labelledby="reviews-title" id="opiniones" data-reviews
+         data-course-id="<?= e($course->id) ?>" data-can-moderate="<?= $canModerate ? '1' : '0' ?>"
+         data-can-react="<?= $canReactToOpinions ? '1' : '0' ?>">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="reviews-title">Opiniones</h2>
+            <p class="panel-description">Calificaciones de los alumnos que terminaron el curso.</p>
+        </div>
+    </div>
+    <div class="panel-body reviews">
+        <div class="reviews-summary">
+            <p class="reviews-average"><?= e($summary->ratingAvg ?? '—') ?></p>
+            <p class="reviews-stars" aria-hidden="true"><?= star_string((int) round((float) ($summary->ratingAvg ?? 0))) ?></p>
+            <p class="text-muted"><?= $summary->ratingCount ?> calificación(es)</p>
+            <ul class="reviews-bars">
+                <?php foreach ($summary->stars as $star => $count): ?>
+                    <li>
+                        <span><?= $star ?> ★</span>
+                        <span class="reviews-bar" role="img" aria-label="<?= $count ?> con <?= $star ?> estrellas"><span style="width: <?= $summary->percent($star) ?>%"></span></span>
+                        <span class="reviews-bar-count"><?= $count ?></span>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+
+        <div class="reviews-main">
+            <?php if ($myReview !== null && $myReview->canReview()): ?>
+                <form class="review-form" data-review-form novalidate>
+                    <p class="review-form-title"><?= $myRate === null ? 'Califica este curso' : 'Tu calificación' ?></p>
+                    <div class="form-alert" role="alert" data-form-alert hidden></div>
+                    <fieldset class="form-field fieldset-reset" data-field="calificacion">
+                        <legend class="visually-hidden">Estrellas, de 1 a 5</legend>
+                        <div class="star-input">
+                            <?php for ($star = 5; $star >= 1; $star--): ?>
+                                <input type="radio" id="review-star-<?= $star ?>" name="calificacion" value="<?= $star ?>"<?= $myRate === $star ? ' checked' : '' ?>>
+                                <label for="review-star-<?= $star ?>" title="<?= $star ?> de 5"><span aria-hidden="true">★</span><span class="visually-hidden"><?= $star ?> estrella(s)</span></label>
+                            <?php endfor; ?>
+                        </div>
+                        <p class="field-error" aria-live="polite"></p>
+                    </fieldset>
+                    <?php if ($myReview->isHidden()): ?>
+                        <div class="notice notice-warning" role="note">
+                            <p>El instructor o el administrador ocultaron tu opinión: «<?= e($myReview->opinion?->reason()) ?>». Ya no se puede cambiar, pero sí tus estrellas.</p>
+                        </div>
+                    <?php endif; ?>
+                    <div class="form-field">
+                        <label class="form-label" for="review-opinion">Tu opinión <span class="optional">(opcional)</span></label>
+                        <textarea class="form-control" id="review-opinion" name="opinion" rows="4" maxlength="2000"
+                                  placeholder="¿Qué te pareció el curso? ¿A quién se lo recomendarías?"<?= $myReview->isHidden() ? ' readonly' : '' ?>><?= e($myReview->opinion?->opinion()) ?></textarea>
+                        <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><?= $myRate === null ? 'Publicar' : 'Guardar cambios' ?></button>
+                    </div>
+                </form>
+            <?php elseif ($myReview !== null && $myReview->enrolled): ?>
+                <p class="notice" role="note">Podrás calificar el curso cuando lo termines.</p>
+            <?php endif; ?>
+
+            <ul class="review-list" data-review-list>
+                <?php foreach ($reviewPage->reviews as $review): ?>
+                    <li class="review" data-opinion-id="<?= e($review->opinionId) ?>">
+                        <img class="review-avatar" src="<?= e($review->authorAvatar) ?>" alt="">
+                        <div class="review-body">
+                            <p class="review-head">
+                                <strong><?= e($review->authorName) ?></strong>
+                                <span class="review-stars" aria-label="<?= $review->rate ?? 0 ?> de 5 estrellas"><?= star_string($review->rate ?? 0) ?></span>
+                                <span class="review-date"><?= e(format_date($review->commentedAt)) ?><?= $review->wasEdited() ? ' · editada' : '' ?></span>
+                            </p>
+                            <p class="review-text"><?= nl2br(e($review->opinion)) ?></p>
+                            <?php
+                            $reactionSummary = $review->reactions;
+                            $reactionUrl = $canReactToOpinions ? 'api/opinions/' . rawurlencode($review->opinionId) . '/reaction' : null;
+                            require BASE_PATH . '/app/views/reactions/html/reactions.html';
+                            ?>
+                            <?php if ($canModerate): ?>
+                                <button type="button" class="btn btn-ghost btn-sm" data-hide-opinion="<?= e($review->opinionId) ?>">Ocultar</button>
+                            <?php elseif ($canReactToOpinions && !$review->mine): ?>
+                                <div class="review-actions" data-report-host>
+                                    <?php if ($review->reportedByMe): ?>
+                                        <span class="report-done" title="Un administrador lo va a revisar">Reportado</span>
+                                    <?php else: ?>
+                                        <button type="button" class="btn btn-ghost btn-sm" data-report data-report-url="api/opinions/<?= e(rawurlencode($review->opinionId)) ?>/report">Reportar</button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php if ($reviewPage->reviews === []): ?>
+                <p class="text-muted" data-reviews-empty>Todavía no hay opiniones de este curso.</p>
+            <?php endif; ?>
+            <?php if ($reviewPage->hasMore()): ?>
+                <button type="button" class="btn btn-secondary btn-sm" data-reviews-more data-next-page="2">Ver más opiniones</button>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>

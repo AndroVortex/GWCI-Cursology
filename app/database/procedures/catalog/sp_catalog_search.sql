@@ -1,10 +1,13 @@
--- sp_catalog_search: catálogo público. Solo cursos publicados y activos (no dados de baja).
+-- sp_catalog_search: catálogo público. Solo cursos publicados y activos (no dados de baja) de
+-- instructores activos y sin ban.
 -- p_query: texto a buscar en el título y en el nombre del instructor (NULL = todos). PHP ya
 --          escapó % y _ con '\'; la colación de la base no distingue mayúsculas ni acentos.
 -- p_category_id: solo cursos con esa categoría activa (NULL = todas).
 -- p_sort: 'recientes' (publicación más nueva), 'titulo' (A-Z) o 'precio' (menor primero;
 --         el del curso completo o, si se vende por niveles, la suma de sus niveles).
--- Resultados: 1) las tarjetas de la página (p_limit desde p_offset); 2) total.
+-- Resultados: 1) las tarjetas de la página (p_limit desde p_offset), con rating_avg (1 decimal,
+--             NULL sin calificaciones) y rating_count, sin las estrellas de opiniones ocultas;
+--             2) total.
 
 DROP PROCEDURE IF EXISTS sp_catalog_search;
 
@@ -42,11 +45,20 @@ BEGIN
            JOIN course_level l ON l.id = ch.course_level_id
           WHERE l.course_id = c.id) AS chapter_count,
         (SELECT CAST(COALESCE(SUM(l.cost), 0) AS DECIMAL(14,2))
-           FROM course_level l WHERE l.course_id = c.id) AS level_price_total
+           FROM course_level l WHERE l.course_id = c.id) AS level_price_total,
+        (SELECT CAST(ROUND(AVG(r.rate), 1) AS DECIMAL(3,1))
+           FROM course_rate r
+           LEFT JOIN course_opinion o ON o.commented_by = r.rated_by AND o.course_id = r.course_id
+          WHERE r.course_id = c.id AND (o.id IS NULL OR o.active = 1)) AS rating_avg,
+        (SELECT COUNT(*)
+           FROM course_rate r
+           LEFT JOIN course_opinion o ON o.commented_by = r.rated_by AND o.course_id = r.course_id
+          WHERE r.course_id = c.id AND (o.id IS NULL OR o.active = 1)) AS rating_count
     FROM course c
     JOIN app_user u ON u.id = c.created_by
     WHERE c.active = 1
       AND c.published_at IS NOT NULL
+      AND u.account_status = 'active' AND u.ban = 0
       AND (v_pattern IS NULL
            OR c.title LIKE v_pattern
            OR CONCAT_WS(' ', u.name, u.father_last_name, u.mother_last_name) LIKE v_pattern)
@@ -70,6 +82,7 @@ BEGIN
     JOIN app_user u ON u.id = c.created_by
     WHERE c.active = 1
       AND c.published_at IS NOT NULL
+      AND u.account_status = 'active' AND u.ban = 0
       AND (v_pattern IS NULL
            OR c.title LIKE v_pattern
            OR CONCAT_WS(' ', u.name, u.father_last_name, u.mother_last_name) LIKE v_pattern)

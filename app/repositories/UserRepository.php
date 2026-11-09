@@ -6,9 +6,12 @@ namespace App\Repositories;
 
 use App\Database\ProcedureException;
 use App\Database\StoredProcedures;
+use App\Models\Dto\AccountEvent;
+use App\Models\Dto\AdminUserRow;
 use App\Models\Dto\LockedAccount;
 use App\Models\Dto\LoginResult;
 use App\Models\Entities\AppUser;
+use App\Models\Enums\UserRole;
 use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\EmailTakenException;
 use App\Services\ProfileData;
@@ -100,6 +103,26 @@ final class UserRepository
         ]);
     }
 
+    /**
+     * Un administrador más, aunque ya exista otro. Solo para scripts/create_admin.php --adicional.
+     *
+     * @throws BusinessRuleException EMAIL_TAKEN
+     */
+    public function createAdditionalAdmin(
+        string $name,
+        string $fatherLastName,
+        ?string $motherLastName,
+        string $gender,
+        string $birthday,
+        string $avatar,
+        string $email,
+        string $passwordHash,
+    ): AppUser {
+        return $this->user('sp_admin_create', [
+            $name, $fatherLastName, $motherLastName, $gender, $birthday, $avatar, $email, $passwordHash,
+        ]);
+    }
+
     /** @throws BusinessRuleException EMAIL_TAKEN, USER_NOT_AVAILABLE */
     public function updateProfile(string $userId, ProfileData $data): AppUser
     {
@@ -148,6 +171,61 @@ final class UserRepository
     public function unlock(?string $actorId, string $userId, string $reason): AppUser
     {
         return $this->user('sp_admin_unlock_user', [$actorId, $userId, $reason]);
+    }
+
+    /**
+     * @param ?string $pattern patrón LIKE ya escapado, con % alrededor
+     * @return array{0: list<AdminUserRow>, 1: int} [cuentas, total]
+     * @throws BusinessRuleException NOT_ADMIN
+     */
+    public function listUsers(string $adminId, ?string $pattern, ?UserRole $role, ?string $state, int $limit, int $offset): array
+    {
+        try {
+            [$rows, $totals] = $this->procedures->call('sp_admin_list_users', [$adminId, $pattern, $role?->value, $state, $limit, $offset]) + [[], []];
+        } catch (ProcedureException $exception) {
+            throw BusinessRuleException::fromProcedure($exception);
+        }
+
+        return [array_map(AdminUserRow::fromRow(...), $rows), (int) ($totals[0]['total'] ?? 0)];
+    }
+
+    /** @throws BusinessRuleException NOT_ADMIN, USER_NOT_FOUND, CANNOT_BAN_ADMIN, ALREADY_BANNED */
+    public function ban(string $adminId, string $userId, string $reason): AppUser
+    {
+        return $this->user('sp_admin_ban_user', [$adminId, $userId, $reason]);
+    }
+
+    /** @throws BusinessRuleException NOT_ADMIN, USER_NOT_FOUND, NOT_BANNED */
+    public function unban(string $adminId, string $userId, string $reason): AppUser
+    {
+        return $this->user('sp_admin_unban_user', [$adminId, $userId, $reason]);
+    }
+
+    /** Una cuenta bloqueada o dada de baja vuelve a estar activa. @throws BusinessRuleException NOT_ADMIN, USER_NOT_FOUND, USER_ALREADY_ACTIVE */
+    public function reactivate(string $adminId, string $userId, string $reason): AppUser
+    {
+        return $this->user('sp_admin_reactivate_user', [$adminId, $userId, $reason]);
+    }
+
+    /**
+     * @return list<AccountEvent>
+     * @throws BusinessRuleException NOT_ADMIN, USER_NOT_FOUND
+     */
+    public function events(string $adminId, string $userId): array
+    {
+        try {
+            $rows = $this->procedures->rows('sp_admin_user_events', [$adminId, $userId]);
+        } catch (ProcedureException $exception) {
+            throw BusinessRuleException::fromProcedure($exception);
+        }
+
+        return array_map(AccountEvent::fromRow(...), $rows);
+    }
+
+    /** La baja desde el perfil. @throws BusinessRuleException USER_NOT_FOUND, USER_NOT_AVAILABLE, ADMIN_CANNOT_DEACTIVATE */
+    public function deactivate(string $userId, string $reason): AppUser
+    {
+        return $this->user('sp_user_deactivate', [$userId, $reason]);
     }
 
     /**

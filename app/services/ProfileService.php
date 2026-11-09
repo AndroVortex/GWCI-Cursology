@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Integrations\CloudinaryClient;
 use App\Integrations\MediaUploadException;
 use App\Models\Entities\AppUser;
+use App\Models\Enums\UserRole;
 use App\Repositories\UserRepository;
 use App\Services\Exceptions\BusinessRuleException;
 use App\Services\Exceptions\ValidationException;
@@ -16,9 +17,12 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Throwable;
 
-/** Casos de uso del perfil propio: datos, email, foto y contraseña. */
+/** Casos de uso del perfil propio: datos, email, foto, contraseña y dar de baja la cuenta. */
 final class ProfileService
 {
+    /** Motivo que queda en user_account_event si el usuario no escribe uno al darse de baja. */
+    public const DEACTIVATE_REASON = 'Baja solicitada por el usuario';
+    public const MAX_DEACTIVATE_REASON_CHARS = 500;
     private const AVATAR_FOLDER = 'cursology/avatars';
     private const LOCAL_TIME_ZONE = 'America/Monterrey';
 
@@ -102,6 +106,39 @@ final class ProfileService
         }
 
         $this->users->changePassword($user->id(), password_hash($new, PASSWORD_DEFAULT));
+    }
+
+    /**
+     * Da de baja la cuenta propia (account_status = 'deleted'), con la contraseña actual como
+     * confirmación. Se conservan sus cursos, compras y certificados; solo un admin la reactiva.
+     * Un administrador no se da de baja así.
+     *
+     * @param array<string, mixed> $input {password, motivo?}
+     * @throws ValidationException|BusinessRuleException ADMIN_CANNOT_DEACTIVATE, USER_NOT_AVAILABLE
+     */
+    public function deactivate(AppUser $user, array $input): void
+    {
+        if ($user->role() === UserRole::Admin) {
+            throw BusinessRuleException::of('ADMIN_CANNOT_DEACTIVATE');
+        }
+
+        $password = $input['password'] ?? null;
+        $reason = UserRules::text($input, 'motivo');
+        $errors = array_filter([
+            'password' => match (true) {
+                !is_string($password) || $password === '' => 'Escribe tu contraseña para confirmar.',
+                !password_verify($password, $user->passwordHash()) => 'La contraseña no es correcta.',
+                default => null,
+            },
+            'motivo' => mb_strlen($reason) > self::MAX_DEACTIVATE_REASON_CHARS
+                ? sprintf('No puede exceder %d caracteres.', self::MAX_DEACTIVATE_REASON_CHARS)
+                : null,
+        ]);
+        if ($errors !== []) {
+            throw new ValidationException($errors);
+        }
+
+        $this->users->deactivate($user->id(), $reason === '' ? self::DEACTIVATE_REASON : $reason);
     }
 
     /** Borra de Cloudinary un avatar anterior; solo los de nuestra carpeta de avatares. */

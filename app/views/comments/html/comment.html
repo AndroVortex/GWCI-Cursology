@@ -1,0 +1,56 @@
+<?php
+/**
+ * Un comentario (principal o respuesta). comments.js arma el mismo marcado para los nuevos.
+ *
+ * @var \App\Models\Dto\ChapterComment $comment
+ * @var string $viewerId
+ * @var bool $viewerIsOwner quien ve es el instructor del curso (puede ocultar)
+ */
+$can = \App\Http\Presenters\CommentPresenter::can($comment, $viewerId, $viewerIsOwner);
+?>
+<article class="comment<?= $comment->isRemoved() ? ' is-removed' : '' ?>" id="comentario-<?= e($comment->id) ?>"
+         data-comment="<?= e($comment->id) ?>" data-author="<?= e($comment->authorName) ?>">
+    <?php if ($comment->isRemoved()): ?>
+        <p class="comment-removed">Comentario eliminado</p>
+    <?php else: ?>
+        <img class="account-avatar comment-avatar" src="<?= e($comment->authorAvatar) ?>" alt="" loading="lazy">
+        <div class="comment-body">
+            <p class="comment-head">
+                <strong class="comment-author"><?= e($comment->authorName) ?></strong>
+                <?php if ($comment->authorIsInstructor): ?>
+                    <span class="badge badge-exam">Instructor</span>
+                <?php endif; ?>
+                <time class="comment-date" datetime="<?= e($comment->commentedAt->format(DATE_ATOM)) ?>"><?= e(format_date_time($comment->commentedAt)) ?></time>
+                <span class="comment-edited" data-comment-edited<?= $comment->wasEdited() ? '' : ' hidden' ?>>· editado</span>
+                <?php if ($comment->answered === false && !$comment->authorIsInstructor): ?>
+                    <span class="badge badge-warning" data-unanswered>Sin responder</span>
+                <?php endif; ?>
+            </p>
+            <p class="comment-text" data-comment-text><?= e($comment->content) ?></p>
+            <?php
+            $reactionSummary = $comment->reactions;
+            $reactionUrl = 'api/comments/' . rawurlencode($comment->id) . '/reaction';
+            require BASE_PATH . '/app/views/reactions/html/reactions.html';
+            ?>
+            <div class="comment-actions" data-report-host>
+                <?php if ($can['reply']): ?>
+                    <button type="button" class="comment-action" data-comment-reply>Responder</button>
+                <?php endif; ?>
+                <?php if ($can['edit']): ?>
+                    <button type="button" class="comment-action" data-comment-edit>Editar</button>
+                <?php endif; ?>
+                <?php if ($can['delete']): ?>
+                    <button type="button" class="comment-action comment-action-danger" data-comment-delete>Eliminar</button>
+                <?php endif; ?>
+                <?php if ($can['hide']): ?>
+                    <button type="button" class="comment-action comment-action-danger" data-comment-hide>Ocultar</button>
+                <?php endif; ?>
+                <?php if ($can['report'] && $comment->reportedByMe): ?>
+                    <span class="report-done" title="Un administrador lo va a revisar">Reportado</span>
+                <?php elseif ($can['report']): ?>
+                    <button type="button" class="comment-action report-action" data-report data-report-url="api/comments/<?= e(rawurlencode($comment->id)) ?>/report">Reportar</button>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</article>

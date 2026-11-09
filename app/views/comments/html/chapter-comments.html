@@ -1,0 +1,47 @@
+<?php
+/**
+ * Comentarios del capítulo de video abierto en el reproductor (lo incluye learn.html).
+ *
+ * @var \App\Models\Dto\CommentPage $chapterComments
+ * @var \App\Models\Entities\AppUser $currentUser
+ */
+use App\Services\CommentService;
+
+$viewerId = $currentUser->id();
+$viewerIsOwner = $chapterComments->viewerIsOwner;
+?>
+<section class="panel comments" id="comentarios" aria-labelledby="comments-title"
+         data-comments data-chapter-id="<?= e($chapterComments->chapterId) ?>">
+    <div class="panel-header">
+        <div>
+            <h2 class="panel-title" id="comments-title">Comentarios <span class="comments-total" data-comments-total><?= $chapterComments->total ?></span></h2>
+            <p class="panel-description">Pregunta o comparte algo de este capítulo. Lo ven tus compañeros y el instructor.</p>
+        </div>
+    </div>
+    <div class="panel-body">
+        <form class="comment-form" data-comment-form novalidate>
+            <div class="form-alert" role="alert" data-form-alert hidden></div>
+            <div class="form-field">
+                <label class="visually-hidden" for="comment-text">Tu comentario</label>
+                <textarea class="form-control" id="comment-text" name="texto" rows="3"
+                          maxlength="<?= CommentService::MAX_COMMENT_CHARS ?>" placeholder="Escribe un comentario…"></textarea>
+                <p class="field-error" aria-live="polite"></p>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Comentar</button>
+            </div>
+        </form>
+
+        <ol class="comment-list" data-comment-list>
+            <?php foreach ($chapterComments->comments as $thread): ?>
+                <?php require __DIR__ . '/comment-thread.html'; ?>
+            <?php endforeach; ?>
+        </ol>
+        <p class="text-muted comments-empty" data-comments-empty<?= $chapterComments->comments === [] ? '' : ' hidden' ?>>
+            Todavía no hay comentarios en este capítulo. Sé el primero.
+        </p>
+        <?php if ($chapterComments->hasMore()): ?>
+            <button type="button" class="btn btn-secondary btn-sm" data-comments-more data-next-page="2">Ver más comentarios</button>
+        <?php endif; ?>
+    </div>
+</section>

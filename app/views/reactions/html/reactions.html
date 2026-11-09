@@ -1,0 +1,30 @@
+<?php
+/**
+ * Las reacciones de un comentario, una opinión o un mensaje. reactions.js arma el mismo marcado
+ * para los elementos nuevos y lo vuelve a dibujar al reaccionar.
+ *
+ * @var \App\Models\Dto\ReactionSummary $reactionSummary
+ * @var ?string $reactionUrl la ruta PUT de la API; null = solo lectura (visitantes)
+ * @var list<\App\Models\Entities\Reaction> $activeReactions el catálogo activo
+ */
+$canReact = $reactionUrl !== null;
+?>
+<div class="reactions" data-reactions<?= $canReact ? ' data-url="' . e($reactionUrl) . '"' : '' ?>>
+    <?php foreach ($reactionSummary->counts as $count): ?>
+        <?php $isMine = $count['reactionId'] === $reactionSummary->mine; ?>
+        <button type="button" class="reaction-chip<?= $isMine ? ' is-mine' : '' ?>" data-reaction="<?= e($count['reactionId']) ?>"
+                aria-pressed="<?= $isMine ? 'true' : 'false' ?>" title="<?= e($count['name']) ?>"<?= $canReact ? '' : ' disabled' ?>>
+            <span class="reaction-emoji" aria-hidden="true"><?= e($count['emoji']) ?></span>
+            <span class="reaction-count"><?= $count['total'] ?></span>
+            <span class="visually-hidden"><?= e($count['name']) ?></span>
+        </button>
+    <?php endforeach; ?>
+    <?php if ($canReact && !empty($activeReactions)): ?>
+        <button type="button" class="reaction-add" data-reaction-add aria-haspopup="true" aria-expanded="false" title="Reaccionar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4 4 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/>
+            </svg>
+            <span class="visually-hidden">Reaccionar</span>
+        </button>
+    <?php endif; ?>
+</div>

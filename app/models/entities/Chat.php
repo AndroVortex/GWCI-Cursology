@@ -15,7 +15,8 @@ use DateTimeImmutable;
 /**
  * Fila de `chat`: conversación por curso entre el instructor propietario y un alumno.
  * Los participantes son datos internos; que coincidan con course.created_by y con
- * los roles se valida en PHP, no en esta entidad.
+ * los roles se valida en sp_chat_start, no en esta entidad.
+ * *_last_read_at: última vez que cada participante abrió la conversación (no leídos).
  */
 final class Chat extends Entity
 {
@@ -25,6 +26,8 @@ final class Chat extends Entity
         protected readonly string $instructorId,
         protected readonly string $studentId,
         protected readonly DateTimeImmutable $createdAt,
+        protected readonly ?DateTimeImmutable $studentLastReadAt,
+        protected readonly ?DateTimeImmutable $instructorLastReadAt,
     ) {
     }
 
@@ -38,6 +41,8 @@ final class Chat extends Entity
             instructorId: $r->id('instructor_id'),
             studentId: $r->id('student_id'),
             createdAt: $r->dateTime('created_at'),
+            studentLastReadAt: $r->nullableDateTime('student_last_read_at'),
+            instructorLastReadAt: $r->nullableDateTime('instructor_last_read_at'),
         );
     }
 
@@ -51,6 +56,8 @@ final class Chat extends Entity
                 new Column('instructor_id', 'instructorId', 'BIGINT UNSIGNED'),
                 new Column('student_id', 'studentId', 'BIGINT UNSIGNED'),
                 new Column('created_at', 'createdAt', 'DATETIME(6)', default: 'CURRENT_TIMESTAMP(6)'),
+                new Column('student_last_read_at', 'studentLastReadAt', 'DATETIME(6)', nullable: true),
+                new Column('instructor_last_read_at', 'instructorLastReadAt', 'DATETIME(6)', nullable: true),
             ],
             primaryKey: ['id'],
             uniqueKeys: [
@@ -69,4 +76,6 @@ final class Chat extends Entity
     public function instructorId(): string { return $this->instructorId; }
     public function studentId(): string { return $this->studentId; }
     public function createdAt(): DateTimeImmutable { return $this->createdAt; }
+    public function studentLastReadAt(): ?DateTimeImmutable { return $this->studentLastReadAt; }
+    public function instructorLastReadAt(): ?DateTimeImmutable { return $this->instructorLastReadAt; }
 }

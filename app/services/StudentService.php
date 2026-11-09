@@ -35,6 +35,7 @@ final class StudentService
      * @return array{
      *     stats: array{enrolled: int, inProgress: int, completed: int},
      *     continue: list<KardexEntry>,
+     *     completed: list<KardexEntry>,
      *     kardex: list<KardexEntry>,
      *     filters: array{desde: string, hasta: string, categoria: string, estado: string},
      *     purchases: list<Purchase>
@@ -62,6 +63,7 @@ final class StudentService
                 'completed' => count($all) - count($inProgress),
             ],
             'continue' => array_slice($inProgress, 0, self::CONTINUE_LIMIT),
+            'completed' => array_values(array_filter($all, static fn (KardexEntry $entry): bool => $entry->isCompleted())),
             'kardex' => $filtered,
             'filters' => $filters,
             'purchases' => $this->students->purchases($student->id()),

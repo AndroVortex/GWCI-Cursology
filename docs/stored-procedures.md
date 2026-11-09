@@ -61,7 +61,7 @@ Registra el resultado de un intento de login en una transacción propia, despué
   - Si `account_status <> 'active'` o `ban = 1`: registra `blocked`. Una contraseña correcta **no** reactiva la cuenta.
   - Si la contraseña es correcta: deja `consecutive_failed_logins = 0`, actualiza `last_login_at` y registra `success`.
   - Si es incorrecta: suma 1 al contador. Al llegar a 3, en el mismo `UPDATE` cambia `account_status = 'locked'` y actualiza `status_changed_at`, e inserta `user_account_event` (`locked`, sin actor). Registra `wrong_password` con el contador nuevo.
-- **Resultado:** una fila `outcome, consecutive_failures, account_status` (`account_status` es NULL para `unknown_user`). PHP la lee con `App\Models\Dto\LoginResult`.
+- **Resultado:** una fila `outcome, consecutive_failures, account_status, ban` (`account_status` y `ban` son NULL para `unknown_user`). Con `blocked`, `account_status` y `ban` dicen si la cuenta está bloqueada, dada de baja o suspendida, para el mensaje del login. PHP la lee con `App\Models\Dto\LoginResult`.
 - **Error:** `USER_NOT_FOUND`, si el id no existe.
 
 ### Administración de cuentas
@@ -81,11 +81,31 @@ Registra el resultado de un intento de login en una transacción propia, despué
 - **Resultado:** la fila completa de `app_user` ya reactivada.
 - **Errores:** `NOT_ADMIN`, `USER_NOT_FOUND` y `USER_NOT_LOCKED` (la cuenta no estaba bloqueada).
 
+**Cuentas (vista "Cuentas" del admin):**
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_admin_list_users(p_admin_id, p_search, p_role, p_state, p_limit, p_offset)` | 1) las cuentas, de la más reciente a la más antigua: `id, name, father_last_name, mother_last_name, email, avatar, role, account_status, ban, ban_reason, banned_at, created_at, last_login_at, status_changed_at, last_event_type, last_event_at, last_event_reason`; 2) `total`. Nunca el hash de la contraseña | `NOT_ADMIN` |
+| `sp_admin_ban_user(p_admin_id, p_user_id, p_reason)` | Suspende: `ban = 1` con `banned_by`, `banned_at` y `ban_reason` (lo exige `ck_user_ban_metadata`), y el evento `banned` | `NOT_ADMIN`, `USER_NOT_FOUND`, `CANNOT_BAN_ADMIN`, `ALREADY_BANNED` |
+| `sp_admin_unban_user(p_admin_id, p_user_id, p_reason)` | Quita la suspensión (deja los cuatro campos del ban en 0/NULL) y registra `unbanned` con `p_reason` | `NOT_ADMIN`, `USER_NOT_FOUND`, `NOT_BANNED` |
+| `sp_admin_reactivate_user(p_admin_id, p_user_id, p_reason)` | Una cuenta `locked` o `deleted` vuelve a `active` con el contador en 0 (un solo `UPDATE`, por `ck_user_locked`) y el evento `reactivated`. El ban no cambia | `NOT_ADMIN`, `USER_NOT_FOUND`, `USER_ALREADY_ACTIVE` |
+| `sp_admin_user_events(p_admin_id, p_user_id)` | El historial de `user_account_event`, del más reciente al más antiguo: `id, event_type, reason, created_at, actor_id, actor_name` (NULL si fue el sistema) | `NOT_ADMIN`, `USER_NOT_FOUND` |
+
+- **Filtros de `sp_admin_list_users`** (NULL = sin filtrar): `p_search` es un patrón `LIKE` ya escapado por PHP sobre el email o el nombre; `p_role`; `p_state` = `active` (activa y sin ban), `locked`, `deleted` o `banned`.
+- Los tres que escriben usan una transacción propia con la fila del usuario bloqueada por `SELECT ... FOR UPDATE`.
+- **Los textos de los eventos los manda PHP** (`p_reason`), para que los SP no lleven acentos que dependan del juego de caracteres del cliente de MySQL.
+
 **`sp_admin_create_first(p_name, p_father_last_name, p_mother_last_name, p_gender, p_birthday, p_avatar, p_email, p_password_hash)`**
 
 - Crea el **primer** administrador. Solo lo llama `scripts/create_admin.php`; ningún endpoint web.
 - **Resultado:** la fila completa de `app_user`.
 - **Errores:** `ADMIN_EXISTS` (ya hay un admin) y `EMAIL_TAKEN`.
+
+**`sp_admin_create(p_name, p_father_last_name, p_mother_last_name, p_gender, p_birthday, p_avatar, p_email, p_password_hash)`**
+
+- Crea un administrador **adicional**, aunque ya exista otro. Solo lo llama `scripts/create_admin.php --adicional`; ningún endpoint web.
+- **Resultado:** la fila completa de `app_user`.
+- **Errores:** `EMAIL_TAKEN`.
 
 ### Usuarios
 
@@ -105,6 +125,14 @@ Registra el resultado de un intento de login en una transacción propia, despué
 - Cambian la foto (URL de Cloudinary o el avatar por defecto) o el hash de la contraseña. PHP borra la foto anterior y verifica la contraseña actual.
 - **Resultado:** la fila completa de `app_user`.
 - **Error:** `USER_NOT_AVAILABLE`.
+
+**`sp_user_deactivate(p_user_id, p_reason)`**
+
+- La baja desde el perfil (PHP ya verificó la contraseña): `account_status = 'deleted'`, `status_changed_at` y el evento `deleted` con la propia cuenta como actor y `p_reason`. Se conservan sus cursos, compras, certificados y lo que publicó; solo un admin la reactiva.
+- **Resultado:** la fila completa de `app_user`.
+- **Errores:** `USER_NOT_FOUND`, `USER_NOT_AVAILABLE` (ya no estaba activa o tiene ban) y `ADMIN_CANNOT_DEACTIVATE` (un admin no se da de baja así).
+
+**Cuentas que no están activas o tienen ban.** No inician sesión y el middleware corta sus sesiones. Si son de un instructor, sus cursos salen del catálogo y no se venden: `sp_catalog_search`, `sp_catalog_course`, `sp_purchase_start`, `sp_enrollment_free`, `sp_review_list`, `sp_opinion_react`, `sp_report_create` y `sp_admin_overview` exigen que el instructor del curso esté `active` y sin ban. El reproductor, el kardex y los certificados no cambian: sus alumnos conservan el acceso.
 
 ### Categorías
 
@@ -230,7 +258,8 @@ Solo cursos con `active = 1` y `published_at` con fecha. No exponen las URIs del
 - `p_query`: busca con `LIKE` en el título y en el nombre completo del instructor. PHP ya escapó `%`, `_` y `\`. La colación de la base no distingue mayúsculas ni acentos. NULL o vacío = todos.
 - `p_category_id`: solo los que tienen esa categoría activa. NULL = todas.
 - `p_sort`: `recientes` (publicación más nueva), `titulo` o `precio` (`full_course_price` o, si es NULL, la suma de los niveles).
-- **Resultados:** 1) las tarjetas de la página (`id, title, cover_image, full_course_price, currency, published_at, instructor_name, category_names` separadas por `|`, `level_count, chapter_count, level_price_total`), que lee `App\Models\Dto\CatalogCourse`; 2) `total`.
+- **Resultados:** 1) las tarjetas de la página (`id, title, cover_image, full_course_price, currency, published_at, instructor_name, category_names` separadas por `|`, `level_count, chapter_count, level_price_total, rating_avg, rating_count`), que lee `App\Models\Dto\CatalogCourse`; 2) `total`.
+- `rating_avg` es `DECIMAL(3,1)` (NULL sin calificaciones). Ni él ni `rating_count` cuentan las estrellas de quien tiene su opinión oculta. `sp_catalog_course` devuelve las mismas dos columnas en su primer resultado.
 
 **`sp_catalog_course(p_course_id)`**
 
@@ -240,7 +269,7 @@ Cuatro result sets, que lee `App\Models\Dto\PublicCourse`:
 3. los niveles por orden, con su precio y su video de presentación;
 4. los capítulos, con `is_test`, `duration_seconds` del video principal y `question_count`.
 
-**Error:** `COURSE_NOT_FOUND` si no existe, es borrador o está dado de baja.
+**Error:** `COURSE_NOT_FOUND` si no existe, es borrador, está dado de baja o su instructor ya no está activo o tiene ban. `sp_catalog_search` deja fuera esos mismos cursos.
 
 ### Formas de pago
 
@@ -336,3 +365,191 @@ Columnas:
 Error: `INVALID_KARDEX_STATUS`.
 
 **`sp_student_purchases(p_user_id)`:** las columnas de `purchase`, de la más reciente a la más antigua. Incluye las de $0 y las rechazadas o canceladas.
+
+### Certificados
+
+Todos devuelven filas de `certificate`, que lee la entidad `Certificate`.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_certificate_issue(p_user_id, p_course_id)` | Devuelve el certificado del alumno o, si no existe, lo crea `pending` con los datos congelados | `NOT_ENROLLED`, `COURSE_NOT_COMPLETED` |
+| `sp_certificate_mark_issued(p_user_id, p_certificate_id, p_document_uri)` | Con la fila bloqueada (`FOR UPDATE`), la pasa a `issued` con `issued_at` y la referencia del PDF. Si ya estaba emitido no cambia nada | `CERTIFICATE_NOT_FOUND` |
+| `sp_certificate_list_by_student(p_user_id)` | Los del alumno (emitidos y pendientes), del curso terminado más reciente al más antiguo | — |
+| `sp_certificate_verify(p_code)` | Verificación pública: solo los `issued` | `CERTIFICATE_NOT_FOUND` |
+
+**Datos congelados** (`sp_certificate_issue`):
+- el nombre completo del alumno;
+- el título del curso;
+- el certificador: `course.certifier_name` o, si está vacío, el nombre del instructor;
+- `completed_at_snapshot` = `user_courses.completed_at`;
+- `template_snapshot = 'cursology-v1'` (la misma constante que `CertificateRenderer::TEMPLATE`);
+- `issued_by` = el instructor del curso;
+- `verification_code = UUID()`.
+
+Cambiar después el nombre del alumno, el título o el certificador no altera el certificado.
+
+**Peticiones a la vez:** `uq_certificate_enrollment (user_id, course_id)` y `INSERT ... ON DUPLICATE KEY UPDATE certificate.id = certificate.id` hacen que dos peticiones al mismo tiempo no dupliquen nada. No se usa `INSERT IGNORE`, para no esconder errores de los CHECK.
+
+**El PDF lo genera PHP sin transacción abierta:**
+1. `sp_certificate_issue`;
+2. generar el PDF;
+3. subirlo a Cloudinary como `raw` `authenticated` en `cursology/certificates/u<alumno>/<código>.pdf`;
+4. `sp_certificate_mark_issued`.
+
+Si la subida falla, queda `pending` y el siguiente intento lo vuelve a generar con los mismos datos.
+
+**`p_code`** es `CHAR(36) CHARACTER SET ascii`. PHP lo pasa en minúsculas y solo si tiene formato UUID.
+
+### Calificaciones y opiniones
+
+`course_rate` (una calificación de 1 a 5 por alumno y curso) y `course_opinion` (una opinión de texto por alumno y curso, que se puede ocultar).
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_review_mine(p_user_id, p_course_id)` | 1) `enrolled, completed`; 2) su `course_rate`; 3) su `course_opinion` (aunque esté oculta, con el motivo). Lo lee `MyReview` | — |
+| `sp_review_save(p_user_id, p_course_id, p_rate, p_opinion)` | Guarda las estrellas (upsert con `AS incoming`) y crea, cambia o quita la opinión (`p_opinion` NULL o vacía la quita). Devuelve lo mismo que `sp_review_mine` | `NOT_ENROLLED`, `COURSE_NOT_COMPLETED`, `INVALID_RATE`, `OPINION_HIDDEN` |
+| `sp_review_list(p_course_id, p_limit, p_offset, p_viewer_id)` | 1) `rating_avg, rating_count, stars_1 ... stars_5`; 2) opiniones visibles con `rate`, `author_name`, `author_avatar`, `mine` y `reported_by_me`, de la más reciente a la primera; 3) `total`; 4) las reacciones de esas opiniones (ver "Reacciones"). `p_viewer_id` (NULL para visitantes) solo marca lo de quien consulta | `COURSE_NOT_FOUND` (no publicado, dado de baja o de un instructor que ya no está activo o tiene ban) |
+| `sp_review_hide(p_actor_id, p_opinion_id, p_reason)` | Oculta la opinión (`active = 0`, `deactivated_by`, `deactivated_at`, `reason`) y resuelve sus reportes pendientes. Ocultarla otra vez no cambia nada | `OPINION_NOT_FOUND` |
+
+- **Solo con el curso terminado** (`user_courses.completed_at`): no basta con estar inscrito.
+- **Opinión oculta:** ya no cambia de texto. `OPINION_HIDDEN` si llega otro distinto (comparación con `<=>`); con el mismo texto sí se guardan las estrellas.
+- **Moderación:** solo el instructor del curso (`course.created_by`) o un usuario con `role = 'admin'`. Para cualquier otro la opinión "no existe" (`OPINION_NOT_FOUND`), igual que si el id fuera inventado.
+- **Promedio:** cuenta las calificaciones de quien no tiene opinión o la tiene visible:
+
+  ```sql
+  LEFT JOIN course_opinion o ... WHERE o.id IS NULL OR o.active = 1
+  ```
+
+### Reportes
+
+Solo lectura, para los paneles del instructor y del admin (los lee `ReportRepository`).
+
+**Reglas comunes:**
+- Los importes son la suma de `purchase.amount` con `status = 'completed'`. Las inscripciones de $0 no cambian la suma; en el total por forma de pago se excluyen.
+- Las calificaciones usan la misma regla que el catálogo: no cuentan las de quien tiene la opinión oculta.
+
+| SP | Qué devuelve | Errores |
+|---|---|---|
+| `sp_instructor_overview(p_instructor_id)` | `revenue_total, student_total` (inscripciones), `rating_avg, rating_count` de todos sus cursos | `NOT_INSTRUCTOR` |
+| `sp_instructor_sales(p_instructor_id, p_from, p_to, p_category_id, p_only_active)` | 1) por curso: `id, title, cover_image, active, created_at, currency, student_count, avg_progress, revenue, rating_avg, rating_count`; 2) por forma de pago: `method_name, purchases, total`; 3) `revenue_total` | `NOT_INSTRUCTOR` |
+| `sp_instructor_course_students(p_instructor_id, p_course_id)` | 1) el curso con `chapter_count, student_count, avg_progress, revenue`; 2) sus alumnos: `user_id, full_name, email, avatar, enrolled_at, completed_at, progress, paid, payment_methods` | `COURSE_NOT_FOUND` (no existe o es de otro instructor) |
+| `sp_instructor_recent_reviews(p_instructor_id, p_limit)` | Las últimas opiniones de sus cursos, también las ocultas (`active`, `reason`), con `course_title`, `rate` y el autor | `NOT_INSTRUCTOR` |
+| `sp_admin_overview(p_admin_id)` | `active_students, active_instructors` (activos y sin ban) y `published_courses` (activos y publicados) | `NOT_ADMIN` |
+| `sp_admin_report_instructors(p_admin_id)` | Instructores activos y sin ban: `id, email, full_name, avatar, created_at, published_courses, earnings` | `NOT_ADMIN` |
+| `sp_admin_report_students(p_admin_id)` | Alumnos activos y sin ban: `id, email, full_name, avatar, created_at, enrolled_courses, completed_courses, completed_percent` | `NOT_ADMIN` |
+
+**`sp_instructor_sales`:**
+- Solo los cursos con `published_at` (los borradores no tienen alumnos).
+- Filtros (NULL = sin filtrar):
+  - `p_from`/`p_to`: `course.created_at`, por días completos;
+  - `p_category_id`: categoría asignada y activa;
+  - `p_only_active = 1`: sin los dados de baja.
+
+  Se repiten en las tres consultas en lugar de usar una tabla temporal, que pide un permiso extra (`CREATE TEMPORARY TABLES`).
+
+**Avance:**
+- Por alumno: `capítulos terminados / capítulos del curso * 100` (`LEAST(100, ...)`, 1 decimal).
+- `avg_progress` es su promedio entre los inscritos. Un curso sin alumnos o sin capítulos da `0.0`.
+
+**`payment_methods`:** las formas de pago de las compras de más de $0, separadas por `|` (`GROUP_CONCAT DISTINCT`). NULL si todo fue gratis.
+
+**Orden:**
+- reportes del admin: de la cuenta más reciente a la más antigua;
+- detalle de alumnos: del inscrito más reciente al primero;
+- ventas: del curso creado más reciente al más antiguo.
+
+### Mensajes
+
+`chat` (una conversación por curso entre el instructor dueño y un alumno inscrito) y `message` (mensajes de texto, que pueden responder a otro de la misma conversación). Los lee `ChatRepository`. Requieren la migración `2026_11_chat_read.sql` en bases creadas antes (ver el README, sección "Migraciones").
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_chat_start(p_user_id, p_course_id, p_student_id)` | Busca o crea la conversación. El alumno pasa `p_student_id` NULL; el instructor dueño pasa el alumno. Devuelve la fila de `chat` y `created` (1 si se creó, 0 si ya existía) | `COURSE_NOT_FOUND`, `NOT_ENROLLED`, `STUDENT_NOT_ENROLLED` (el alumno que eligió el instructor), `NOT_ALLOWED` (ni el alumno ni el dueño del curso) |
+| `sp_chat_list(p_user_id)` | Sus conversaciones (como alumno o como instructor): `id, course_id, course_title, course_cover, course_active, viewer_role, other_id, other_name, other_avatar, last_message_id, last_message_content, last_message_at, last_message_mine, unread_count, created_at, last_activity_at`, de la de actividad más reciente a la más antigua | — |
+| `sp_chat_open(p_user_id, p_chat_id, p_after_id, p_limit)` | Marca la conversación leída para quien la abre. 1) la conversación con el curso y los dos participantes; 2) los mensajes posteriores a `p_after_id` (NULL = los últimos `p_limit`), del más antiguo al más nuevo: `id, sent_by, sender_name, sender_avatar, content, sent_at, reply_to, reply_sender_name, reply_content`; 3) `unread_total` de todas sus conversaciones; 4) las reacciones de los mensajes de 2) (ver "Reacciones") | `CHAT_NOT_FOUND` (no existe o no participa) |
+| `sp_message_send(p_user_id, p_chat_id, p_content, p_reply_to)` | Guarda el mensaje y marca la conversación leída para quien envía. Devuelve el mensaje con las columnas de los de `sp_chat_open` | `CHAT_NOT_FOUND`, `MESSAGE_NOT_FOUND` (`p_reply_to` no es un mensaje activo de esta conversación), `INVALID_MESSAGE` (vacío o de más de 2000 caracteres) |
+| `sp_chat_unread_total(p_user_id)` | `unread_total` de todas sus conversaciones, para el menú | — |
+
+- **No leído:** un mensaje activo que envió el otro participante después de la última lectura de quien consulta:
+
+  ```sql
+  m.sent_by <> p_user_id
+  AND m.sent_at > COALESCE(<student_last_read_at o instructor_last_read_at>, '1000-01-01')
+  ```
+
+  `sp_chat_open` solo reescribe la última lectura si hay algo nuevo del otro, para que el sondeo de cada 10 segundos no actualice la fila en cada consulta.
+- **Curso dado de baja:** la conversación sigue disponible; `course_active` lo indica.
+- **Mensajes dados de baja** (`message.active = 0`, la moderación de la fase 3): no se listan ni cuentan como no leídos; una respuesta a uno de ellos trae `reply_content` NULL.
+- **`p_after_id` es un id, no una fecha:** el sondeo pide "lo posterior al último que se ve", así que ningún mensaje se pierde aunque dos lleguen en el mismo instante.
+
+### Comentarios por capítulo
+
+`chapter_comment`: comentarios de texto en los capítulos de video, con respuestas de un solo nivel (`comment_parent_id` siempre apunta a un comentario principal del mismo capítulo). Los lee `CommentRepository`.
+
+**Columnas de cada comentario** (las mismas en la lista, al crear, editar, eliminar, ocultar y restaurar): `id, course_chapter_id, comment_parent_id, commented_by, author_name, author_avatar, author_is_instructor, comment, commented_at, updated_at, active, reply_count`. `comment` es NULL si se eliminó o se ocultó. `sp_comment_list` agrega `reported_by_me` (quien consulta ya lo reportó).
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_comment_list(p_user_id, p_chapter_id, p_limit, p_offset)` | 1) los principales de la página, del más nuevo al más antiguo; 2) sus respuestas visibles, de la más antigua a la más nueva; 3) las reacciones de todos ellos; 4) `total` y `viewer_is_owner` | `CHAPTER_NOT_FOUND`, `NO_COMMENTS_ON_EXAM`, `NO_LEVEL_ACCESS` |
+| `sp_comment_create(p_user_id, p_chapter_id, p_parent_id, p_content)` | Publica el comentario o la respuesta. Si `p_parent_id` es una respuesta, la nueva se cuelga de su comentario principal | Los de la lista, más `COMMENT_NOT_FOUND` (`p_parent_id` no es un comentario activo del capítulo) e `INVALID_COMMENT` (vacío o de más de 2000 caracteres) |
+| `sp_comment_update(p_user_id, p_comment_id, p_content)` | El autor cambia el texto. `updated_at` solo cambia si el texto es distinto: así se marca "editado" | `COMMENT_NOT_FOUND` (no existe, no es suyo o ya no está activo), `INVALID_COMMENT` |
+| `sp_comment_delete(p_user_id, p_comment_id)` | El autor lo elimina: `active = 0`, `deactivated_by` = él y `reason = 'Eliminado por su autor'`. Sus reportes pendientes quedan resueltos | `COMMENT_NOT_FOUND` |
+| `sp_comment_hide(p_user_id, p_comment_id, p_reason)` | El instructor del curso o un admin lo ocultan con su motivo y sus reportes pendientes quedan resueltos. Ocultarlo otra vez no cambia nada | `COMMENT_NOT_FOUND` (también para cualquier otro) |
+| `sp_comment_react(p_user_id, p_comment_id, p_reaction_id)` | Pone, cambia o quita (NULL) la reacción de quien puede ver el comentario. Devuelve las reacciones del comentario | `COMMENT_NOT_FOUND`, `REACTION_NOT_FOUND` |
+| `sp_instructor_course_comments(p_instructor_id, p_course_id, p_chapter_id, p_unanswered, p_limit, p_offset)` | 1) `id, title, active` del curso; 2) sus capítulos de video con `comment_count` y `unanswered_count`; 3) los principales de la página con `chapter_title, level_sort, chapter_sort, answered`; 4) sus respuestas; 5) sus reacciones; 6) `total` | `COURSE_NOT_FOUND` (no existe o es de otro instructor) |
+| `sp_instructor_recent_comments(p_instructor_id, p_limit)` | Los últimos principales activos de alumnos en sus cursos: `id, course_id, course_title, chapter_id, chapter_title, author_name, author_avatar, comment, commented_at, answered` | `NOT_INSTRUCTOR` |
+
+- **Quién ve y comenta:** el alumno con acceso al nivel (`user_course_level`) o el dueño del curso (`course.created_by`). Los exámenes no llevan comentarios.
+- **Visibles:** los principales activos y los eliminados u ocultos que todavía tienen respuestas visibles ("Comentario eliminado"). Las respuestas eliminadas u ocultas no se listan.
+- **Sin responder** (`p_unanswered = 1`, `unanswered_count`): principales activos de alumnos sin una respuesta activa del instructor.
+- **Páginas:** la página de principales se repite como tabla derivada con `LIMIT` en las consultas de respuestas y reacciones, porque MySQL no admite `LIMIT` dentro de `IN`.
+
+### Reacciones
+
+`reaction` es el catálogo (lo administra el admin); `chapter_comment_reaction`, `opinion_reaction` y `message_reaction` guardan una reacción por usuario y elemento (son únicas por usuario). Los lee `ReactionRepository` (y `CommentRepository` las de comentarios).
+
+**Filas de reacciones** (en `sp_comment_list`, `sp_instructor_course_comments`, `sp_review_list`, `sp_chat_open` y los `*_react`): `target_id, reaction_id, emoji, reaction_name, total, mine`, una por emoji y elemento, en el orden del catálogo. `mine` es 1 si es la de quien consulta. Solo cuentan las reacciones activas del catálogo.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_reaction_list(p_only_active)` | El catálogo por `id` (el orden en que se ofrece): con 1 solo las activas, con 0 todas | — |
+| `sp_reaction_create(p_admin_id, p_emoji, p_name)` | Agrega una activa | `NOT_ADMIN`, `REACTION_NAME_TAKEN` |
+| `sp_reaction_update(p_admin_id, p_reaction_id, p_emoji, p_name)` | Cambia emoji y nombre | `NOT_ADMIN`, `REACTION_NOT_FOUND`, `REACTION_NAME_TAKEN` |
+| `sp_reaction_set_active(p_admin_id, p_reaction_id, p_active)` | Activa o desactiva. Las reacciones que ya se dieron se conservan y vuelven a contar si se reactiva | `NOT_ADMIN`, `REACTION_NOT_FOUND` |
+| `sp_opinion_react(p_user_id, p_opinion_id, p_reaction_id)` | Pone, cambia o quita (NULL) la reacción a una opinión visible de un curso publicado y activo | `OPINION_NOT_FOUND`, `REACTION_NOT_FOUND` |
+| `sp_message_react(p_user_id, p_message_id, p_reaction_id)` | Ídem a un mensaje activo de una conversación en la que participa | `MESSAGE_NOT_FOUND`, `REACTION_NOT_FOUND` |
+
+- **Poner o cambiar** es un upsert con `INSERT ... AS incoming ON DUPLICATE KEY UPDATE reaction_id = incoming.reaction_id`; **quitar** es un `DELETE` de la fila del usuario.
+- **No se borran reacciones del catálogo:** tienen historial. Se desactivan.
+
+### Moderación
+
+`content_report`: un reporte por usuario y contenido (comentario u opinión), con su motivo y su estado (`pending`, `resolved` o `dismissed`). Requiere la migración `2026_11_content_report.sql` en bases creadas antes (ver el README, sección "Migraciones"). Los lee `ModerationRepository`.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_report_create(p_user_id, p_target_type, p_target_id, p_reason_code, p_details)` | Crea el reporte. Si el usuario ya lo había reportado no cambia nada. Devuelve `target_type, target_id, created` | `INVALID_REPORT` (tipo o motivo desconocido, u "other" sin detalle), `COMMENT_NOT_FOUND` / `OPINION_NOT_FOUND` (no lo ve, está oculto o no existe), `CANNOT_REPORT_OWN` |
+| `sp_report_dismiss(p_admin_id, p_target_type, p_target_id)` | Sus reportes pendientes pasan a `dismissed`; el contenido sigue visible. Devuelve `dismissed` (cuántos) | `NOT_ADMIN`, `INVALID_REPORT` |
+| `sp_moderation_reports(p_admin_id, p_limit, p_offset)` | 1) la cola, un renglón por contenido con reportes pendientes, del reporte más reciente al más antiguo: `target_type, target_id, content, active, created_at`, el autor (`author_id, author_name, author_email, author_avatar`), `course_id, course_title, chapter_id, chapter_title`, `report_count`, `spam_count, offensive_count, answers_count, other_count`, `first_reported_at, last_reported_at, last_details`; 2) `total` (contenidos) y `report_total` (reportes) | `NOT_ADMIN` |
+| `sp_moderation_content(p_admin_id, p_type, p_state, p_search, p_limit, p_offset)` | 1) comentarios y opiniones, del más reciente al más antiguo, con lo mismo más `deactivated_at, deactivation_reason, deactivated_by_name, removed_by_author, restorable, report_count`; 2) `total`. Filtros: `p_type` (`comment`/`opinion`), `p_state` (`visible`/`hidden`) y `p_search` (patrón `LIKE` escapado por PHP sobre el texto, el nombre y el email del autor) | `NOT_ADMIN` |
+| `sp_comment_restore(p_admin_id, p_comment_id)` | Vuelve a mostrar un comentario oculto (deja los datos de baja en NULL, como exige `ck_comment_deletion`). Devuelve el comentario | `NOT_ADMIN`, `COMMENT_NOT_FOUND`, `NOT_RESTORABLE` (visible o eliminado por su autor) |
+| `sp_opinion_restore(p_admin_id, p_opinion_id)` | Ídem con una opinión: sus estrellas vuelven a contar. Devuelve la fila de `course_opinion` | `NOT_ADMIN`, `OPINION_NOT_FOUND`, `NOT_RESTORABLE` |
+
+- **Quién reporta:** un comentario, quien lo puede ver (como en `sp_comment_list`); una opinión, cualquier usuario mientras esté visible. Nunca lo propio.
+- **Se resuelven solos:** `sp_comment_hide`, `sp_review_hide` y `sp_comment_delete` pasan a `resolved` los reportes pendientes de ese contenido, con quien actuó en `resolved_by`.
+- **Reportar otra vez** después de un descarte no regresa el contenido a la cola (`uq_report_comment_user`, `uq_report_opinion_user`); el reporte de otra persona sí.
+- **La cola y todo el contenido** juntan comentarios y opiniones con `UNION ALL` en una tabla derivada, ordenada y paginada afuera.
+
+### Mantenimiento
+
+Lo usa `scripts/purge_test_data.php` (ver el README, sección "Limpiar los datos de prueba") mediante `MaintenanceRepository`.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_maintenance_purge(p_scope, p_apply)` | Borra de verdad las cuentas de un alcance y todo lo que depende de ellas. Devuelve una fila con las filas borradas por tabla (`users, login_attempts, account_events, courses, levels, chapters, contents, questions, enrollments, purchases, access, progress, attempts, certificates, rates, opinions, comments, reactions, chats, messages, reports, categories, test_reactions`), las cuentas que quedan (`remaining_students, remaining_instructors, remaining_admins`) y `applied` | `INVALID_SCOPE` |
+
+- **Alcances fijos:** `'test'` son las cuentas `%@cursology.test` (dominio reservado para pruebas), más las categorías y reacciones cuyo nombre lleva la marca de las pruebas (`^Prueba [0-9]{14}-[0-9a-f]{6}`) y que nadie usa; `'demo'` son las cuentas `%@demo.cursology.local` de `scripts/seed_demo.php`. El SP no recibe un patrón libre y cada filtro excluye `role = 'admin'`.
+- **Ensayo:** con `p_apply = 0` borra todo, cuenta con `ROW_COUNT()` y termina con `ROLLBACK`; con `1`, `COMMIT`. Las cifras del ensayo son exactamente las del borrado.
+- **También borra lo ajeno ligado a esos datos:** la inscripción de otra cuenta a un curso de prueba (con su avance, compras y opinión), sus comentarios en ese curso y sus respuestas o reacciones a un comentario de prueba. Las respuestas siempre cuelgan del comentario raíz, así que primero se borran las respuestas y luego los comentarios. Los mensajes sueltan `reply_to` antes de borrarse con su chat.
+- **Orden:** de las hojas a la raíz (reportes, reacciones, mensajes y chats, comentarios, opiniones, calificaciones y certificados, intentos, avance, accesos, compras, inscripciones, la estructura de los cursos, el historial de las cuentas, las cuentas y, al final, el catálogo de prueba). Si queda alguna llave foránea sin resolver, el `EXIT HANDLER` deshace todo.
+- **Instalar la base desde PHP:** `scripts/setup_test_db.php` es la única excepción a "PHP no ejecuta SQL": corre con PDO el esquema y los archivos de `install.sql` (DDL, sin datos de negocio) sobre la base de pruebas, separándolos con `scripts/support/SqlScript.php`, que entiende `DELIMITER` y `SOURCE` como el cliente `mysql`.

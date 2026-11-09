@@ -25,6 +25,7 @@ use App\Services\PricingMode;
     $checkoutUrl = static fn (?string $levelId = null): string => '?view=checkout&course=' . rawurlencode($course->id) . ($levelId === null ? '' : '&level=' . rawurlencode($levelId));
     ?>
     <p class="breadcrumb"><a href="?view=catalog">Catálogo</a> / <?= e($course->title) ?></p>
+    <div class="form-alert page-alert" role="status" data-page-alert hidden></div>
 
     <section class="course-hero">
         <div class="course-hero-main">
@@ -48,6 +49,7 @@ use App\Services\PricingMode;
                 <?php endif; ?>
                 · Publicado el <?= e(format_date($course->publishedAt)) ?>
             </p>
+            <a class="course-rating" href="#opiniones"><?= e(format_rating($course->ratingAvg, $course->ratingCount)) ?></a>
         </div>
 
         <aside class="course-buy panel" aria-label="Precio e inscripción">
@@ -161,7 +163,12 @@ use App\Services\PricingMode;
             <div>
                 <p class="course-instructor-name"><?= e($course->instructorName) ?></p>
                 <p class="text-muted"><?= $course->instructorDescription !== null ? nl2br(e($course->instructorDescription)) : 'Instructor en Cursology.' ?></p>
+                <?php if ($isStudent && $courseAccess->enrolled): ?>
+                    <button type="button" class="btn btn-secondary btn-sm course-instructor-chat" data-start-chat="<?= e($course->id) ?>">Escribirle al instructor</button>
+                <?php endif; ?>
             </div>
         </div>
     </section>
+
+    <?php require __DIR__ . '/course-reviews.html'; ?>
 <?php endif; ?>

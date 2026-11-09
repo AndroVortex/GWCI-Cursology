@@ -46,33 +46,17 @@
     font-weight: 600;
 }
 
-/* ---------- Avisos ---------- */
-.notice-success {
-    border-color: transparent;
-    background: var(--success-soft);
-    color: var(--success);
+/* ---------- Curso terminado ---------- */
+.learn-completed {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
 }
 
-.notice-warning {
-    border-color: transparent;
-    background: var(--warning-soft);
-    color: var(--warning);
-}
-
-/* ---------- Barra de avance ---------- */
-.progress-bar {
-    overflow: hidden;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--surface-3);
-}
-
-.progress-bar span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--success);
-    transition: width var(--transition);
+.learn-completed-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 /* ---------- Reproductor ---------- */
@@ -103,6 +87,10 @@
 .learn-index-header .text-muted {
     margin: 2px 0 0;
     font-size: 0.8125rem;
+}
+
+.learn-ask {
+    margin: 6px 0 0 -10px;
 }
 
 .learn-progress .form-hint {
@@ -247,18 +235,15 @@
     margin-top: 6px;
 }
 
-.filters-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
+.certificate-title {
+    margin: 0;
+    font-weight: 600;
 }
 
-.table-sub {
-    display: block;
-    margin-top: 2px;
-    color: var(--text-muted);
-    font-size: 0.75rem;
+.certificate-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 /* ---------- Examen del alumno ---------- */

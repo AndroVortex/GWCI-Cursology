@@ -15,6 +15,7 @@ set_error_handler(static function (int $severity, string $message, string $file,
 });
 
 require dirname(__DIR__) . '/app/autoload.php';
+require_once dirname(__DIR__) . '/scripts/support/SqlScript.php';
 
 final class Report
 {
@@ -73,6 +74,73 @@ final class Report
 function check(bool $ok, string $label): void
 {
     Report::check($ok, $label);
+}
+
+/**
+ * Guarda qué formas de pago están activas y lo restaura al salir del script (también si la
+ * prueba falla o termina con exit), para no cambiar lo que el admin configuró.
+ */
+function restorePaymentMethodsAtExit(App\Services\PaymentMethodService $methods, App\Models\Entities\AppUser $admin): void
+{
+    $initial = [];
+    foreach ($methods->overview() as $row) {
+        $initial[$row['provider']->value] = $row['active'];
+    }
+    register_shutdown_function(static function () use ($methods, $admin, $initial): void {
+        foreach ($initial as $code => $active) {
+            $methods->setActive($admin, ['codigo' => $code, 'activa' => $active]);
+        }
+    });
+}
+
+/**
+ * Configuración de la base de pruebas ($DATABASES['test'] de conn.php, que se carga antes).
+ * Las suites con base de datos nunca usan la local, para que sus cuentas prueba+… no lleguen
+ * a los reportes. Termina el script si la base no existe, se llama igual que la local o la de
+ * producción, o tiene un SP o el esquema más viejos que su archivo.
+ *
+ * @return array{host: string, port: int, name: string, user: string, password: string, charset: string, ssl_ca: string}
+ */
+function testDatabase(): array
+{
+    $databases = $GLOBALS['DATABASES'] ?? throw new LogicException('Carga app/database/conn.php antes de llamar a testDatabase().');
+    $config = $databases['test'];
+    $setup = 'Créala o actualízala con: php scripts/setup_test_db.php';
+    $stop = static function (string $message): never {
+        fwrite(STDERR, $message . PHP_EOL);
+        exit(1);
+    };
+
+    foreach (['local', 'prod'] as $other) {
+        if (strcasecmp($config['name'], $databases[$other]['name']) === 0) {
+            $stop(sprintf('La base de pruebas se llama igual que la base %s (%s): cambia DB_TEST_NAME en el .env.', $other, $config['name']));
+        }
+    }
+
+    try {
+        $pdo = (new App\Database\Connection($config))->pdo();
+        $routines = $pdo->query("SELECT LOWER(ROUTINE_NAME), UNIX_TIMESTAMP(LAST_ALTERED) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_TYPE = 'PROCEDURE'")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $schemaCreated = (int) $pdo->query('SELECT UNIX_TIMESTAMP(MIN(CREATE_TIME)) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()')->fetchColumn();
+    } catch (PDOException $exception) {
+        $stop(sprintf("No se pudo abrir la base de pruebas %s. Revisa que MySQL esté encendido.\n%s\nDetalle: %s", $config['name'], $setup, $exception->getMessage()));
+    }
+
+    $root = dirname(__DIR__);
+    $stale = [];
+    if (filemtime($root . '/app/database/schema/Cursology_modelo_fisico_mysql.sql') > $schemaCreated) {
+        $stale[] = 'el esquema';
+    }
+    foreach (SqlScript::sourcedFiles((string) file_get_contents($root . '/app/database/procedures/install.sql')) as $file) {
+        $altered = $routines[strtolower(basename($file, '.sql'))] ?? null;
+        if ($altered === null || filemtime($root . '/' . $file) > (int) $altered) {
+            $stale[] = basename($file, '.sql');
+        }
+    }
+    if ($stale !== []) {
+        $stop(sprintf("La base de pruebas %s está desactualizada (%s).\n%s", $config['name'], implode(', ', array_slice($stale, 0, 5)) . (count($stale) > 5 ? ', …' : ''), $setup));
+    }
+
+    return $config;
 }
 
 /**

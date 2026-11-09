@@ -1,0 +1,183 @@
+/* Comentarios de los capítulos: panel del reproductor y vista del instructor (?view=course-comments). */
+.comments-total {
+    margin-left: 4px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.comment-form {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.comment-list,
+.comment-replies {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.comment-list {
+    display: grid;
+    gap: 16px;
+}
+
+.comment-thread + .comment-thread {
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.comment-replies {
+    display: grid;
+    gap: 12px;
+    margin: 12px 0 0 38px;
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+}
+
+.comment-replies:empty {
+    display: none;
+}
+
+.comment {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.comment:target .comment-body,
+.comment.is-highlighted .comment-body {
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.comment-avatar {
+    width: 28px;
+    height: 28px;
+}
+
+.comment-body {
+    display: grid;
+    flex: 1;
+    gap: 6px;
+    min-width: 0;
+}
+
+.comment-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.comment-date,
+.comment-edited {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.comment-edited[hidden] {
+    display: none;
+}
+
+.comment-text {
+    margin: 0;
+    font-size: 0.9375rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.comment-removed {
+    margin: 0;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.comment-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.comment-actions:empty {
+    display: none;
+}
+
+.comment-action {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.comment-action:hover {
+    text-decoration: underline;
+}
+
+.comment-action-danger {
+    color: var(--danger);
+}
+
+/* Formularios en línea: responder, editar y ocultar con motivo */
+.comment-inline-form {
+    display: grid;
+    gap: 6px;
+}
+
+.comment-inline-form .form-actions {
+    justify-content: flex-start;
+    padding-top: 0;
+}
+
+.comment-inline-form .form-hint {
+    margin: 0;
+}
+
+.comment-replies + .comment-inline-form,
+.comment-thread > .comment-inline-form {
+    margin: 12px 0 0 50px;
+}
+
+.comments-empty {
+    margin: 0;
+}
+
+.comments-empty[hidden] {
+    display: none;
+}
+
+[data-comments-more] {
+    margin-top: 16px;
+}
+
+.comments-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+@media (max-width: 599.98px) {
+    .comment-replies {
+        margin-left: 12px;
+    }
+
+    .comment-replies + .comment-inline-form,
+    .comment-thread > .comment-inline-form {
+        margin-left: 0;
+    }
+}

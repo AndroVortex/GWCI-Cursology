@@ -26,6 +26,8 @@ final class CatalogPresenter
             'currency' => $course->currency,
             'levels' => $course->levelCount,
             'chapters' => $course->chapterCount,
+            'ratingAvg' => $course->ratingAvg,
+            'ratingCount' => $course->ratingCount,
             'publishedAt' => $course->publishedAt->format(DATE_ATOM),
         ];
     }
@@ -55,6 +57,8 @@ final class CatalogPresenter
             'fullCoursePrice' => $course->fullCoursePrice,
             'levelPriceTotal' => $course->levelPriceTotal(),
             'currency' => $course->currency,
+            'ratingAvg' => $course->ratingAvg,
+            'ratingCount' => $course->ratingCount,
             'publishedAt' => $course->publishedAt->format(DATE_ATOM),
             'instructor' => [
                 'id' => $course->instructorId,

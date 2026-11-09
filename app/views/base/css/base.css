@@ -7,6 +7,7 @@
 
     --header-h: 56px;
     --sidebar-w: 232px;
+    --content-max: 1200px;
 
     --radius-sm: 6px;
     --radius: 8px;
@@ -171,9 +172,11 @@ strong {
 /* =========================================================
    Layout
    ========================================================= */
+/* El sidebar no ocupa columna: en escritorio se despliega encima del contenido y en pantallas
+   chicas es un panel lateral. */
 .app-shell {
     display: grid;
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     min-height: calc(100vh - var(--header-h));
 }
 
@@ -186,7 +189,7 @@ strong {
 .app-content {
     flex: 1;
     width: 100%;
-    max-width: 1080px;
+    max-width: var(--content-max);
     margin: 0 auto;
     padding: 28px clamp(16px, 4vw, 40px) 40px;
 }
@@ -417,13 +420,17 @@ strong {
 /* =========================================================
    Sidebar
    ========================================================= */
+.sidebar-dock {
+    display: contents;
+}
+
+.sidebar-handle {
+    display: none;
+}
+
 .sidebar {
-    position: sticky;
-    top: var(--header-h);
-    align-self: start;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - var(--header-h));
     padding: 16px 12px;
     overflow-y: auto;
     border-right: 1px solid var(--border);
@@ -553,6 +560,84 @@ strong {
     display: none;
 }
 
+/* Escritorio: escondido tras una pestaña en la orilla izquierda; se despliega encima del contenido
+   con el cursor (la orilla también cuenta), con el teclado o con un toque en la pestaña. Las
+   esperas al abrir y al cerrar evitan que parpadee al pasar el cursor de largo. */
+@media (min-width: 1024px) {
+    .sidebar-dock {
+        position: fixed;
+        top: var(--header-h);
+        bottom: 0;
+        left: 0;
+        z-index: 45;
+        display: block;
+        width: 12px;
+    }
+
+    .sidebar-handle {
+        position: absolute;
+        top: 16px;
+        left: 0;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 44px;
+        padding: 0 2px 0 0;
+        border: 1px solid var(--border);
+        border-left: 0;
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--text-muted);
+        box-shadow: var(--shadow-sm);
+        cursor: pointer;
+        transition: color var(--transition), background-color var(--transition);
+    }
+
+    .sidebar-handle:hover {
+        background: var(--surface-2);
+        color: var(--text);
+    }
+
+    .sidebar-handle svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .sidebar-handle-badge {
+        position: absolute;
+        top: -7px;
+        right: -9px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        font-size: 0.625rem;
+    }
+
+    .sidebar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: var(--sidebar-w);
+        box-shadow: var(--shadow);
+        visibility: hidden;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease 0.15s, visibility 0s linear 0.35s;
+    }
+
+    .sidebar-dock:hover .sidebar,
+    .sidebar-dock.is-pinned .sidebar,
+    .sidebar-dock.has-focus .sidebar {
+        visibility: visible;
+        transform: none;
+        transition: transform 0.2s ease 0.08s, visibility 0s linear 0.08s;
+    }
+
+    .sidebar-dock.has-focus .sidebar {
+        transition-delay: 0s;
+    }
+}
+
 /* =========================================================
    Footer
    ========================================================= */
@@ -627,6 +712,18 @@ strong {
 
 .notice p {
     margin: 0;
+}
+
+.notice-success {
+    border-color: transparent;
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.notice-warning {
+    border-color: transparent;
+    background: var(--warning-soft);
+    color: var(--warning);
 }
 
 .stat-grid {
@@ -705,6 +802,305 @@ strong {
     padding: 12px 16px;
     border-top: 1px solid var(--border);
     background: var(--bg);
+}
+
+/* ---------- Barra de avance (reproductor, Mi aprendizaje y reportes) ---------- */
+.progress-bar {
+    overflow: hidden;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-3);
+}
+
+.progress-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--success);
+    transition: width var(--transition);
+}
+
+.progress-cell {
+    display: grid;
+    grid-template-columns: minmax(60px, 120px) auto;
+    align-items: center;
+    justify-content: end;
+    gap: 8px;
+}
+
+/* ---------- Reportes: totales por forma de pago y opiniones recientes ---------- */
+.sales-totals {
+    gap: 8px 20px;
+    font-size: 0.875rem;
+}
+
+.recent-review {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.recent-review-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin: 0;
+}
+
+.recent-review-stars {
+    color: #f59e0b;
+    letter-spacing: 1px;
+}
+
+.recent-review-text {
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+/* ---------- Reacciones (comentarios, opiniones y mensajes) ---------- */
+.reactions {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.reactions:empty {
+    display: none;
+}
+
+.reaction-chip,
+.reaction-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.8125rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.reaction-chip:disabled {
+    cursor: default;
+}
+
+.reaction-chip:not(:disabled):hover,
+.reaction-add:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+}
+
+.reaction-chip.is-mine {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.reaction-emoji {
+    font-size: 0.9375rem;
+}
+
+.reaction-add {
+    padding: 0 6px;
+    border-style: dashed;
+    color: var(--text-muted);
+}
+
+.reaction-picker {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.reaction-option {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+
+.reaction-option:hover,
+.reaction-option[aria-checked="true"] {
+    background: var(--surface-2);
+}
+
+.reaction-error {
+    color: var(--danger);
+    font-size: 0.75rem;
+}
+
+.reaction-catalog-emoji {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.reaction-emoji-input {
+    max-width: 120px;
+    font-size: 1.125rem;
+}
+
+/* ---------- Reportar comentarios y opiniones ---------- */
+.report-form {
+    display: grid;
+    gap: 8px;
+    max-width: 520px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+}
+
+.report-form .form-hint {
+    margin: 0;
+}
+
+.report-form .form-actions {
+    justify-content: flex-start;
+    padding-top: 0;
+}
+
+.report-done {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-style: italic;
+}
+
+.review-actions {
+    margin-top: 4px;
+}
+
+/* ---------- Mensajes: lista de conversaciones (vista de mensajes y paneles) y no leídos ---------- */
+.unread-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.unread-badge[hidden] {
+    display: none;
+}
+
+.sidebar-badge {
+    margin-left: auto;
+}
+
+.chat-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chat-list li + li {
+    border-top: 1px solid var(--border);
+}
+
+.chat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 0.875rem;
+}
+
+.chat-item:hover {
+    background: var(--surface-2);
+    text-decoration: none;
+}
+
+.chat-item.is-active {
+    background: var(--accent-soft);
+}
+
+.chat-item-avatar {
+    width: 36px;
+    height: 36px;
+}
+
+.chat-item-body {
+    display: grid;
+    flex: 1;
+    gap: 1px;
+    min-width: 0;
+}
+
+.chat-item-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.chat-item-name,
+.chat-item-course,
+.chat-item-excerpt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-item-date,
+.chat-item-course {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.chat-item-date {
+    flex-shrink: 0;
+}
+
+.chat-item-excerpt {
+    color: var(--text-muted);
+}
+
+.chat-item.has-unread .chat-item-excerpt {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* ---------- Tablas: texto secundario y acciones de los filtros ---------- */
+.table-sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.filters-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
 }
 
 .grid-2 {
@@ -980,6 +1376,18 @@ strong {
     margin: 0;
     font-size: 0.9375rem;
     line-height: 1.35;
+}
+
+.course-card-rating {
+    margin: 0;
+    color: var(--warning);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.course-card-rating.is-empty {
+    color: var(--text-muted);
+    font-weight: 400;
 }
 
 .course-card-price {
@@ -1428,10 +1836,6 @@ select.form-control {
    Responsive
    ========================================================= */
 @media (max-width: 1023.98px) {
-    .app-shell {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
     .menu-toggle {
         display: inline-grid;
     }

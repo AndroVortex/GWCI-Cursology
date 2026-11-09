@@ -8,27 +8,38 @@
 <div class="form-alert page-alert" role="status" data-page-alert hidden></div>
 
 <?php
-/** @var list<\App\Models\Dto\LockedAccount> $lockedAccounts */
-$previewMessage = 'Las categorías, las formas de pago y la reactivación de cuentas ya funcionan. Reportes y moderación se conectarán en las siguientes entregas.';
-require BASE_PATH . '/app/views/base/html/preview-notice.html';
+/**
+ * @var list<\App\Models\Dto\LockedAccount> $lockedAccounts
+ * @var \App\Models\Dto\ModerationPage $moderationSummary los 3 reportes pendientes más recientes
+ * @var array{overview: \App\Models\Dto\AdminOverview, instructors: list<\App\Models\Dto\InstructorReportRow>,
+ *     students: list<\App\Models\Dto\StudentReportRow>} $adminDashboard
+ * @var \App\Models\Dto\ModerationPage $moderationSummary los 3 más recientes de la cola de reportes
+ */
+$adminOverview = $adminDashboard['overview'];
 ?>
 
 <div class="stat-grid">
     <div class="stat">
         <p class="stat-label">Alumnos activos</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $adminOverview->activeStudents ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Instructores activos</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $adminOverview->activeInstructors ?></p>
     </div>
     <div class="stat">
         <p class="stat-label">Cursos publicados</p>
-        <p class="stat-value">—</p>
+        <p class="stat-value"><?= $adminOverview->publishedCourses ?></p>
+        <p class="stat-hint">Activos en el catálogo</p>
     </div>
     <div class="stat">
         <p class="stat-label">Cuentas bloqueadas</p>
         <p class="stat-value"><?= count($lockedAccounts) ?></p>
+    </div>
+    <div class="stat">
+        <p class="stat-label">Reportes pendientes</p>
+        <p class="stat-value"><?= $moderationSummary->total ?></p>
+        <p class="stat-hint"><a href="?view=moderation">Abrir moderación</a></p>
     </div>
 </div>
 
@@ -38,6 +49,7 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
             <h2 class="panel-title" id="admin-locked-title">Cuentas bloqueadas</h2>
             <p class="panel-description">Se bloquean tras 3 contraseñas incorrectas consecutivas. Al reactivarla, la cuenta vuelve a entrar con su misma contraseña.</p>
         </div>
+        <a class="btn btn-secondary btn-sm" href="?view=accounts">Administrar cuentas</a>
     </div>
     <div class="table-wrap">
         <table class="table">
@@ -64,7 +76,7 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                         <td>
                             <?= e(role_label($account->role)) ?>
                             <?php if ($account->banned): ?>
-                                <span class="badge badge-danger">Con ban</span>
+                                <span class="badge badge-danger">Suspendida</span>
                             <?php endif; ?>
                         </td>
                         <td><?= e(format_date($account->lockedAt)) ?></td>
@@ -113,18 +125,34 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                     <th scope="col">Usuario</th>
                     <th scope="col">Nombre</th>
                     <th scope="col">Fecha de ingreso</th>
-                    <th scope="col" class="num">Cursos</th>
+                    <th scope="col" class="num">Cursos publicados</th>
                     <th scope="col" class="num">Ganancias</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="5">
-                        <div class="empty-state">
-                            <p class="empty-title">Sin instructores registrados</p>
-                        </div>
-                    </td>
-                </tr>
+                <?php foreach ($adminDashboard['instructors'] as $row): ?>
+                    <tr>
+                        <td>
+                            <div class="account-cell">
+                                <img class="account-avatar" src="<?= e($row->avatar) ?>" alt="" loading="lazy">
+                                <span><?= e($row->email) ?></span>
+                            </div>
+                        </td>
+                        <td><?= e($row->fullName) ?></td>
+                        <td><?= e(format_date($row->createdAt)) ?></td>
+                        <td class="num"><?= $row->publishedCourses ?></td>
+                        <td class="num"><?= e(format_money($row->earnings)) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($adminDashboard['instructors'] === []): ?>
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <p class="empty-title">Sin instructores activos</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
@@ -141,13 +169,32 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="5">
-                        <div class="empty-state">
-                            <p class="empty-title">Sin alumnos registrados</p>
-                        </div>
-                    </td>
-                </tr>
+                <?php foreach ($adminDashboard['students'] as $row): ?>
+                    <tr>
+                        <td>
+                            <div class="account-cell">
+                                <img class="account-avatar" src="<?= e($row->avatar) ?>" alt="" loading="lazy">
+                                <span><?= e($row->email) ?></span>
+                            </div>
+                        </td>
+                        <td><?= e($row->fullName) ?></td>
+                        <td><?= e(format_date($row->createdAt)) ?></td>
+                        <td class="num"><?= $row->enrolledCourses ?></td>
+                        <td class="num">
+                            <?= e($row->completedPercent) ?>%
+                            <span class="table-sub"><?= $row->completedCourses ?> de <?= $row->enrolledCourses ?></span>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($adminDashboard['students'] === []): ?>
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <p class="empty-title">Sin alumnos activos</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
@@ -172,21 +219,45 @@ require BASE_PATH . '/app/views/base/html/preview-notice.html';
             </li>
             <li>
                 <span>Reacciones</span>
-                <button type="button" class="btn btn-secondary btn-sm" disabled>Administrar</button>
+                <a class="btn btn-secondary btn-sm" href="?view=reactions">Administrar</a>
             </li>
         </ul>
     </section>
 
     <section class="panel" aria-labelledby="admin-moderation-title">
         <div class="panel-header">
-            <h2 class="panel-title" id="admin-moderation-title">Moderación</h2>
+            <div>
+                <h2 class="panel-title" id="admin-moderation-title">Moderación</h2>
+                <p class="panel-description">
+                    <?= $moderationSummary->total === 1 ? '1 contenido reportado pendiente' : $moderationSummary->total . ' contenidos reportados pendientes' ?>.
+                </p>
+            </div>
+            <a class="btn btn-secondary btn-sm" href="?view=moderation">Abrir moderación</a>
         </div>
-        <div class="empty-state">
-            <span class="empty-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </span>
-            <p class="empty-title">Nada pendiente</p>
-            <p class="empty-text">Desde aquí podrás dar de baja comentarios y opiniones; se mostrarán como “Comentario eliminado”.</p>
-        </div>
+        <?php if ($moderationSummary->items === []): ?>
+            <div class="empty-state">
+                <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+                <p class="empty-title">Nada pendiente</p>
+                <p class="empty-text">Los comentarios y opiniones que reporten los usuarios llegarán aquí. Ocultarlos los muestra como "Comentario eliminado".</p>
+            </div>
+        <?php else: ?>
+            <ul class="list">
+                <?php foreach ($moderationSummary->items as $report): ?>
+                    <li>
+                        <div class="recent-review">
+                            <p class="recent-review-head">
+                                <span class="badge"><?= e($report->targetType->label()) ?></span>
+                                <strong><?= e($report->authorName) ?></strong>
+                                <span class="badge badge-danger"><?= $report->reportCount === 1 ? '1 reporte' : $report->reportCount . ' reportes' ?></span>
+                            </p>
+                            <p class="recent-review-text"><?= e(\App\Models\Dto\ChatMessage::excerpt($report->content, 120)) ?></p>
+                            <p class="table-sub"><?= e($report->reasonsSummary()) ?> · <?= e($report->courseTitle) ?></p>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
     </section>
 </div>

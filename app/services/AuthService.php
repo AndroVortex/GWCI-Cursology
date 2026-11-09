@@ -109,7 +109,7 @@ final class AuthService
                 : new InvalidCredentialsException()),
             LoginOutcome::Blocked => throw ($result->accountStatus === AccountStatus::Locked
                 ? new AccountLockedException()
-                : new AccountUnavailableException()),
+                : new AccountUnavailableException(banned: $result->banned)),
             LoginOutcome::UnknownUser => throw new InvalidCredentialsException(),
         };
     }
