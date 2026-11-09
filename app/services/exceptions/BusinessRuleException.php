@@ -92,6 +92,7 @@ final class BusinessRuleException extends RuntimeException
         'ALREADY_BANNED' => [409, 'Esta cuenta ya está suspendida.', null],
         'NOT_BANNED' => [409, 'Esta cuenta no está suspendida.', null],
         'USER_ALREADY_ACTIVE' => [409, 'Esta cuenta ya está activa.', null],
+        'INVALID_SCOPE' => [422, 'La limpieza solo puede borrar las cuentas de prueba o las de demostración.', null],
         'ADMIN_CANNOT_DEACTIVATE' => [403, 'Las cuentas de administrador no se dan de baja desde el perfil.', null],
     ];
 

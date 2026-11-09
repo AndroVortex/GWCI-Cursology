@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Verificación de los reportes de los paneles del instructor y del admin contra la base LOCAL,
- * con los SP instalados (app/database/procedures/install.sql).
+ * Verificación de los reportes de los paneles del instructor y del admin contra la base de
+ * pruebas (cursology_test), creada con php scripts/setup_test_db.php.
  *
  *   php tests/verify_reports_db.php
  *
@@ -46,7 +46,7 @@ use App\Services\VerifiedMedia;
 require __DIR__ . '/support.php';
 require dirname(__DIR__) . '/app/database/conn.php';
 
-$procedures = new StoredProcedures(new Connection($DATABASES['local']));
+$procedures = new StoredProcedures(new Connection(testDatabase()));
 $users = new UserRepository($procedures);
 $noCloudinary = new CloudinaryClient('', '', '');
 $auth = new AuthService($users, new RegistrationValidator(), $noCloudinary);
@@ -90,8 +90,8 @@ try {
     $procedures->call('sp_admin_overview', [0]);
 } catch (ProcedureException $exception) {
     if ($exception->businessCode !== 'NOT_ADMIN') {
-        fwrite(STDERR, 'No se pudieron ejecutar los SP de reportes en la base local. Revisa el .env y que MySQL esté encendido,' . PHP_EOL
-            . 'e instala los SP con: SOURCE app/database/procedures/install.sql;' . PHP_EOL
+        fwrite(STDERR, 'No se pudieron ejecutar los SP de reportes en la base de pruebas. Revisa que MySQL esté encendido' . PHP_EOL
+            . 'y recrea la base con: php scripts/setup_test_db.php' . PHP_EOL
             . 'Detalle: ' . ($exception->getPrevious()?->getMessage() ?? $exception->getMessage()) . PHP_EOL);
         exit(1);
     }

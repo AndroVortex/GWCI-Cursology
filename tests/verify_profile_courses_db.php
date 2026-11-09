@@ -3,15 +3,14 @@
 declare(strict_types=1);
 
 /**
- * Verificación de perfil, primer admin, cuentas bloqueadas, categorías y cursos contra la base LOCAL,
- * con los SP instalados (app/database/procedures/install.sql).
+ * Verificación de perfil, primer admin, cuentas bloqueadas, categorías y cursos contra la base de
+ * pruebas (cursology_test), creada con php scripts/setup_test_db.php.
  *
  *   php tests/verify_profile_courses_db.php
  *
  * Usa referencias de medios inventadas: no llama a Cloudinary. Cada corrida deja en la
- * base tres cuentas de prueba (prueba+<marca>...@cursology.test), dos categorías
- * "Prueba <marca>" (desactivadas al terminar) y un curso en borrador: no hay SP de
- * borrado para ellos y no se ejecuta SQL directo desde PHP.
+ * base de pruebas tres cuentas (prueba+<marca>...@cursology.test), dos categorías
+ * "Prueba <marca>" (desactivadas al terminar) y un curso en borrador.
  */
 
 use App\Database\Connection;
@@ -48,7 +47,7 @@ use App\Services\VerifiedMedia;
 require __DIR__ . '/support.php';
 require dirname(__DIR__) . '/app/database/conn.php';
 
-$procedures = new StoredProcedures(new Connection($DATABASES['local']));
+$procedures = new StoredProcedures(new Connection(testDatabase()));
 $users = new UserRepository($procedures);
 $noCloudinary = new CloudinaryClient('', '', '');
 $auth = new AuthService($users, new RegistrationValidator(), $noCloudinary);
@@ -64,8 +63,8 @@ $catalog = new CatalogService(new CatalogRepository($procedures));
 try {
     $procedures->call('sp_category_list', [1]);
 } catch (ProcedureException $exception) {
-    fwrite(STDERR, 'No se pudo ejecutar sp_category_list en la base local. Revisa el .env y que MySQL esté encendido,' . PHP_EOL
-        . 'e instala los SP con: SOURCE app/database/procedures/install.sql;' . PHP_EOL
+    fwrite(STDERR, 'No se pudo ejecutar sp_category_list en la base de pruebas. Revisa que MySQL esté encendido' . PHP_EOL
+        . 'y recrea la base con: php scripts/setup_test_db.php' . PHP_EOL
         . 'Detalle: ' . ($exception->getPrevious()?->getMessage() ?? $exception->getMessage()) . PHP_EOL);
     exit(1);
 }

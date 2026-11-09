@@ -51,4 +51,15 @@ $DATABASES = [
         'charset'  => 'utf8mb4',
         'ssl_ca'   => $ENV['DB_PROD_SSL_CA'] ?? '',
     ],
+    // Base de las pruebas automáticas: la crea y la reinicia scripts/setup_test_db.php.
+    // Sin DB_TEST_* usa el mismo servidor y usuario que la local.
+    'test' => [
+        'host'     => ($ENV['DB_TEST_HOST'] ?? '') ?: ($ENV['DB_LOCAL_HOST'] ?? ''),
+        'port'     => (int) (($ENV['DB_TEST_PORT'] ?? '') ?: (($ENV['DB_LOCAL_PORT'] ?? '') ?: 3306)),
+        'name'     => ($ENV['DB_TEST_NAME'] ?? '') ?: 'cursology_test',
+        'user'     => ($ENV['DB_TEST_USER'] ?? '') ?: ($ENV['DB_LOCAL_USER'] ?? ''),
+        'password' => ($ENV['DB_TEST_USER'] ?? '') !== '' ? ($ENV['DB_TEST_PASSWORD'] ?? '') : ($ENV['DB_LOCAL_PASSWORD'] ?? ''),
+        'charset'  => 'utf8mb4',
+        'ssl_ca'   => '',
+    ],
 ];

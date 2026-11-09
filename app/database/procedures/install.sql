@@ -153,3 +153,6 @@ SOURCE app/database/procedures/student/sp_student_purchases.sql;
 -- Catálogo público
 SOURCE app/database/procedures/catalog/sp_catalog_search.sql;
 SOURCE app/database/procedures/catalog/sp_catalog_course.sql;
+
+-- Mantenimiento (borrar las cuentas de prueba o de demostración: scripts/purge_test_data.php)
+SOURCE app/database/procedures/maintenance/sp_maintenance_purge.sql;

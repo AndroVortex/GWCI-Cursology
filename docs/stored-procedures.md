@@ -533,3 +533,17 @@ Solo lectura, para los paneles del instructor y del admin (los lee `ReportReposi
 - **Se resuelven solos:** `sp_comment_hide`, `sp_review_hide` y `sp_comment_delete` pasan a `resolved` los reportes pendientes de ese contenido, con quien actuó en `resolved_by`.
 - **Reportar otra vez** después de un descarte no regresa el contenido a la cola (`uq_report_comment_user`, `uq_report_opinion_user`); el reporte de otra persona sí.
 - **La cola y todo el contenido** juntan comentarios y opiniones con `UNION ALL` en una tabla derivada, ordenada y paginada afuera.
+
+### Mantenimiento
+
+Lo usa `scripts/purge_test_data.php` (ver el README, sección "Limpiar los datos de prueba") mediante `MaintenanceRepository`.
+
+| SP | Qué hace | Errores |
+|---|---|---|
+| `sp_maintenance_purge(p_scope, p_apply)` | Borra de verdad las cuentas de un alcance y todo lo que depende de ellas. Devuelve una fila con las filas borradas por tabla (`users, login_attempts, account_events, courses, levels, chapters, contents, questions, enrollments, purchases, access, progress, attempts, certificates, rates, opinions, comments, reactions, chats, messages, reports, categories, test_reactions`), las cuentas que quedan (`remaining_students, remaining_instructors, remaining_admins`) y `applied` | `INVALID_SCOPE` |
+
+- **Alcances fijos:** `'test'` son las cuentas `%@cursology.test` (dominio reservado para pruebas), más las categorías y reacciones cuyo nombre lleva la marca de las pruebas (`^Prueba [0-9]{14}-[0-9a-f]{6}`) y que nadie usa; `'demo'` son las cuentas `%@demo.cursology.local` de `scripts/seed_demo.php`. El SP no recibe un patrón libre y cada filtro excluye `role = 'admin'`.
+- **Ensayo:** con `p_apply = 0` borra todo, cuenta con `ROW_COUNT()` y termina con `ROLLBACK`; con `1`, `COMMIT`. Las cifras del ensayo son exactamente las del borrado.
+- **También borra lo ajeno ligado a esos datos:** la inscripción de otra cuenta a un curso de prueba (con su avance, compras y opinión), sus comentarios en ese curso y sus respuestas o reacciones a un comentario de prueba. Las respuestas siempre cuelgan del comentario raíz, así que primero se borran las respuestas y luego los comentarios. Los mensajes sueltan `reply_to` antes de borrarse con su chat.
+- **Orden:** de las hojas a la raíz (reportes, reacciones, mensajes y chats, comentarios, opiniones, calificaciones y certificados, intentos, avance, accesos, compras, inscripciones, la estructura de los cursos, el historial de las cuentas, las cuentas y, al final, el catálogo de prueba). Si queda alguna llave foránea sin resolver, el `EXIT HANDLER` deshace todo.
+- **Instalar la base desde PHP:** `scripts/setup_test_db.php` es la única excepción a "PHP no ejecuta SQL": corre con PDO el esquema y los archivos de `install.sql` (DDL, sin datos de negocio) sobre la base de pruebas, separándolos con `scripts/support/SqlScript.php`, que entiende `DELIMITER` y `SOURCE` como el cliente `mysql`.
