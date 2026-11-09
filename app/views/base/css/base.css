@@ -7,6 +7,7 @@
 
     --header-h: 56px;
     --sidebar-w: 232px;
+    --content-max: 1200px;
 
     --radius-sm: 6px;
     --radius: 8px;
@@ -171,9 +172,11 @@ strong {
 /* =========================================================
    Layout
    ========================================================= */
+/* El sidebar no ocupa columna: en escritorio se despliega encima del contenido y en pantallas
+   chicas es un panel lateral. */
 .app-shell {
     display: grid;
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     min-height: calc(100vh - var(--header-h));
 }
 
@@ -186,7 +189,7 @@ strong {
 .app-content {
     flex: 1;
     width: 100%;
-    max-width: 1080px;
+    max-width: var(--content-max);
     margin: 0 auto;
     padding: 28px clamp(16px, 4vw, 40px) 40px;
 }
@@ -417,13 +420,17 @@ strong {
 /* =========================================================
    Sidebar
    ========================================================= */
+.sidebar-dock {
+    display: contents;
+}
+
+.sidebar-handle {
+    display: none;
+}
+
 .sidebar {
-    position: sticky;
-    top: var(--header-h);
-    align-self: start;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - var(--header-h));
     padding: 16px 12px;
     overflow-y: auto;
     border-right: 1px solid var(--border);
@@ -551,6 +558,84 @@ strong {
 
 .sidebar-backdrop {
     display: none;
+}
+
+/* Escritorio: escondido tras una pestaña en la orilla izquierda; se despliega encima del contenido
+   con el cursor (la orilla también cuenta), con el teclado o con un toque en la pestaña. Las
+   esperas al abrir y al cerrar evitan que parpadee al pasar el cursor de largo. */
+@media (min-width: 1024px) {
+    .sidebar-dock {
+        position: fixed;
+        top: var(--header-h);
+        bottom: 0;
+        left: 0;
+        z-index: 45;
+        display: block;
+        width: 12px;
+    }
+
+    .sidebar-handle {
+        position: absolute;
+        top: 16px;
+        left: 0;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 44px;
+        padding: 0 2px 0 0;
+        border: 1px solid var(--border);
+        border-left: 0;
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--text-muted);
+        box-shadow: var(--shadow-sm);
+        cursor: pointer;
+        transition: color var(--transition), background-color var(--transition);
+    }
+
+    .sidebar-handle:hover {
+        background: var(--surface-2);
+        color: var(--text);
+    }
+
+    .sidebar-handle svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .sidebar-handle-badge {
+        position: absolute;
+        top: -7px;
+        right: -9px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        font-size: 0.625rem;
+    }
+
+    .sidebar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: var(--sidebar-w);
+        box-shadow: var(--shadow);
+        visibility: hidden;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease 0.15s, visibility 0s linear 0.35s;
+    }
+
+    .sidebar-dock:hover .sidebar,
+    .sidebar-dock.is-pinned .sidebar,
+    .sidebar-dock.has-focus .sidebar {
+        visibility: visible;
+        transform: none;
+        transition: transform 0.2s ease 0.08s, visibility 0s linear 0.08s;
+    }
+
+    .sidebar-dock.has-focus .sidebar {
+        transition-delay: 0s;
+    }
 }
 
 /* =========================================================
@@ -1751,10 +1836,6 @@ select.form-control {
    Responsive
    ========================================================= */
 @media (max-width: 1023.98px) {
-    .app-shell {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
     .menu-toggle {
         display: inline-grid;
     }
