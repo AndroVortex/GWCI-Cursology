@@ -37,7 +37,7 @@ check(SqlScript::sourcedFiles("USE cursology;\nSOURCE app/a.sql;\n  source app/b
 // -----------------------------------------------------------
 Report::section('install.sql y el esquema');
 $install = SqlScript::sourcedFiles((string) file_get_contents("$root/app/database/procedures/install.sql"));
-check(count($install) === 104 && count(array_unique($install)) === 104, 'install.sql instala 104 SP, sin repetir');
+check(count($install) === 105 && count(array_unique($install)) === 105, 'install.sql instala 105 SP, sin repetir');
 check(array_filter($install, static fn (string $file): bool => !is_file("$root/$file")) === [], 'todos los archivos de install.sql existen');
 $onDisk = [];
 foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$root/app/database/procedures", FilesystemIterator::SKIP_DOTS)) as $file) {
@@ -108,6 +108,22 @@ foreach (['setup_test_db.php', 'purge_test_data.php', 'seed_demo.php', 'create_a
 $suites = glob("$root/tests/verify_*_db.php");
 $usesLocal = static fn (string $file): bool => !str_contains($code = (string) file_get_contents($file), 'testDatabase()') || str_contains($code, "\$DATABASES['local']");
 check(count($suites) === 9 && array_filter($suites, $usesLocal) === [], 'las 9 suites con base de datos usan testDatabase() y nunca la base local');
+
+// -----------------------------------------------------------
+Report::section('Administradores desde la consola');
+$additional = (string) file_get_contents("$root/app/database/procedures/admin/sp_admin_create.sql");
+check(preg_match("/INSERT INTO app_user \\([^)]*\\brole\\s*\\) VALUES \\([^)]*'admin'\\s*\\)/s", $additional) === 1 && !str_contains($additional, 'ADMIN_EXISTS'), 'sp_admin_create inserta un admin aunque ya exista otro');
+check(str_contains((string) file_get_contents("$root/app/database/procedures/admin/sp_admin_create_first.sql"), "MESSAGE_TEXT = 'ADMIN_EXISTS'"), 'sp_admin_create_first sigue rechazando un segundo admin');
+$callers = [];
+foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$root/app", FilesystemIterator::SKIP_DOTS)) as $file) {
+    if ($file->getExtension() === 'php' && preg_match('/sp_admin_create|createAdditionalAdmin|createFirstAdmin/', (string) file_get_contents($file->getPathname())) === 1) {
+        $callers[] = str_replace('\\', '/', substr($file->getPathname(), strlen($root) + 1));
+    }
+}
+check($callers === ['app/repositories/UserRepository.php'], 'ningún controlador ni servicio de la app crea admins: solo el repositorio que usan los scripts');
+$createAdmin = (string) file_get_contents("$root/scripts/create_admin.php");
+check(str_contains($createAdmin, "'adicional'") && str_contains($createAdmin, '$additional ? $users->createAdditionalAdmin(...$fields) : $users->createFirstAdmin(...$fields)'), 'create_admin.php crea el primero o, con --adicional, otro más');
+check(str_contains($createAdmin, "if (\$additional && !isset(\$options['email'])) {"), 'con --adicional el --email es obligatorio');
 
 // -----------------------------------------------------------
 Report::section('Datos de demostración');

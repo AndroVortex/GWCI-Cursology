@@ -101,6 +101,12 @@ Registra el resultado de un intento de login en una transacción propia, despué
 - **Resultado:** la fila completa de `app_user`.
 - **Errores:** `ADMIN_EXISTS` (ya hay un admin) y `EMAIL_TAKEN`.
 
+**`sp_admin_create(p_name, p_father_last_name, p_mother_last_name, p_gender, p_birthday, p_avatar, p_email, p_password_hash)`**
+
+- Crea un administrador **adicional**, aunque ya exista otro. Solo lo llama `scripts/create_admin.php --adicional`; ningún endpoint web.
+- **Resultado:** la fila completa de `app_user`.
+- **Errores:** `EMAIL_TAKEN`.
+
 ### Usuarios
 
 **`sp_user_get_by_id(p_user_id)`**

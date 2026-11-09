@@ -65,7 +65,7 @@ SOURCE app/database/procedures/install.sql;
 SHOW PROCEDURE STATUS WHERE Db = 'cursology';
 ```
 
-Deben aparecer 104 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
+Deben aparecer 105 procedimientos. Detalle de cada uno: [docs/stored-procedures.md](docs/stored-procedures.md).
 
 ### 4. Crear el primer administrador
 
@@ -76,6 +76,14 @@ php scripts/create_admin.php --password="<contraseña>"
 ```
 
 Crea `admin@cursology.local` (cámbialo con `--email=...`). La contraseña necesita mínimo 8 caracteres, una mayúscula, un número y un carácter especial. Sin `--password`, genera una y la muestra una sola vez.
+
+Si ya hay un administrador, el script se niega a crear otro, salvo que lo pidas con `--adicional`. En ese caso el `--email` es obligatorio:
+
+```powershell
+php scripts/create_admin.php --adicional --email=maria@cursology.local --nombre=María --apellido=López
+```
+
+Al terminar muestra todos los administradores de la base. Ningún admin se crea desde la app: solo desde la consola. Con `--prod` usa la base de producción del `.env`.
 
 ### 5. Levantar el servidor
 
@@ -163,7 +171,7 @@ Las pruebas que usan base de datos corren contra una **base de pruebas aparte**,
 php scripts/setup_test_db.php
 ```
 
-El script borra `cursology_test` si ya existe, corre el esquema, instala los 104 SP y crea `admin@cursology.local` con una contraseña aleatoria que no se muestra (las pruebas no la usan). Usa el mismo servidor y usuario que `DB_LOCAL_*`; para otro nombre u otro servidor, llena las claves `DB_TEST_*` del `.env`. Se niega a correr si la base de pruebas se llama igual que la local o la de producción.
+El script borra `cursology_test` si ya existe, corre el esquema, instala los 105 SP y crea `admin@cursology.local` con una contraseña aleatoria que no se muestra (las pruebas no la usan). Usa el mismo servidor y usuario que `DB_LOCAL_*`; para otro nombre u otro servidor, llena las claves `DB_TEST_*` del `.env`. Se niega a correr si la base de pruebas se llama igual que la local o la de producción.
 
 Para probar a mano por HTTP sin llenar la base local, levanta el servidor sobre la base de pruebas:
 
