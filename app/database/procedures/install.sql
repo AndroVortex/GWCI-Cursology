@@ -23,6 +23,7 @@ SOURCE app/database/procedures/user/sp_user_deactivate.sql;
 
 -- Administración
 SOURCE app/database/procedures/admin/sp_admin_create_first.sql;
+SOURCE app/database/procedures/admin/sp_admin_create.sql;
 SOURCE app/database/procedures/admin/sp_admin_list_locked_users.sql;
 SOURCE app/database/procedures/admin/sp_admin_unlock_user.sql;
 SOURCE app/database/procedures/admin/sp_admin_list_users.sql;

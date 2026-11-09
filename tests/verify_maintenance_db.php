@@ -193,7 +193,7 @@ try {
     $applied = $maintenance->purge(MaintenanceRepository::SCOPE_TEST, true);
     check($applied->applied && $applied->deleted === $dry->deleted, 'borra exactamente lo que contó el ensayo');
     check($users->findForLogin($testInstructor->email()) === null && $users->findForLogin($testStudent->email()) === null, 'las cuentas de prueba ya no existen');
-    check(countRows($inspect, "SELECT COUNT(*) FROM app_user WHERE email LIKE '%@cursology.test'") === 0, 'no queda ninguna cuenta ...@cursology.test');
+    check(countRows($inspect, "SELECT COUNT(*) FROM app_user WHERE email LIKE '%@cursology.test' AND role <> 'admin'") === 0, 'no queda ninguna cuenta ...@cursology.test (salvo admins, que nunca se borran)');
     check($users->findForLogin($student->email()) !== null && $users->findForLogin($instructor->email()) !== null && $users->findForLogin('admin@cursology.local') !== null, 'las otras cuentas y el admin siguen');
     check(countRows($inspect, 'SELECT COUNT(*) FROM course WHERE id = ?', [$testCourse->id()]) === 0, 'el curso de prueba se borró');
     check(countRows($inspect, 'SELECT COUNT(*) FROM course WHERE id = ? AND published_at IS NOT NULL', [$realCourse->id()]) === 1, 'el curso real sigue publicado');
