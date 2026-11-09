@@ -630,9 +630,12 @@ php tests/verify_reports_unit.php
 php tests/verify_messages_unit.php
 php tests/verify_comments_unit.php
 php tests/verify_moderation_unit.php
+php tests/verify_maintenance_unit.php
 
-# Contra la base local (con los SP instalados; crean cuentas, categorías y cursos de prueba por corrida
-# y dejan las formas de pago como estaban)
+# Contra la base de pruebas (cursology_test, nunca la local). Créala, y vuelve a crearla cuando
+# cambien el esquema o un SP (las pruebas avisan si está desactualizada):
+php scripts/setup_test_db.php
+# Crean cuentas, categorías y cursos de prueba por corrida y dejan las formas de pago como estaban
 php tests/verify_auth_db.php
 php tests/verify_profile_courses_db.php
 php tests/verify_learning_db.php
@@ -641,6 +644,7 @@ php tests/verify_reports_db.php
 php tests/verify_messages_db.php
 php tests/verify_comments_db.php
 php tests/verify_moderation_db.php
+php tests/verify_maintenance_db.php
 
 # Contra Cloudinary real (opcional; sube y borra archivos de prueba, incluido un PDF de certificado)
 php tests/verify_cloudinary_live.php
@@ -649,7 +653,9 @@ php tests/verify_cloudinary_live.php
 php tests/verify_paypal_sandbox.php
 ```
 
-Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`):
+Con curl.exe y el servidor levantado (`php -S localhost:8000 -t public`). Para que esas pruebas a mano
+tampoco llenen la base local, levanta el servidor sobre la base de pruebas:
+`$env:CURSOLOGY_DB = 'test'; php -S localhost:8099 -t public` (en otra terminal, la variable no está puesta).
 
 ```powershell
 curl.exe -s -c jar.txt -b jar.txt http://localhost:8000/api/auth/csrf
